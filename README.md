@@ -28,6 +28,4 @@
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
 ## Support
-<img src="https://github.com/baitim/ParaCL/blob/main/images/orangutan.gif" width="8%" align="left">
-
 **This project is created by [baitim](https://t.me/bai_tim)**
