@@ -1,3 +1,4 @@
+#include "ast.hpp"
 #include "driver.hpp"
 #include <iostream>
 
@@ -8,5 +9,7 @@ int yyFlexLexer::yywrap() {
 int main() {
     FlexLexer* lexer = new yyFlexLexer;
     yy::Driver_t driver(lexer);
-    driver.parse();
+    ast::ast_t ast;
+    driver.parse(ast.root_);
+    delete lexer;
 }

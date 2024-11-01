@@ -10,7 +10,6 @@ Grammar:
 %skeleton "lalr1.cc"
 %defines
 %define api.value.type variant
-%param {yy::Driver_t* driver}
 
 %code requires
 {
@@ -19,6 +18,9 @@ using namespace node;
 #include <iostream>
 namespace yy {class Driver_t;}
 }
+
+%param { yy::Driver_t* driver }
+%parse-param {node_t*& root}
 
 %code
 {
@@ -38,23 +40,24 @@ namespace yy {
 
 %token <int>         NUMBER
 %token <std::string> ID
-%nterm statements
+%nterm <node_t*> statements
+%nterm <node_t*> statement
+%nterm <node_t*> assignment
 %nterm <node_t*> lvalue
 %nterm <node_t*> expression
-%nterm <node_t*> assignment
 
 %start program
 
 %%
 
-program: statements
+program: statements { root = $1; }
 ;
 
-statements: statement SCOLON statements
-          | %empty
+statements: statement SCOLON statements { $$ = new node_statement_t($1, $3); }
+          | %empty                      { $$ = nullptr; }
 ;
 
-statement: assignment
+statement: assignment { $$ = $1; }
 
 assignment: lvalue ASSIGN expression { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;

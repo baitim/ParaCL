@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 namespace node {
@@ -46,6 +47,23 @@ namespace node {
     public:
         node_bin_op_t(binary_operators_e type, node_t* left, node_t* right)
         : type_(type), left_(left), right_(right) {}
-        ~node_bin_op_t() {}
+        ~node_bin_op_t() {
+            delete left_;
+            delete right_;
+        }
+    };
+
+    //////////////////////////////////////////////////////
+
+    class node_statement_t final : public node_t {
+        node_t* left_;
+        node_t* right_;
+
+    public:
+        node_statement_t(node_t* left, node_t* right) : left_(left), right_(right) {}
+        ~node_statement_t() {
+            delete left_;
+            delete right_;
+        }
     };
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parser.tab.hh"
+#include "node.hpp"
 #include <FlexLexer.h>
 
 namespace yy {
@@ -30,8 +31,8 @@ public:
         return tt;
     }
 
-    bool parse() {
-        parser parser(this);
+    bool parse(node::node_t*& root) {
+        parser parser(this, root);
         bool res = parser.parse();
         return !res;
     }
