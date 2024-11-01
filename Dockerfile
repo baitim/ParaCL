@@ -17,7 +17,7 @@ RUN pip install conan --break-system-packages
 RUN conan profile detect --force
 
 RUN conan install . --build=missing -c tools.system.package_manager:mode=install \
-    -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Debug
+    -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Release
 RUN cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
     -DCMAKE_BUILD_TYPE=Release; cmake --build build
 RUN ctest --test-dir build --rerun-failed --output-on-failure
