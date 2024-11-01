@@ -1,4 +1,6 @@
 [requires]
+flex/2.6.4
+bison/3.8.2
 gtest/1.15.0
 [generators]
 CMakeDeps
