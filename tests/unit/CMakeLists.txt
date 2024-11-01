@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.11)
+project(unit)
+
+include_directories(${gtest_SOURCE_DIR})
+
+add_executable(unit_paracl paracl_unit_tests.cpp)
+target_link_libraries(unit_paracl gtest gtest_main)
+
+set(RUN_TESTS ./unit_paracl --gtest_color=yes)
+add_test(
+    NAME unit_paracl_target
+    COMMAND ${RUN_TESTS}
+)
