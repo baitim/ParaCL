@@ -7,5 +7,5 @@ RUN apt-get -y install cmake
 RUN apt-get -y install flex
 RUN apt-get -y install bison
 
-RUN cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake; cmake --build build
+RUN cmake . -B build -DCMAKE_BUILD_TYPE=Debug; cmake --build build
 ENTRYPOINT ["/app"]
