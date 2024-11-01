@@ -1,9 +1,12 @@
 /*
 Grammar:
-    statements -> statement; statements | empty
-    statement  -> assignment
-    assignment -> lvalue = statement
-    expression -> expression + number | expression - number | number
+    statements   -> statement; statements | empty
+    statement    -> assignment
+
+    assignment   -> lvalue = expression_1
+    lvalue       -> id
+    expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
+    expression_2 -> expression_2 bin_oper_2 number | number
 */
 
 %language "c++"
@@ -31,11 +34,14 @@ namespace yy {
 }
 
 %token
- ASSIGN
- PLUS
- MINUS
- SCOLON
- ERR
+    ASSIGN
+    ADD
+    SUB
+    MUL
+    DIV
+
+    SCOLON
+    ERR
 ;
 
 %token <int>         NUMBER
@@ -44,7 +50,10 @@ namespace yy {
 %nterm <node_t*> statement
 %nterm <node_t*> assignment
 %nterm <node_t*> lvalue
-%nterm <node_t*> expression
+%nterm <node_t*> expression_1
+%nterm <node_t*> expression_2
+%nterm <binary_operators_e> bin_oper_1
+%nterm <binary_operators_e> bin_oper_2
 
 %start program
 
@@ -59,17 +68,26 @@ statements: statement SCOLON statements { $$ = new node_statement_t($1, $3); }
 
 statement: assignment { $$ = $1; }
 
-assignment: lvalue ASSIGN expression { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
+assignment: lvalue ASSIGN expression_1 { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
 lvalue: ID { $$ = new node_id_t($1); }
 ;
 
-expression: expression PLUS  NUMBER { $$ = new node_bin_op_t(binary_operators_e::ADD,
-                                                             $1, new node_number_t($3)); }
-          | expression MINUS NUMBER { $$ = new node_bin_op_t(binary_operators_e::SUB,
-                                                             $1, new node_number_t($3)); }
-          | NUMBER                  { $$ = new node_number_t($1); }
+expression_1: expression_1 bin_oper_1 expression_2 { $$ = new node_bin_op_t($2, $1, $3); }
+            | expression_2                         { $$ = $1; }
+;
+
+expression_2: expression_2 bin_oper_2 NUMBER { $$ = new node_bin_op_t($2, $1, new node_number_t($3)); }
+            | NUMBER                         { $$ = new node_number_t($1); }
+;
+
+bin_oper_1 : ADD { $$ = binary_operators_e::ADD; }
+           | SUB { $$ = binary_operators_e::SUB; }
+;
+
+bin_oper_2 : MUL { $$ = binary_operators_e::MUL; }
+           | DIV { $$ = binary_operators_e::DIV; }
 ;
 
 %%
