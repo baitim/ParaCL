@@ -3,8 +3,8 @@ project(src)
 
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-find_package(BISON REQUIRED)
-find_package(FLEX  REQUIRED)
+find_package(bison REQUIRED)
+find_package(flex  REQUIRED)
 
 flex_target(lexer
     lexer.l

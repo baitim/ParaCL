@@ -10,6 +10,8 @@ RUN apt-get -y install cmake
 RUN apt-get -y install pkg-config
 RUN apt-get -y install python3
 RUN apt-get -y install python3-pip
+RUN apt-get -y install flex
+RUN apt-get -y install bison
 
 RUN pip install conan --break-system-packages
 RUN conan profile detect --force
