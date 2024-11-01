@@ -10,6 +10,7 @@ int main() {
     yy::Driver_t driver(lexer);
     ast::ast_t ast;
     driver.parse(ast.root_);
+    ast.calculate();
     ast.print();
     delete lexer;
 }

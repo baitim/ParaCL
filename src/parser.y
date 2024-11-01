@@ -81,7 +81,7 @@ Grammar:
 
 %%
 
-program: scope { root = $1; root->calculate(); }
+program: scope { root = $1; }
 ;
 
 scope: %empty          { $$ = new node_scope_t(); current_scope = $$; }
