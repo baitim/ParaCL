@@ -33,6 +33,13 @@ namespace node {
     //////////////////////////////////////////////////////
 
     enum class binary_operators_e {
+        EQ,
+        NE,
+        LE,
+        GE,
+        LT,
+        GT,
+
         ASSIGN,
         ADD,
         SUB,

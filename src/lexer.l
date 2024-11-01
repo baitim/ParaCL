@@ -11,17 +11,24 @@ ID       [a-zA-Z_][a-zA-Z0-9_]*
 %%
 
 {WS}             // skip
-{NUMBER}         {std::cout << "number <" << yytext    << ">\n"; return yy::parser::token_type::NUMBER; }
-{ID}             {std::cout << "    id <" << yytext    << ">\n"; return yy::parser::token_type::ID;     }
+{NUMBER}         {std::cout << "number <" << yytext << ">\n"; return yy::parser::token_type::NUMBER; }
+{ID}             {std::cout << "    id <" << yytext << ">\n"; return yy::parser::token_type::ID;     }
 
-"="              {std::cout << "     = <" << yytext[0] << ">\n"; return yy::parser::token_type::ASSIGN; }
-"+"              {std::cout << "     + <" << yytext[0] << ">\n"; return yy::parser::token_type::ADD;    }
-"-"              {std::cout << "     - <" << yytext[0] << ">\n"; return yy::parser::token_type::SUB;    }
-"*"              {std::cout << "     + <" << yytext[0] << ">\n"; return yy::parser::token_type::MUL;    }
-"/"              {std::cout << "     - <" << yytext[0] << ">\n"; return yy::parser::token_type::DIV;    }
+"=="             {std::cout << "     = <" << yytext << ">\n"; return yy::parser::token_type::EQUAL;    }
+"!="             {std::cout << "     = <" << yytext << ">\n"; return yy::parser::token_type::NEQUAL;   }
+"<="             {std::cout << "     + <" << yytext << ">\n"; return yy::parser::token_type::ELESS;    }
+">="             {std::cout << "     - <" << yytext << ">\n"; return yy::parser::token_type::EGREATER; }
+"<"              {std::cout << "     + <" << yytext << ">\n"; return yy::parser::token_type::LESS;     }
+">"              {std::cout << "     - <" << yytext << ">\n"; return yy::parser::token_type::GREATER;  }
 
-";"              {std::cout << "     ; <" << yytext[0] << ">\n"; return yy::parser::token_type::SCOLON; }
-.                {std::cout << "     . <" << yytext[0] << ">\n"; return yy::parser::token_type::ERR;    }
+"="              {std::cout << "     = <" << yytext << ">\n"; return yy::parser::token_type::ASSIGN; }
+"+"              {std::cout << "     + <" << yytext << ">\n"; return yy::parser::token_type::ADD;    }
+"-"              {std::cout << "     - <" << yytext << ">\n"; return yy::parser::token_type::SUB;    }
+"*"              {std::cout << "     + <" << yytext << ">\n"; return yy::parser::token_type::MUL;    }
+"/"              {std::cout << "     - <" << yytext << ">\n"; return yy::parser::token_type::DIV;    }
+
+";"              {std::cout << "     ; <" << yytext << ">\n"; return yy::parser::token_type::SCOLON; }
+.                {std::cout << "     . <" << yytext << ">\n"; return yy::parser::token_type::ERR;    }
 
 %%
 

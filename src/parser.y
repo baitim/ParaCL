@@ -3,8 +3,9 @@ Grammar:
     statements   -> statement; statements | empty
     statement    -> assignment
 
-    assignment   -> lvalue = expression_1
+    assignment   -> lvalue = expression
     lvalue       -> id
+    expression   -> expression   bin_oper   expression_1 | expression_1
     expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
     expression_2 -> expression_2 bin_oper_2 number | number
 */
@@ -34,6 +35,13 @@ namespace yy {
 }
 
 %token
+    EQUAL
+    NEQUAL
+    ELESS
+    EGREATER
+    LESS
+    GREATER
+
     ASSIGN
     ADD
     SUB
@@ -50,8 +58,10 @@ namespace yy {
 %nterm <node_t*> statement
 %nterm <node_t*> assignment
 %nterm <node_t*> lvalue
+%nterm <node_t*> expression
 %nterm <node_t*> expression_1
 %nterm <node_t*> expression_2
+%nterm <binary_operators_e> bin_oper
 %nterm <binary_operators_e> bin_oper_1
 %nterm <binary_operators_e> bin_oper_2
 
@@ -68,10 +78,14 @@ statements: statement SCOLON statements { $$ = new node_statement_t($1, $3); }
 
 statement: assignment { $$ = $1; }
 
-assignment: lvalue ASSIGN expression_1 { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
+assignment: lvalue ASSIGN expression { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
 lvalue: ID { $$ = new node_id_t($1); }
+;
+
+expression  : expression   bin_oper   expression_1 { $$ = new node_bin_op_t($2, $1, $3); }
+            | expression_1                         { $$ = $1; }
 ;
 
 expression_1: expression_1 bin_oper_1 expression_2 { $$ = new node_bin_op_t($2, $1, $3); }
@@ -80,6 +94,14 @@ expression_1: expression_1 bin_oper_1 expression_2 { $$ = new node_bin_op_t($2, 
 
 expression_2: expression_2 bin_oper_2 NUMBER { $$ = new node_bin_op_t($2, $1, new node_number_t($3)); }
             | NUMBER                         { $$ = new node_number_t($1); }
+;
+
+bin_oper   : EQUAL    { $$ = binary_operators_e::EQ; }
+           | NEQUAL   { $$ = binary_operators_e::NE; }
+           | ELESS    { $$ = binary_operators_e::LE; }
+           | EGREATER { $$ = binary_operators_e::GE; }
+           | LESS     { $$ = binary_operators_e::LT; }
+           | GREATER  { $$ = binary_operators_e::GT; }
 ;
 
 bin_oper_1 : ADD { $$ = binary_operators_e::ADD; }
