@@ -3,7 +3,7 @@ project(src)
 
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
-find_package(BISON 2.4.1 REQUIRED)
+find_package(BISON REQUIRED)
 find_package(FLEX  REQUIRED)
 
 flex_target(lexer
@@ -12,9 +12,9 @@ flex_target(lexer
 )
 
 bison_target(parser
-    grammar.y
+    parser.y
     ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    COMPILE_FLAGS "--defines=${CMAKE_CURRENT_BINARY_DIR}/grammar.tab.hh"
+    COMPILE_FLAGS "--defines=${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh"
 )
 
 add_flex_bison_dependency(lexer parser)

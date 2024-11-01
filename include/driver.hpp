@@ -1,4 +1,6 @@
-#include "grammar.tab.hh"
+#pragma once
+
+#include "parser.tab.hh"
 #include <FlexLexer.h>
 
 namespace yy {
@@ -10,8 +12,21 @@ public:
 
     parser::token_type yylex(parser::semantic_type* yylval) {
         parser::token_type tt = static_cast<parser::token_type>(plex_->yylex());
-        if (tt == yy::parser::token_type::NUMBER)
-            yylval->as<int>() = std::stoi(plex_->YYText());
+        switch (tt) {
+            case yy::parser::token_type::NUMBER:
+                yylval->as<int>() = std::stoi(plex_->YYText());
+                break;
+
+            case yy::parser::token_type::ID: {
+                parser::semantic_type tmp;
+                tmp.as<std::string>() = plex_->YYText();
+                yylval->swap<std::string>(tmp);
+                break;
+            }
+
+            default:
+                break;
+        }
         return tt;
     }
 
