@@ -1,4 +1,4 @@
-name: paracl pre-commit and post-push
+name: ParaCL unit tests pre-commit and post-push
 on:
   push:
     branches:
