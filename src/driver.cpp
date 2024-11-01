@@ -1,6 +1,5 @@
 #include "ast.hpp"
 #include "driver.hpp"
-#include <iostream>
 
 int yyFlexLexer::yywrap() {
     return 1;
@@ -11,5 +10,6 @@ int main() {
     yy::Driver_t driver(lexer);
     ast::ast_t ast;
     driver.parse(ast.root_);
+    ast.print();
     delete lexer;
 }

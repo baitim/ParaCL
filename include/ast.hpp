@@ -5,8 +5,7 @@
 namespace ast {
     struct ast_t final {
         node::node_t* root_ = nullptr;
-        ~ast_t() {
-            delete root_;
-        }
+        void calculate() { root_->calculate(); }
+        void print()     { return root_->print(); }
     };
 }

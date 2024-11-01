@@ -1,7 +1,10 @@
 /*
 Grammar:
-    statements   -> statement; statements | empty
-    statement    -> assignment
+    scope        -> statement; scope | empty
+    statement    -> assignment | print
+
+    print        -> print rvalue
+    rvalue       -> lvalue | expression
 
     assignment   -> lvalue = expression
     lvalue       -> id
@@ -17,10 +20,10 @@ Grammar:
 
 %code requires
 {
-#include "node.hpp"
-using namespace node;
-#include <iostream>
-namespace yy {class Driver_t;}
+    #include "node.hpp"
+    using namespace node;
+    #include <iostream>
+    namespace yy {class Driver_t;}
 }
 
 %param { yy::Driver_t* driver }
@@ -28,13 +31,15 @@ namespace yy {class Driver_t;}
 
 %code
 {
-#include "driver.hpp"
-namespace yy {
-    parser::token_type yylex(parser::semantic_type* yylval, Driver_t* driver);
-}
+    #include "driver.hpp"
+    namespace yy {
+        parser::token_type yylex(parser::semantic_type* yylval, Driver_t* driver);
+    }
 }
 
 %token
+    PRINT
+
     EQUAL
     NEQUAL
     ELESS
@@ -54,8 +59,10 @@ namespace yy {
 
 %token <int>         NUMBER
 %token <std::string> ID
-%nterm <node_t*> statements
+%nterm <node_scope_t*> scope
 %nterm <node_t*> statement
+%nterm <node_t*> print
+%nterm <node_t*> rvalue
 %nterm <node_t*> assignment
 %nterm <node_t*> lvalue
 %nterm <node_t*> expression
@@ -65,23 +72,45 @@ namespace yy {
 %nterm <binary_operators_e> bin_oper_1
 %nterm <binary_operators_e> bin_oper_2
 
+%code
+{
+    node_scope_t* current_scope = nullptr;
+}
+
 %start program
 
 %%
 
-program: statements { root = $1; }
+program: scope { root = $1; root->calculate(); }
 ;
 
-statements: statement SCOLON statements { $$ = new node_statement_t($1, $3); }
-          | %empty                      { $$ = nullptr; }
+scope: %empty          { $$ = new node_scope_t(); current_scope = $$; }
+     | scope statement { $$ = $1; $$->add_statement($2); }
 ;
 
-statement: assignment { $$ = $1; }
+statement: assignment SCOLON { $$ = $1; }
+         | print      SCOLON { $$ = $1; }
+         | statement  SCOLON { $$ = $1; }
+;
+
+print: PRINT rvalue { $$ = new node_print_t($2); }
+;
+
+rvalue: lvalue     { $$ = $1; }
+      | expression { $$ = $1; }
+;
 
 assignment: lvalue ASSIGN expression { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
-lvalue: ID { $$ = new node_id_t($1); }
+lvalue: ID {
+                if(current_scope->find_variable($1)) {
+                    $$ = current_scope->get_variable($1);
+                } else {
+                    $$ = new node_id_t();
+                    current_scope->add_variable($1, $$);
+                }
+            }
 ;
 
 expression  : expression   bin_oper   expression_1 { $$ = new node_bin_op_t($2, $1, $3); }
