@@ -15,10 +15,9 @@ RUN apt-get -y install bison
 
 RUN pip install conan --break-system-packages
 RUN conan profile detect --force
-RUN git submodule update --init --recursive
 
 RUN conan install . --build=missing -c tools.system.package_manager:mode=install \
-    -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20
+    -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Debug
 RUN cmake . -B build -DCMAKE_BUILD_TYPE=Release; cmake --build build
 RUN ctest --test-dir build --rerun-failed --output-on-failure
 
