@@ -9,6 +9,7 @@ RUN apt-get -y install cmake
 RUN apt-get -y install git
 RUN apt-get -y install flex
 RUN apt-get -y install bison
+RUN apt-get -y install python3
 
 RUN git submodule update --init --recursive
 
