@@ -13,6 +13,7 @@ SCOLON   [;]+
 
 {WS}            // skip
 "print"         {/* std::cout << " print <" << yytext << ">\n"; */ return yy::parser::token_type::PRINT;  }
+"?"             {/* std::cout << "     ? <" << yytext << ">\n"; */ return yy::parser::token_type::INPUT;  }
 
 {NUMBER}        {/* std::cout << "number <" << yytext << ">\n"; */ return yy::parser::token_type::NUMBER; }
 {ID}            {/* std::cout << "    id <" << yytext << ">\n"; */ return yy::parser::token_type::ID;     }

@@ -2,6 +2,7 @@
 
 #include "parser.tab.hh"
 #include "node.hpp"
+#include <fstream>
 #include <FlexLexer.h>
 
 namespace yy {
@@ -31,7 +32,10 @@ public:
         return tt;
     }
 
-    bool parse(node::node_t*& root) {
+    bool parse(const char* file_name, node::node_t*& root) {
+        std::ifstream input_file(file_name);
+        plex_->switch_streams(input_file, std::cout);
+
         parser parser(this, root);
         bool res = parser.parse();
         return !res;

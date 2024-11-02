@@ -11,7 +11,7 @@ Grammar:
     expression   -> expression   bin_oper   expression_1 | expression_1
     expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
     expression_2 -> expression_2 bin_oper_2 terminal     | terminal
-    terminal     -> '(' expression ')' | lvalue | number
+    terminal     -> '(' expression ')' | lvalue | number | ?
     lvalue       -> id
 */
 
@@ -41,6 +41,7 @@ Grammar:
 
 %token
     PRINT
+    INPUT
 
     LBRACKET
     RBRACKET
@@ -126,6 +127,7 @@ expression_2: expression_2 bin_oper_2 terminal     { $$ = new node_bin_op_t($2, 
 terminal: LBRACKET expression RBRACKET   { $$ = $2; }
         | lvalue                         { $$ = $1; }
         | NUMBER                         { $$ = new node_number_t($1); }
+        | INPUT                          { $$ = new node_input_t(); }
 ;
 
 lvalue: ID {

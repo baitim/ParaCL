@@ -1,0 +1,6 @@
+print print ? == ?;
+
+goida = 777;
+print ? * goida;
+
+print print print goida_x2 = goida * goida;

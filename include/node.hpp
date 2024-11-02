@@ -115,4 +115,15 @@ namespace node {
             return value;
         }
     };
+
+    //////////////////////////////////////////////////////
+
+    class node_input_t final : public node_t {
+    public:
+        int execute() {
+            int value;
+            std::cin >> value;
+            return value;
+        }
+    };
 }
