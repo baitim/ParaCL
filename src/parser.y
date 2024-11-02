@@ -92,13 +92,13 @@ Grammar:
 program: scope { root = $1; }
 ;
 
-scope: %empty          { $$ = new node_scope_t(); current_scope = $$; }
-     | scope statement { $$ = $1; $$->add_statement($2); }
+scope: %empty                 { $$ = new node_scope_t(); current_scope = $$; }
+     | scope statement SCOLON { $$ = $1; $$->add_statement($2); }
+     | scope SCOLON           { $$ = $1; }
 ;
 
-statement: assignment SCOLON { $$ = $1; }
-         | print      SCOLON { $$ = $1; }
-         | statement  SCOLON { $$ = $1; }
+statement: assignment { $$ = $1; }
+         | print      { $$ = $1; }
 ;
 
 print: PRINT rvalue { $$ = new node_print_t($2); }
