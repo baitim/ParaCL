@@ -7,7 +7,7 @@ Grammar:
 
     assignment   -> lvalue = rvalue
 
-    rvalue       -> expression
+    rvalue       -> statement | expression
     expression   -> expression   bin_oper   expression_1 | expression_1
     expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
     expression_2 -> expression_2 bin_oper_2 terminal     | terminal
@@ -107,7 +107,8 @@ print: PRINT rvalue { $$ = new node_print_t($2); }
 assignment: lvalue ASSIGN rvalue { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
-rvalue: expression { $$ = $1; }
+rvalue: statement  { $$ = $1; }
+      | expression { $$ = $1; }
 ;
 
 expression  : expression   bin_oper   expression_1 { $$ = new node_bin_op_t($2, $1, $3); }

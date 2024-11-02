@@ -1,0 +1,12 @@
+a = 5 + 2;
+print a;
+f = c = b = a * 3;
+print b;
+print c;
+print 3 - 2 * f;
+
+b = a * c;
+print print print k = b;
+print k * 7;
+
+print c - a;
