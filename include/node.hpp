@@ -9,11 +9,22 @@
 
 namespace node {
 
+    enum class node_type_e {
+        ID,
+        NUMBER,
+        BIN_OP,
+        SCOPE,
+        PRINT,
+        INPUT,
+        LOOP,
+        FORK
+    };
     class node_t {
     public:
         virtual ~node_t() {}
         virtual int set_value(int value) { throw "attempt to set value to base node"; }
         virtual int execute()            { throw "attempt to execute base node"; }
+        virtual node_type_e get_type()   { throw "attempt to get type of base node"; }
     };
 
     /* ----------------------------------------------------- */
@@ -24,6 +35,7 @@ namespace node {
     public:
         int set_value(int value) { return value_ = value; }
         int execute()            { return value_; }
+        node_type_e get_type()   { return node_type_e::ID; }
     };
 
     /* ----------------------------------------------------- */
@@ -33,7 +45,8 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        int execute() { return number_; }
+        int execute()          { return number_; }
+        node_type_e get_type() { return node_type_e::NUMBER; }
     };
 
     /* ----------------------------------------------------- */
@@ -79,21 +92,30 @@ namespace node {
             }
             throw "attempt to execute unknown binary operator";
         }
+
+        node_type_e get_type() { return node_type_e::BIN_OP; }
+
+        ~node_bin_op_t() {
+            if (left_->get_type()  != node_type_e::ID) delete left_;
+            if (right_->get_type() != node_type_e::ID) delete right_;
+        }
     };
 
     /* ----------------------------------------------------- */
 
     class node_scope_t final : public node_t {
         std::list<node_t*> statements_;
+        node_scope_t* parent_;
 
         using vars_container = std::unordered_map<std::string, node_t*>;
         vars_container variables_;
 
     public:
+        node_scope_t(node_scope_t* parent) : parent_(parent) {}
         void    add_statement(node_t* node) { statements_.push_back(node); }
-        void    add_variable (std::string name, node_t* node) { variables_.emplace(name, node); }
-        bool    find_variable(std::string name) { return variables_.find(name) != variables_.end(); }
-        node_t* get_variable (std::string name) { return variables_.find(name)->second; }
+        void    add_variable (const std::string& name, node_t* node) { variables_.emplace(name, node); }
+        bool    find_variable(const std::string& name) { return variables_.find(name) != variables_.end(); }
+        node_t* get_node     (const std::string& name) { return variables_.find(name)->second; }
 
         const vars_container& get_variables() { return variables_; }
         void copy_variables(const vars_container& variables) { variables_ = variables;  }
@@ -103,6 +125,25 @@ namespace node {
             for (auto node : statements_)
                 result = node->execute();
             return result;
+        }
+
+        node_type_e get_type() { return node_type_e::SCOPE; }
+
+        ~node_scope_t() {
+            for (auto node : statements_)
+                if (node->get_type() != node_type_e::ID)
+                    delete node;
+            
+
+            vars_container parent_variables;
+            if (parent_)
+                parent_variables = parent_->get_variables();
+
+            for (auto node_it : variables_) {
+                if ((!parent_) ||
+                    ( parent_ && parent_variables.find(node_it.first) == parent_variables.end()))
+                    delete node_it.second;
+            }
         }
     };
 
@@ -119,6 +160,10 @@ namespace node {
             std::cout << value << "\n";
             return value;
         }
+
+        node_type_e get_type() { return node_type_e::PRINT; }
+
+        ~node_print_t() { if (argument_->get_type() != node_type_e::ID) delete argument_; }
     };
 
     /* ----------------------------------------------------- */
@@ -132,6 +177,8 @@ namespace node {
                 throw "invalid input: need integer";
             return value;
         }
+
+        node_type_e get_type() { return node_type_e::INPUT; }
     };
 
     /* ----------------------------------------------------- */
@@ -150,6 +197,13 @@ namespace node {
             }
             return 0;
         }
+
+        ~node_loop_t() {
+            if (condition_->get_type() != node_type_e::ID) delete condition_;
+            if (body_->get_type()      != node_type_e::ID) delete body_;
+        }
+
+        node_type_e get_type() { return node_type_e::LOOP; }
     };
 
     /* ----------------------------------------------------- */
@@ -173,5 +227,14 @@ namespace node {
             }
             return 0;
         }
+
+        ~node_fork_t() {
+            if (condition_->get_type() != node_type_e::ID) delete condition_;
+            if (body1_->get_type()     != node_type_e::ID) delete body1_;
+            if (body2_ &&
+                body2_->get_type()     != node_type_e::ID) delete body2_;
+        }
+
+        node_type_e get_type() { return node_type_e::FORK; }
     };
 }

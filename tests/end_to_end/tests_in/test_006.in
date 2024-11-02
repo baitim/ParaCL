@@ -1,0 +1,30 @@
+x = 3;
+y = 2;
+
+print x;
+while (x < 150) {
+    x = x * y;
+    print x;
+}
+
+print x;
+print y;
+
+
+
+x = 1;
+
+u = 66 - 21;
+
+if (x < 10)
+    print u;
+
+print u;
+
+b = 5;
+if (b * 3 > ?)
+    print b;
+else {
+    k = 15;
+    print k * 2;
+}

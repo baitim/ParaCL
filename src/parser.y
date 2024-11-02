@@ -101,6 +101,7 @@ Grammar:
 %code
 {
     std::stack<node_scope_t*> scopes;
+    node_scope_t* current_scope = nullptr;
 }
 
 %start program
@@ -111,11 +112,11 @@ program: scope { root = $1; }
 ;
 
 scope: %empty           {
-                            $$ = new node_scope_t();
+                            $$ = new node_scope_t(current_scope);
                             if (!scopes.empty())
                                 $$->copy_variables(scopes.top()->get_variables());
                             scopes.push($$);
-                            std::cerr << "new scope = " << $$ << "\n";
+                            current_scope = $$;
                         }
      | scope ustatement { $$ = $1; $$->add_statement($2); }
      | scope SCOLON     { $$ = $1; }
@@ -177,9 +178,8 @@ terminal: LBRACKET expression RBRACKET   { $$ = $2; }
 ;
 
 lvalue: ID {
-                node_scope_t* current_scope = scopes.top();
                 if (current_scope->find_variable($1)) {
-                    $$ = current_scope->get_variable($1);
+                    $$ = current_scope->get_node($1);
                 } else {
                     $$ = new node_id_t();
                     current_scope->add_variable($1, $$);
