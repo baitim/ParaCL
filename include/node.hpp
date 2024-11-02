@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <exception>
 #include <memory>
 #include <list>
 #include <unordered_map>
@@ -11,10 +12,8 @@ namespace node {
     class node_t {
     public:
         virtual ~node_t() {}
-        virtual void set_value(int value) {}
-        virtual int  get_value() { return 0; }
-        virtual int  calculate() { return 0; }
-        virtual void print()     {}
+        virtual int set_value(int value) { throw "attempt to set value to base node"; }
+        virtual int execute()            { throw "attempt to execute base node"; }
     };
 
     //////////////////////////////////////////////////////
@@ -23,8 +22,8 @@ namespace node {
         int value_;
 
     public:
-        void set_value(int value) { value_ = value; }
-        int  get_value()          { return value_; }
+        int set_value(int value) { return value_ = value; }
+        int execute()            { return value_; }
     };
 
     //////////////////////////////////////////////////////
@@ -34,7 +33,7 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        int calculate() { return number_; }
+        int execute() { return number_; }
     };
 
     //////////////////////////////////////////////////////
@@ -62,30 +61,24 @@ namespace node {
         node_bin_op_t(binary_operators_e type, node_t* left, node_t* right)
         : type_(type), left_(left), right_(right) {}
 
-        int calculate() {
+        int execute() {
             switch (type_) {
-                case binary_operators_e::EQ: return left_->calculate() == right_->calculate(); 
-                case binary_operators_e::NE: return left_->calculate() != right_->calculate(); 
-                case binary_operators_e::LE: return left_->calculate() <= right_->calculate(); 
-                case binary_operators_e::GE: return left_->calculate() >= right_->calculate(); 
-                case binary_operators_e::LT: return left_->calculate() <  right_->calculate(); 
-                case binary_operators_e::GT: return left_->calculate() >  right_->calculate(); 
+                case binary_operators_e::EQ: return left_->execute() == right_->execute(); 
+                case binary_operators_e::NE: return left_->execute() != right_->execute(); 
+                case binary_operators_e::LE: return left_->execute() <= right_->execute(); 
+                case binary_operators_e::GE: return left_->execute() >= right_->execute(); 
+                case binary_operators_e::LT: return left_->execute() <  right_->execute(); 
+                case binary_operators_e::GT: return left_->execute() >  right_->execute(); 
 
-                case binary_operators_e::ASSIGN: {
-                    int value = right_->calculate();
-                    left_->set_value(value);
-                    return value;
-                }
+                case binary_operators_e::ASSIGN: { return left_->set_value(right_->execute()); }
 
-                case binary_operators_e::ADD: return left_->calculate() + right_->calculate(); 
-                case binary_operators_e::SUB: return left_->calculate() - right_->calculate(); 
-                case binary_operators_e::MUL: return left_->calculate() * right_->calculate(); 
-                case binary_operators_e::DIV: return left_->calculate() / right_->calculate(); 
+                case binary_operators_e::ADD: return left_->execute() + right_->execute(); 
+                case binary_operators_e::SUB: return left_->execute() - right_->execute(); 
+                case binary_operators_e::MUL: return left_->execute() * right_->execute(); 
+                case binary_operators_e::DIV: return left_->execute() / right_->execute(); 
             }
-            return 0;
+            throw "attempt to execute unknown binary operator";
         }
-
-        int get_value() { return calculate(); }
     };
 
     //////////////////////////////////////////////////////
@@ -100,15 +93,11 @@ namespace node {
         bool    find_variable(std::string name) { return variables_.find(name) != variables_.end(); }
         node_t* get_variable (std::string name) { return variables_.find(name)->second; }
 
-        int calculate() {
+        int execute() {
+            int result;
             for (auto node : statements_)
-                node->calculate();
-            return 0;
-        }
-
-        void print() {
-            for (auto node : statements_)
-                node->print();
+                result = node->execute();
+            return result;
         }
     };
 
@@ -120,8 +109,10 @@ namespace node {
     public:
         node_print_t(node_t* body) : body_(body) {}
 
-        void print() {
-            std::cout << body_->get_value() << "\n";
+        int execute() {
+            int value = body_->execute();
+            std::cout << value << "\n";
+            return value;
         }
     };
 }

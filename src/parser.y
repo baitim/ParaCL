@@ -1,16 +1,18 @@
 /*
 Grammar:
     scope        -> statement; scope | empty
-    statement    -> assignment | print
+    statement    -> print | assignment
 
     print        -> print rvalue
-    rvalue       -> lvalue | expression
 
-    assignment   -> lvalue = expression
-    lvalue       -> id
+    assignment   -> lvalue = rvalue
+
+    rvalue       -> expression
     expression   -> expression   bin_oper   expression_1 | expression_1
     expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
-    expression_2 -> expression_2 bin_oper_2 number | number
+    expression_2 -> expression_2 bin_oper_2 terminal     | terminal
+    terminal     -> '(' expression ')' | lvalue | number
+    lvalue       -> id
 */
 
 %language "c++"
@@ -40,6 +42,11 @@ Grammar:
 %token
     PRINT
 
+    LBRACKET
+    RBRACKET
+    LSCOPE
+    RSCOPE
+
     EQUAL
     NEQUAL
     ELESS
@@ -68,6 +75,7 @@ Grammar:
 %nterm <node_t*> expression
 %nterm <node_t*> expression_1
 %nterm <node_t*> expression_2
+%nterm <node_t*> terminal
 %nterm <binary_operators_e> bin_oper
 %nterm <binary_operators_e> bin_oper_1
 %nterm <binary_operators_e> bin_oper_2
@@ -96,21 +104,10 @@ statement: assignment SCOLON { $$ = $1; }
 print: PRINT rvalue { $$ = new node_print_t($2); }
 ;
 
-rvalue: lvalue     { $$ = $1; }
-      | expression { $$ = $1; }
+assignment: lvalue ASSIGN rvalue { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
-assignment: lvalue ASSIGN expression { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
-;
-
-lvalue: ID {
-                if(current_scope->find_variable($1)) {
-                    $$ = current_scope->get_variable($1);
-                } else {
-                    $$ = new node_id_t();
-                    current_scope->add_variable($1, $$);
-                }
-            }
+rvalue: expression { $$ = $1; }
 ;
 
 expression  : expression   bin_oper   expression_1 { $$ = new node_bin_op_t($2, $1, $3); }
@@ -121,8 +118,23 @@ expression_1: expression_1 bin_oper_1 expression_2 { $$ = new node_bin_op_t($2, 
             | expression_2                         { $$ = $1; }
 ;
 
-expression_2: expression_2 bin_oper_2 NUMBER { $$ = new node_bin_op_t($2, $1, new node_number_t($3)); }
-            | NUMBER                         { $$ = new node_number_t($1); }
+expression_2: expression_2 bin_oper_2 terminal     { $$ = new node_bin_op_t($2, $1, $3); }
+            | terminal                             { $$ = $1; }
+;
+
+terminal: LBRACKET expression RBRACKET   { $$ = $2; }
+        | lvalue                         { $$ = $1; }
+        | NUMBER                         { $$ = new node_number_t($1); }
+;
+
+lvalue: ID {
+                if(current_scope->find_variable($1)) {
+                    $$ = current_scope->get_variable($1);
+                } else {
+                    $$ = new node_id_t();
+                    current_scope->add_variable($1, $$);
+                }
+            }
 ;
 
 bin_oper   : EQUAL    { $$ = binary_operators_e::EQ; }

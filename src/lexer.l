@@ -17,6 +17,11 @@ SCOLON   [;]+
 {NUMBER}        {/* std::cout << "number <" << yytext << ">\n"; */ return yy::parser::token_type::NUMBER; }
 {ID}            {/* std::cout << "    id <" << yytext << ">\n"; */ return yy::parser::token_type::ID;     }
 
+"("             {/* std::cout << "     ( <" << yytext << ">\n"; */ return yy::parser::token_type::LBRACKET; }
+")"             {/* std::cout << "     ) <" << yytext << ">\n"; */ return yy::parser::token_type::RBRACKET; }
+"{"             {/* std::cout << "     { <" << yytext << ">\n"; */ return yy::parser::token_type::LSCOPE;   }
+"}"             {/* std::cout << "     } <" << yytext << ">\n"; */ return yy::parser::token_type::RSCOPE;   }
+
 "=="            {/* std::cout << "     = <" << yytext << ">\n"; */ return yy::parser::token_type::EQUAL;    }
 "!="            {/* std::cout << "     = <" << yytext << ">\n"; */ return yy::parser::token_type::NEQUAL;   }
 "<="            {/* std::cout << "     + <" << yytext << ">\n"; */ return yy::parser::token_type::ELESS;    }
@@ -27,8 +32,8 @@ SCOLON   [;]+
 "="             {/* std::cout << "     = <" << yytext << ">\n"; */ return yy::parser::token_type::ASSIGN; }
 "+"             {/* std::cout << "     + <" << yytext << ">\n"; */ return yy::parser::token_type::ADD;    }
 "-"             {/* std::cout << "     - <" << yytext << ">\n"; */ return yy::parser::token_type::SUB;    }
-"*"             {/* std::cout << "     + <" << yytext << ">\n"; */ return yy::parser::token_type::MUL;    }
-"/"             {/* std::cout << "     - <" << yytext << ">\n"; */ return yy::parser::token_type::DIV;    }
+"*"             {/* std::cout << "     * <" << yytext << ">\n"; */ return yy::parser::token_type::MUL;    }
+"/"             {/* std::cout << "     / <" << yytext << ">\n"; */ return yy::parser::token_type::DIV;    }
 
 {SCOLON}        {/* std::cout << "     ; <" << yytext << ">\n"; */ return yy::parser::token_type::SCOLON; }
 .               {/* std::cout << "     . <" << yytext << ">\n"; */ return yy::parser::token_type::ERR;    }

@@ -1,3 +1,4 @@
+#include "ANSI_colors.hpp"
 #include "ast.hpp"
 #include "driver.hpp"
 
@@ -10,7 +11,11 @@ int main() {
     yy::Driver_t driver(lexer);
     ast::ast_t ast;
     driver.parse(ast.root_);
-    ast.calculate();
-    ast.print();
+    try {
+        ast.execute();
+    } catch (const char* error_message) {
+        std::cout << print_red(error_message) << "\n";
+        return 1;
+    }
     delete lexer;
 }

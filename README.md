@@ -29,8 +29,7 @@
 
 * Testing
     - End to end <br>
-        <code>ctest --test-dir build</code><br>
-        maybe you will need these flags for the ctest <code>--rerun-failed --output-on-failure</code>
+        <code>ctest --test-dir build --output-on-failure</code>
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
