@@ -32,7 +32,7 @@ public:
         return tt;
     }
 
-    bool parse(const char* file_name, node::node_t*& root) {
+    bool parse(const std::string& file_name, node::node_t*& root) {
         std::ifstream input_file(file_name);
         plex_->switch_streams(input_file, std::cout);
 

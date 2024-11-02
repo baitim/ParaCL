@@ -1,0 +1,7 @@
+a = -3;
+b = ?;
+print a * (-b);
+print b;
+print b * (-?);
+print - --+-a;
+print 4 - -a + 9;
