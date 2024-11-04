@@ -43,6 +43,6 @@ TEST(Matrix_shuffle, end_to_end) {
 
         EXPECT_EQ(ans_get.size(), ans_src.size());
         for (int j = 0, end = ans_get.size(); j < end; ++j)
-            EXPECT_EQ(ans_get[j], ans_src[j]);
+            EXPECT_EQ(ans_get[j], ans_src[j]) << "\nindexes: " << j + 1;
     }
 }
