@@ -81,6 +81,9 @@ Grammar:
     ERR
 ;
 
+%precedence "then"
+%precedence FORK2
+
 %token <int> NUMBER
 %token <std::string> ID
 %nterm <node_scope_t*> scope
@@ -148,8 +151,8 @@ statement: fork       { $$ = $1; }
          | loop       { $$ = $1; }
 ;
 
-fork: FORK1 condition body FORK2 body { $$ = new node_fork_t($2, $3, $5); }
-    | FORK1 condition body            { $$ = new node_fork_t($2, $3, nullptr); }
+fork: FORK1 condition body %prec "then" { $$ = new node_fork_t($2, $3, nullptr); }
+    | FORK1 condition body FORK2 body   { $$ = new node_fork_t($2, $3, $5); }
 ;
 
 loop: LOOP condition body { $$ = new node_loop_t($2, $3); }
