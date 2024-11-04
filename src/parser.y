@@ -9,7 +9,7 @@ Grammar:
     loop         -> while condition body
 
     condition    -> '(' rvalue ')'
-    body         -> '{' scope '}' | ustatement;
+    body         -> '{' scope '}' | lghost_scope ustatement rghost_scope;
 
     print        -> print rvalue
     assignment   -> lvalue = rvalue
@@ -84,6 +84,8 @@ Grammar:
 %token <int> NUMBER
 %token <std::string> ID
 %nterm <node_scope_t*> scope
+%nterm <node_scope_t*> lghost_scope
+%nterm rghost_scope
 %nterm <node_t*> ustatement
 %nterm <node_t*> rstatement
 %nterm <node_t*>  statement
@@ -107,6 +109,19 @@ Grammar:
 {
     std::stack<node_scope_t*> scopes;
     node_scope_t* current_scope = nullptr;
+
+    void drill_down_to_scope(node_scope_t*& scope) {
+        scope = new node_scope_t(current_scope);
+        if (!scopes.empty())
+            scope->copy_variables(scopes.top()->get_variables());
+        scopes.push(scope);
+        current_scope = scope;
+    }
+
+    void lift_up_from_scope() {
+        scopes.pop();
+        current_scope = scopes.top();
+    }
 }
 
 %start program
@@ -116,13 +131,7 @@ Grammar:
 program: scope { root = $1; }
 ;
 
-scope: %empty           {
-                            $$ = new node_scope_t(current_scope);
-                            if (!scopes.empty())
-                                $$->copy_variables(scopes.top()->get_variables());
-                            scopes.push($$);
-                            current_scope = $$;
-                        }
+scope: %empty           { drill_down_to_scope($$); }
      | scope ustatement { $$ = $1; $$->add_statement($2); }
      | scope SCOLON     { $$ = $1; }
 ;
@@ -149,10 +158,13 @@ loop: LOOP condition body { $$ = new node_loop_t($2, $3); }
 condition: LBRACKET rvalue RBRACKET { $$ = $2; }
 ;
 
-body: LSCOPE scope RSCOPE { $$ = $2; scopes.pop(); }
-    | ustatement          { $$ = $1; }
-    | SCOLON              { $$ = nullptr; }
+body: LSCOPE scope RSCOPE                   { $$ = $2; lift_up_from_scope(); }
+    | lghost_scope ustatement rghost_scope  { $1->add_statement($2); $$ = $1; }
+    | SCOLON                                { $$ = nullptr; }
 ;
+
+lghost_scope: %empty { drill_down_to_scope($$); }
+rghost_scope: %empty { lift_up_from_scope(); }
 
 print: PRINT rvalue { $$ = new node_print_t($2); }
 ;

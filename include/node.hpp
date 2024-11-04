@@ -31,11 +31,19 @@ namespace node {
 
     class node_id_t final : public node_t {
         int value_;
+        bool was_declared = false;
 
     public:
-        int set_value(int value) { return value_ = value; }
-        int execute()            { return value_; }
-        node_type_e get_type()   { return node_type_e::ID; }
+        int  set_value  (int value) { was_declared = true; return value_ = value; }
+        bool is_declared()          { return was_declared; }
+
+        int execute() {
+            if (was_declared)
+                return value_;
+            throw "variable has not been declared";
+        }
+
+        node_type_e get_type() { return node_type_e::ID; }
     };
 
     /* ----------------------------------------------------- */

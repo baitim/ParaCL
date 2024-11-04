@@ -1,0 +1,7 @@
+x = 0;
+if (x < 10) {
+    print x;
+    y = 777;
+}
+z = 5 + y;
+print z;
