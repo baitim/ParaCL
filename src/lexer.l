@@ -18,35 +18,37 @@ SCOLON   [;]+
 {WS}            // nothing
 {NS}            { update_new_line(); }
 
-"print"         {/* std::cout << " print <" << yytext << ">\n"; */ return yy::parser::token_type::PRINT; }
-"?"             {/* std::cout << "     ? <" << yytext << ">\n"; */ return yy::parser::token_type::INPUT; }
-"if"            {/* std::cout << "    if <" << yytext << ">\n"; */ return yy::parser::token_type::FORK1; }
-"else"          {/* std::cout << "  else <" << yytext << ">\n"; */ return yy::parser::token_type::FORK2; }
-"while"         {/* std::cout << " while <" << yytext << ">\n"; */ return yy::parser::token_type::LOOP;  }
+"print"         { return yy::parser::token_type::PRINT; }
+"?"             { return yy::parser::token_type::INPUT; }
+"if"            { return yy::parser::token_type::FORK1; }
+"else"          { return yy::parser::token_type::FORK2; }
+"while"         { return yy::parser::token_type::LOOP;  }
 
-{NUMBER}        {/* std::cout << "number <" << yytext << ">\n"; */ return yy::parser::token_type::NUMBER; }
-{ID}            {/* std::cout << "    id <" << yytext << ">\n"; */ return yy::parser::token_type::ID;     }
+{NUMBER}        { return yy::parser::token_type::NUMBER; }
+{ID}            { return yy::parser::token_type::ID;     }
 
-"("             {/* std::cout << "     ( <" << yytext << ">\n"; */ return yy::parser::token_type::LBRACKET; }
-")"             {/* std::cout << "     ) <" << yytext << ">\n"; */ return yy::parser::token_type::RBRACKET; }
-"{"             {/* std::cout << "     { <" << yytext << ">\n"; */ return yy::parser::token_type::LSCOPE;   }
-"}"             {/* std::cout << "     } <" << yytext << ">\n"; */ return yy::parser::token_type::RSCOPE;   }
+"("             { return yy::parser::token_type::LBRACKET; }
+")"             { return yy::parser::token_type::RBRACKET; }
+"{"             { return yy::parser::token_type::LSCOPE;   }
+"}"             { return yy::parser::token_type::RSCOPE;   }
 
-"=="            {/* std::cout << "    == <" << yytext << ">\n"; */ return yy::parser::token_type::EQUAL;    }
-"!="            {/* std::cout << "    != <" << yytext << ">\n"; */ return yy::parser::token_type::NEQUAL;   }
-"<="            {/* std::cout << "    <= <" << yytext << ">\n"; */ return yy::parser::token_type::ELESS;    }
-">="            {/* std::cout << "    >= <" << yytext << ">\n"; */ return yy::parser::token_type::EGREATER; }
-"<"             {/* std::cout << "     < <" << yytext << ">\n"; */ return yy::parser::token_type::LESS;     }
-">"             {/* std::cout << "     > <" << yytext << ">\n"; */ return yy::parser::token_type::GREATER;  }
+"=="            { return yy::parser::token_type::EQUAL;    }
+"!="            { return yy::parser::token_type::NEQUAL;   }
+"<="            { return yy::parser::token_type::ELESS;    }
+">="            { return yy::parser::token_type::EGREATER; }
+"<"             { return yy::parser::token_type::LESS;     }
+">"             { return yy::parser::token_type::GREATER;  }
 
-"="             {/* std::cout << "     = <" << yytext << ">\n"; */ return yy::parser::token_type::ASSIGN; }
-"+"             {/* std::cout << "     + <" << yytext << ">\n"; */ return yy::parser::token_type::ADD;    }
-"-"             {/* std::cout << "     - <" << yytext << ">\n"; */ return yy::parser::token_type::SUB;    }
-"*"             {/* std::cout << "     * <" << yytext << ">\n"; */ return yy::parser::token_type::MUL;    }
-"/"             {/* std::cout << "     / <" << yytext << ">\n"; */ return yy::parser::token_type::DIV;    }
+"="             { return yy::parser::token_type::ASSIGN; }
+"+"             { return yy::parser::token_type::ADD;    }
+"-"             { return yy::parser::token_type::SUB;    }
+"*"             { return yy::parser::token_type::MUL;    }
+"/"             { return yy::parser::token_type::DIV;    }
 
-{SCOLON}        {/* std::cout << "     ; <" << yytext << ">\n"; */ return yy::parser::token_type::SCOLON; }
-.               { std::cout << print_red(" error token <" << yytext << ">\n"); return yy::parser::token_type::ERR;    }
+{SCOLON}        { return yy::parser::token_type::SCOLON; }
+
+.               { std::cout << print_red("error token <" << yytext << ">\n");
+                  return yy::parser::token_type::ERR; }
 
 %%
 

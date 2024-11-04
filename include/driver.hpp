@@ -8,11 +8,9 @@
 namespace yy {
 
 class Driver_t {
-    Lexer_t* plex_;
+    Lexer_t* plex_ = new yy::Lexer_t;
 
 public:
-    Driver_t(Lexer_t* plex) : plex_(plex) {}
-
     parser::token_type yylex(parser::semantic_type* yylval, location* loc) {
         parser::token_type tt = static_cast<parser::token_type>(plex_->yylex());
         switch (tt) {
@@ -42,5 +40,7 @@ public:
         bool res = parser.parse();
         return !res;
     }
+
+    ~Driver_t() { delete plex_; }
 };
 }

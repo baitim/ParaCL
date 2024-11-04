@@ -18,3 +18,5 @@ print b_1;
 
 abc = 5 > 3;
 print abc;
+
+print 1 - 2 - 5;

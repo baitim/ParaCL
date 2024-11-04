@@ -8,30 +8,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    yy::Lexer_t* lexer = new yy::Lexer_t;
-    yy::Driver_t driver{lexer};
+    yy::Driver_t driver;
     ast::ast_t ast;
 
     try {
         driver.parse(argv[1], ast.root_);
     } catch (const char* error_message) {
-        goto error;
+        return 1;
     }
 
     try {
         ast.execute();
     } catch (const char* error_message) {
         std::cout << print_red(error_message) << "\n";
-        goto error;
+        return 1;
     }
 
-    delete lexer;
-
-    goto no_error;
-error:
-    delete lexer;
-    return 1;
-
-no_error:
     return 0;
 }

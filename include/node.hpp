@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <exception>
-#include <memory>
 #include <list>
 #include <unordered_map>
 #include <string>

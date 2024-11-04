@@ -1,3 +1,4 @@
+#pragma once
 
 #ifndef yyFlexLexer
 #include <FlexLexer.h>

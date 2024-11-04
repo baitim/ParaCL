@@ -5,7 +5,7 @@ Grammar:
     rstatement   -> print | assignment                  //    return
      statement   -> fork  | loop                        // no return
 
-    fork         -> if condition body else body | if condition body
+    fork         -> if condition body | if condition body else body
     loop         -> while condition body
 
     condition    -> '(' rvalue ')'
