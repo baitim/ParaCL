@@ -14,5 +14,5 @@ print k;
 k = (a + a) * tt - k;
 print k;
 
-print !;
+print 1 + 4 - !;
 print tt;

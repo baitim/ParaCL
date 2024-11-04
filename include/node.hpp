@@ -22,9 +22,9 @@ namespace node {
     class node_t {
     public:
         virtual ~node_t() {}
-        virtual int set_value(int value) { throw "attempt to set value to base node"; }
-        virtual int execute()            { throw "attempt to execute base node"; }
-        virtual node_type_e get_type()   { throw "attempt to get type of base node"; }
+        virtual int set_value(int value)     { throw "attempt to set value to base node"; }
+        virtual int execute()                { throw "attempt to execute base node"; }
+        virtual node_type_e get_type() const { throw "attempt to get type of base node"; }
     };
 
     /* ----------------------------------------------------- */
@@ -35,7 +35,7 @@ namespace node {
 
     public:
         int  set_value  (int value) { was_declared = true; return value_ = value; }
-        bool is_declared()          { return was_declared; }
+        bool is_declared() const    { return was_declared; }
 
         int execute() {
             if (was_declared)
@@ -43,7 +43,7 @@ namespace node {
             throw "variable has not been declared";
         }
 
-        node_type_e get_type() { return node_type_e::ID; }
+        node_type_e get_type() const { return node_type_e::ID; }
     };
 
     /* ----------------------------------------------------- */
@@ -53,8 +53,8 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        int execute()          { return number_; }
-        node_type_e get_type() { return node_type_e::NUMBER; }
+        int execute() { return number_; }
+        node_type_e get_type() const { return node_type_e::NUMBER; }
     };
 
     /* ----------------------------------------------------- */
@@ -101,7 +101,7 @@ namespace node {
             throw "attempt to execute unknown binary operator";
         }
 
-        node_type_e get_type() { return node_type_e::BIN_OP; }
+        node_type_e get_type() const { return node_type_e::BIN_OP; }
 
         ~node_bin_op_t() {
             if (left_->get_type()  != node_type_e::ID) delete left_;
@@ -135,7 +135,7 @@ namespace node {
             return result;
         }
 
-        node_type_e get_type() { return node_type_e::SCOPE; }
+        node_type_e get_type() const { return node_type_e::SCOPE; }
 
         ~node_scope_t() {
             for (auto node : statements_)
@@ -169,7 +169,7 @@ namespace node {
             return value;
         }
 
-        node_type_e get_type() { return node_type_e::PRINT; }
+        node_type_e get_type() const { return node_type_e::PRINT; }
 
         ~node_print_t() { if (argument_->get_type() != node_type_e::ID) delete argument_; }
     };
@@ -186,7 +186,7 @@ namespace node {
             return value;
         }
 
-        node_type_e get_type() { return node_type_e::INPUT; }
+        node_type_e get_type() const { return node_type_e::INPUT; }
     };
 
     /* ----------------------------------------------------- */
@@ -211,7 +211,7 @@ namespace node {
             if (body_->get_type()      != node_type_e::ID) delete body_;
         }
 
-        node_type_e get_type() { return node_type_e::LOOP; }
+        node_type_e get_type() const { return node_type_e::LOOP; }
     };
 
     /* ----------------------------------------------------- */
@@ -243,6 +243,6 @@ namespace node {
                 body2_->get_type()     != node_type_e::ID) delete body2_;
         }
 
-        node_type_e get_type() { return node_type_e::FORK; }
+        node_type_e get_type() const { return node_type_e::FORK; }
     };
 }

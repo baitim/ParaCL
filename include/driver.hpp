@@ -30,7 +30,7 @@ public:
             default:
                 break;
         }
-        *loc = plex_->loc;
+        *loc = plex_->get_location();
         return tt;
     }
 

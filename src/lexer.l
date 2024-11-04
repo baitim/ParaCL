@@ -4,7 +4,7 @@
 %{
     #include "parser.tab.hh"
     #include "driver.hpp"
-    #define YY_USER_ACTION loc.columns(yyleng);
+    #define YY_USER_ACTION update_new_token();
 %}
 
 WS       [ \t\v]+
@@ -14,12 +14,9 @@ ID       [a-zA-Z_][a-zA-Z0-9_]*
 SCOLON   [;]+
 
 %%
-%{
-    loc.step(); // start = end value
-%}
 
-{WS}            { loc.step(); }
-{NS}            { loc.lines(yyleng); loc.step(); }
+{WS}            // nothing
+{NS}            { update_new_line(); }
 
 "print"         {/* std::cout << " print <" << yytext << ">\n"; */ return yy::parser::token_type::PRINT; }
 "?"             {/* std::cout << "     ? <" << yytext << ">\n"; */ return yy::parser::token_type::INPUT; }
