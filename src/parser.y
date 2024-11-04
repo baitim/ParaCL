@@ -26,9 +26,12 @@ Grammar:
 %skeleton "lalr1.cc"
 %defines
 %define api.value.type variant
+%locations
+%define api.location.file "location.hh"
 
 %code requires
 {
+    #include "ANSI_colors.hpp"
     #include "node.hpp"
     using namespace node;
     #include <iostream>
@@ -36,14 +39,16 @@ Grammar:
     namespace yy {class Driver_t;}
 }
 
-%param { yy::Driver_t* driver }
-%parse-param {node_t*& root}
+%param       { yy::Driver_t* driver }
+%parse-param { node_t*& root }
 
 %code
 {
     #include "driver.hpp"
     namespace yy {
-        parser::token_type yylex(parser::semantic_type* yylval, Driver_t* driver);
+        parser::token_type yylex(parser::semantic_type* yylval,
+                                 location* loc,
+                                 Driver_t* driver);
     }
 }
 
@@ -208,9 +213,13 @@ bin_oper_2 : MUL { $$ = binary_operators_e::MUL; }
 
 namespace yy {
 parser::token_type yylex(parser::semantic_type* yylval,
+                         location* loc,
                          Driver_t* driver) {
-    return driver->yylex(yylval);
+    return driver->yylex(yylval, loc);
 }
 
-void parser::error(const std::string&) {}
+void parser::error(const location_type& loc, const std::string& message) {
+    std::cout << print_red("error at " << loc << ": " << message << "\n");
+    throw "";
+}
 }

@@ -1,17 +1,26 @@
-%option c++
+%option c++ yylineno noyywrap
+%option yyclass="yy::Lexer_t"
 
 %{
-#include "parser.tab.hh"
+    #include "parser.tab.hh"
+    #include "driver.hpp"
+    #define YY_USER_ACTION loc.columns(yyleng);
 %}
 
-WS       [ \t\n\v]+
+WS       [ \t\v]+
+NS       [\n]+
 NUMBER   [1-9][0-9]*|0
 ID       [a-zA-Z_][a-zA-Z0-9_]*
 SCOLON   [;]+
 
 %%
+%{
+    loc.step(); // start = end value
+%}
 
-{WS}            // skip
+{WS}            { loc.step(); }
+{NS}            { loc.lines(yyleng); loc.step(); }
+
 "print"         {/* std::cout << " print <" << yytext << ">\n"; */ return yy::parser::token_type::PRINT; }
 "?"             {/* std::cout << "     ? <" << yytext << ">\n"; */ return yy::parser::token_type::INPUT; }
 "if"            {/* std::cout << "    if <" << yytext << ">\n"; */ return yy::parser::token_type::FORK1; }
@@ -40,7 +49,7 @@ SCOLON   [;]+
 "/"             {/* std::cout << "     / <" << yytext << ">\n"; */ return yy::parser::token_type::DIV;    }
 
 {SCOLON}        {/* std::cout << "     ; <" << yytext << ">\n"; */ return yy::parser::token_type::SCOLON; }
-.               {/* std::cout << "     . <" << yytext << ">\n"; */ return yy::parser::token_type::ERR;    }
+.               { std::cout << print_red(" error token <" << yytext << ">\n"); return yy::parser::token_type::ERR;    }
 
 %%
 

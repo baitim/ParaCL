@@ -2,17 +2,18 @@
 
 #include "parser.tab.hh"
 #include "node.hpp"
+#include "lexer.hpp"
 #include <fstream>
-#include <FlexLexer.h>
 
 namespace yy {
+
 class Driver_t {
-    FlexLexer* plex_;
+    Lexer_t* plex_;
 
 public:
-    Driver_t(FlexLexer* plex) : plex_(plex) {}
+    Driver_t(Lexer_t* plex) : plex_(plex) {}
 
-    parser::token_type yylex(parser::semantic_type* yylval) {
+    parser::token_type yylex(parser::semantic_type* yylval, location* loc) {
         parser::token_type tt = static_cast<parser::token_type>(plex_->yylex());
         switch (tt) {
             case yy::parser::token_type::NUMBER:
@@ -29,6 +30,7 @@ public:
             default:
                 break;
         }
+        *loc = plex_->loc;
         return tt;
     }
 
