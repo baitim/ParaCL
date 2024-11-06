@@ -202,7 +202,7 @@ lvalue: ID {
                 if (current_scope->find_variable($1)) {
                     $$ = current_scope->get_node($1);
                 } else {
-                    $$ = new node_id_t();
+                    $$ = new node_id_t($1);
                     current_scope->add_variable($1, $$);
                 }
             }
@@ -235,6 +235,6 @@ parser::token_type yylex(parser::semantic_type* yylval,
 
 void parser::error(const location_type& loc, const std::string& message) {
     std::cout << print_red("error at " << loc << ": " << message << "\n");
-    throw "";
+    throw paracl::error_t{""};
 }
 }

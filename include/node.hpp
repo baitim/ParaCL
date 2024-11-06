@@ -1,10 +1,10 @@
 #pragma once
 
+#include "errors.hpp"
 #include <iostream>
 #include <exception>
 #include <list>
 #include <unordered_map>
-#include <string>
 
 namespace node {
 
@@ -21,25 +21,27 @@ namespace node {
     class node_t {
     public:
         virtual ~node_t() {}
-        virtual int set_value(int value)     { throw "attempt to set value to base node"; }
-        virtual int execute()                { throw "attempt to execute base node"; }
-        virtual node_type_e get_type() const { throw "attempt to get type of base node"; }
+        virtual int set_value(int value)     { throw paracl::error_t{"attempt to set value to base node"}; }
+        virtual int execute()                { throw paracl::error_t{"attempt to execute base node"}; }
+        virtual node_type_e get_type() const { throw paracl::error_t{"attempt to get type of base node"}; }
     };
 
     /* ----------------------------------------------------- */
 
     class node_id_t final : public node_t {
+        std::string name_;
         int value_;
         bool was_declared = false;
 
     public:
+        node_id_t(const std::string& name) : name_(name) {} 
         int  set_value  (int value) { was_declared = true; return value_ = value; }
         bool is_declared() const    { return was_declared; }
 
         int execute() {
             if (was_declared)
                 return value_;
-            throw "variable has not been declared";
+            throw paracl::error_t{"variable \"" + name_ + "\" has not been declared"};
         }
 
         node_type_e get_type() const { return node_type_e::ID; }
@@ -97,7 +99,7 @@ namespace node {
                 case binary_operators_e::MUL: return left_->execute() * right_->execute(); 
                 case binary_operators_e::DIV: return left_->execute() / right_->execute(); 
             }
-            throw "attempt to execute unknown binary operator";
+            throw paracl::error_t{"attempt to execute unknown binary operator"};
         }
 
         node_type_e get_type() const { return node_type_e::BIN_OP; }
@@ -181,7 +183,7 @@ namespace node {
             int value;
             std::cin >> value;
             if (!std::cin.good())
-                throw "invalid input: need integer";
+                throw paracl::error_t{"invalid input: need integer"};
             return value;
         }
 

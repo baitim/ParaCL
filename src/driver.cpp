@@ -13,14 +13,14 @@ int main(int argc, char* argv[]) {
 
     try {
         driver.parse(argv[1], ast.root_);
-    } catch (const char* error_message) {
+    } catch (const paracl::error_t& error) {
         return 1;
     }
 
     try {
         ast.execute();
-    } catch (const char* error_message) {
-        std::cout << print_red(error_message) << "\n";
+    } catch (const paracl::error_t& error) {
+        std::cout << print_red(error.msg_) << "\n";
         return 1;
     }
 
