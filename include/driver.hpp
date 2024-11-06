@@ -7,6 +7,12 @@
 
 namespace yy {
 
+    struct error_t final {
+        std::string msg_;
+        error_t(const char*        msg) : msg_(msg) {}
+        error_t(const std::string& msg) : msg_(msg) {}
+    };
+
     inline std::string get_location2str(const location& loc) {
         std::stringstream ss;
         ss << loc;

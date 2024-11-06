@@ -12,12 +12,6 @@
 
 namespace yy {
 
-    struct error_t final {
-        std::string msg_;
-        error_t(const char*        msg) : msg_(msg) {}
-        error_t(const std::string& msg) : msg_(msg) {}
-    };
-
     class Lexer_t : public yyFlexLexer {
         location loc_;
 
