@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <exception>
 #include <list>
 #include <unordered_map>
@@ -99,11 +100,6 @@ namespace node {
         }
 
         node_type_e get_type() const { return node_type_e::BIN_OP; }
-
-        ~node_bin_op_t() {
-            if (left_->get_type()  != node_type_e::ID) delete left_;
-            if (right_->get_type() != node_type_e::ID) delete right_;
-        }
     };
 
     /* ----------------------------------------------------- */
@@ -133,23 +129,6 @@ namespace node {
         }
 
         node_type_e get_type() const { return node_type_e::SCOPE; }
-
-        ~node_scope_t() {
-            for (auto node : statements_)
-                if (node->get_type() != node_type_e::ID)
-                    delete node;
-            
-
-            vars_container parent_variables;
-            if (parent_)
-                parent_variables = parent_->get_variables();
-
-            for (auto node_it : variables_) {
-                if ((!parent_) ||
-                    ( parent_ && parent_variables.find(node_it.first) == parent_variables.end()))
-                    delete node_it.second;
-            }
-        }
     };
 
     /* ----------------------------------------------------- */
@@ -167,8 +146,6 @@ namespace node {
         }
 
         node_type_e get_type() const { return node_type_e::PRINT; }
-
-        ~node_print_t() { if (argument_->get_type() != node_type_e::ID) delete argument_; }
     };
 
     /* ----------------------------------------------------- */
@@ -203,11 +180,6 @@ namespace node {
             return 0;
         }
 
-        ~node_loop_t() {
-            if (condition_->get_type() != node_type_e::ID) delete condition_;
-            if (body_->get_type()      != node_type_e::ID) delete body_;
-        }
-
         node_type_e get_type() const { return node_type_e::LOOP; }
     };
 
@@ -233,13 +205,15 @@ namespace node {
             return 0;
         }
 
-        ~node_fork_t() {
-            if (condition_->get_type() != node_type_e::ID) delete condition_;
-            if (body1_->get_type()     != node_type_e::ID) delete body1_;
-            if (body2_ &&
-                body2_->get_type()     != node_type_e::ID) delete body2_;
-        }
-
         node_type_e get_type() const { return node_type_e::FORK; }
+    };
+
+    struct buffer_t final {
+        std::list<std::unique_ptr<node::node_t>> nodes_;
+
+        template <typename NodeT>
+        NodeT* add_node(NodeT node) {
+            return static_cast<NodeT*>((nodes_.emplace_back(std::make_unique<NodeT>(node))).get());
+        }
     };
 }

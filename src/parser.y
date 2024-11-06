@@ -38,7 +38,8 @@ Grammar:
 }
 
 %param       { yy::Driver_t* driver }
-%parse-param { node_t*& root }
+%parse-param { node::buffer_t& buf }
+%parse-param { node::node_t*&  root }
 
 %code
 {
@@ -111,8 +112,7 @@ Grammar:
     std::stack<node_scope_t*> scopes;
     node_scope_t* current_scope = nullptr;
 
-    void drill_down_to_scope(node_scope_t*& scope) {
-        scope = new node_scope_t(current_scope);
+    void drill_down_to_scope(node_scope_t* scope) {
         if (!scopes.empty())
             scope->copy_variables(scopes.top()->get_variables());
         scopes.push(scope);
@@ -132,7 +132,7 @@ Grammar:
 program: scope { root = $1; }
 ;
 
-scope: %empty           { drill_down_to_scope($$); }
+scope: %empty           { $$ = buf.add_node(node_scope_t(current_scope)); drill_down_to_scope($$); }
      | scope ustatement { $$ = $1; $$->add_statement($2); }
      | scope SCOLON     { $$ = $1; }
 ;
@@ -149,11 +149,11 @@ statement: fork       { $$ = $1; }
          | loop       { $$ = $1; }
 ;
 
-fork: FORK1 condition body %prec "then" { $$ = new node_fork_t($2, $3, nullptr); }
-    | FORK1 condition body FORK2 body   { $$ = new node_fork_t($2, $3, $5); }
+fork: FORK1 condition body %prec "then" { $$ = buf.add_node(node_fork_t($2, $3, nullptr)); }
+    | FORK1 condition body FORK2 body   { $$ = buf.add_node(node_fork_t($2, $3, $5)); }
 ;
 
-loop: LOOP condition body { $$ = new node_loop_t($2, $3); }
+loop: LOOP condition body { $$ = buf.add_node(node_loop_t($2, $3)); }
 ;
 
 condition: LBRACKET rvalue RBRACKET { $$ = $2; }
@@ -164,10 +164,10 @@ body: LSCOPE scope RSCOPE                   { $$ = $2; lift_up_from_scope(); }
     | SCOLON                                { $$ = nullptr; }
 ;
 
-lghost_scope: %empty { drill_down_to_scope($$); }
+lghost_scope: %empty { $$ = buf.add_node(node_scope_t(current_scope)); drill_down_to_scope($$); }
 rghost_scope: %empty { lift_up_from_scope(); }
 
-print: PRINT rvalue { $$ = new node_print_t($2); }
+print: PRINT rvalue { $$ = buf.add_node(node_print_t($2)); }
 ;
 
 assignment: lvalue ASSIGN rvalue {
@@ -175,10 +175,10 @@ assignment: lvalue ASSIGN rvalue {
                                     if (current_scope->find_variable($1)) {
                                         lvalue_node = current_scope->get_node($1);
                                     } else {
-                                        lvalue_node = new node_id_t();
+                                        lvalue_node = buf.add_node(node_id_t());
                                         current_scope->add_variable($1, lvalue_node);
                                     }
-                                    $$ = new node_bin_op_t(binary_operators_e::ASSIGN, lvalue_node, $3);
+                                    $$ = buf.add_node(node_bin_op_t(binary_operators_e::ASSIGN, lvalue_node, $3));
                                  }
 ;
 
@@ -186,22 +186,22 @@ rvalue: rstatement     { $$ = $1; }
       | expression_cmp { $$ = $1; }
 ;
 
-expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = new node_bin_op_t($2, $1, $3); }
+expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = buf.add_node(node_bin_op_t($2, $1, $3)); }
               | expression_pls                             { $$ = $1; }
 ;
 
-expression_pls: expression_pls bin_oper_pls expression_mul { $$ = new node_bin_op_t($2, $1, $3); }
+expression_pls: expression_pls bin_oper_pls expression_mul { $$ = buf.add_node(node_bin_op_t($2, $1, $3)); }
               | expression_mul                             { $$ = $1; }
 ;
 
-expression_mul: expression_mul bin_oper_mul terminal       { $$ = new node_bin_op_t($2, $1, $3); }
+expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node(node_bin_op_t($2, $1, $3)); }
               | terminal                                   { $$ = $1; }
 ;
 
 terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
-        | NUMBER                    { $$ = new node_number_t($1); }
-        | INPUT                     { $$ = new node_input_t(); }
-        | bin_oper_pls terminal     { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
+        | NUMBER                    { $$ = buf.add_node(node_number_t($1)); }
+        | INPUT                     { $$ = buf.add_node(node_input_t()); }
+        | bin_oper_pls terminal     { $$ = buf.add_node(node_bin_op_t($1, buf.add_node(node_number_t(0)), $2)); }
         | ID                        {
                                         if (!current_scope->find_variable($1))
                                             driver->report_undecl_error(@1, $1);

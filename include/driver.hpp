@@ -1,7 +1,7 @@
 #pragma once
 
 #include "parser.tab.hh"
-#include "node.hpp"
+#include "ast.hpp"
 #include "lexer.hpp"
 #include <cstring>
 
@@ -78,7 +78,7 @@ namespace yy {
 
         void report_undecl_error(const location& loc, const std::string& variable) {
             print_syntax_error(loc, program_str_, variable.length());
-            std::cout << print_red("undecl error at " << loc
+            std::cout << print_red("declaration error at " << loc
                       << ": \"" << variable << "\" - undeclared variable\n");
             throw error_t{""};
         }
@@ -112,12 +112,12 @@ namespace yy {
             return tt;
         }
 
-        bool parse(const std::string& file_name, node::node_t*& root) {
+        bool parse(const std::string& file_name, node::buffer_t& buf, node::node_t*& root) {
             init(file_name);
             std::ifstream input_file(file_name);
             lexer_.switch_streams(input_file, std::cout);
 
-            parser parser(this, root);
+            parser parser(this, buf, root);
             bool res = parser.parse();
             return !res;
         }

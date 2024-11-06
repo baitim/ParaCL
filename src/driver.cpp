@@ -11,8 +11,9 @@ int main(int argc, char* argv[]) {
     ast::ast_t ast;
 
     try {
-        driver.parse(argv[1], ast.root_);
+        driver.parse(argv[1], ast.buffer_, ast.root_);
     } catch (const yy::error_t& error) {
+        std::cout << print_red(error.msg_) << "\n";
         return 1;
     }
 
