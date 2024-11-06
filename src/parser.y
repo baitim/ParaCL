@@ -238,7 +238,7 @@ parser::token_type yylex(parser::semantic_type* yylval,
 }
 
 void parser::error(const location_type& loc, const std::string& message) {
-    std::cout << print_red(message << " at " << loc << ": unknown token\n");
+    driver->report_syntax_error(loc);
     throw error_t{""};
 }
 }

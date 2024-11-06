@@ -61,6 +61,7 @@ namespace yy {
     class Driver_t {
         Lexer_t lexer_;
         std::string program_str_;
+        std::string last_token_;
 
     public:
         void init(const std::string& file_name) {
@@ -77,25 +78,29 @@ namespace yy {
 
         void report_undecl_error(const location& loc, const std::string& variable) {
             print_syntax_error(loc, program_str_, variable.length());
+            std::cout << print_red("undecl error at " << loc
+                      << ": \"" << variable << "\" - undeclared variable\n");
+            throw error_t{""};
+        }
+
+        void report_syntax_error(const location& loc) {
+            print_syntax_error(loc, program_str_, last_token_.length());
             std::cout << print_red("syntax error at " << loc
-                    << ": \"" << variable << "\" - undeclared variable\n");
+                      << ": \"" << last_token_ << "\" - token that breaks\n");
             throw error_t{""};
         }
 
         parser::token_type yylex(parser::semantic_type* yylval, location* loc) {
             parser::token_type tt = static_cast<parser::token_type>(lexer_.yylex());
+            last_token_ = lexer_.YYText();
             switch (tt) {
-                case yy::parser::token_type::ERR:
-                    print_syntax_error(lexer_.get_location(), program_str_, strlen(lexer_.YYText()));
-                    break;
-
                 case yy::parser::token_type::NUMBER:
-                    yylval->as<int>() = std::stoi(lexer_.YYText());
+                    yylval->as<int>() = std::stoi(last_token_);
                     break;
 
                 case yy::parser::token_type::ID: {
                     parser::semantic_type tmp;
-                    tmp.as<std::string>() = lexer_.YYText();
+                    tmp.as<std::string>() = last_token_;
                     yylval->swap<std::string>(tmp);
                     break;
                 }
