@@ -33,7 +33,6 @@ Grammar:
 {
     #include "node.hpp"
     using namespace node;
-    #include <iostream>
     #include <stack>
     namespace yy {class Driver_t;}
 }
@@ -102,7 +101,7 @@ Grammar:
 %nterm <node_t*> expression_pls
 %nterm <node_t*> expression_mul
 %nterm <node_t*> terminal
-%nterm <node_t*> lvalue
+%nterm <std::string> lvalue
 %nterm <binary_operators_e> bin_oper_cmp
 %nterm <binary_operators_e> bin_oper_pls
 %nterm <binary_operators_e> bin_oper_mul
@@ -171,7 +170,16 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT rvalue { $$ = new node_print_t($2); }
 ;
 
-assignment: lvalue ASSIGN rvalue { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
+assignment: lvalue ASSIGN rvalue {
+                                    node_t* lvalue_node;
+                                    if (current_scope->find_variable($1)) {
+                                        lvalue_node = current_scope->get_node($1);
+                                    } else {
+                                        lvalue_node = new node_id_t();
+                                        current_scope->add_variable($1, lvalue_node);
+                                    }
+                                    $$ = new node_bin_op_t(binary_operators_e::ASSIGN, lvalue_node, $3);
+                                 }
 ;
 
 rvalue: rstatement     { $$ = $1; }
@@ -191,20 +199,17 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = new node_bin_o
 ;
 
 terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
-        | lvalue                    { $$ = $1; }
         | NUMBER                    { $$ = new node_number_t($1); }
         | INPUT                     { $$ = new node_input_t(); }
         | bin_oper_pls terminal     { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
+        | ID                        {
+                                        if (!current_scope->find_variable($1))
+                                            driver->report_undecl_error($1);
+                                        $$ = current_scope->get_node($1);
+                                    }
 ;
 
-lvalue: ID {
-                if (current_scope->find_variable($1)) {
-                    $$ = current_scope->get_node($1);
-                } else {
-                    $$ = new node_id_t($1);
-                    current_scope->add_variable($1, $$);
-                }
-            }
+lvalue: ID { $$ = $1; }
 ;
 
 bin_oper_cmp : EQUAL    { $$ = binary_operators_e::EQ; }
@@ -233,7 +238,7 @@ parser::token_type yylex(parser::semantic_type* yylval,
 }
 
 void parser::error(const location_type& loc, const std::string& message) {
-    std::cout << print_red(message << " at " << loc << "\n");
-    throw paracl::error_t{""};
+    std::cout << print_red(message << " at " << loc << ": unknown token\n");
+    throw error_t{""};
 }
 }

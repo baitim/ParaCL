@@ -3,6 +3,7 @@
 #include "parser.tab.hh"
 #include "node.hpp"
 #include "lexer.hpp"
+#include <cstring>
 
 namespace yy {
 
@@ -10,11 +11,18 @@ class Driver_t {
     Lexer_t lexer_;
 
 public:
+    void report_undecl_error(const std::string& variable) {
+        lexer_.print_syntax_error(variable.length());
+        std::cout << print_red("syntax error at " << lexer_.get_location()
+                  << ": \"" << variable << "\" - undeclared variable\n");
+        throw error_t{""};
+    }
+
     parser::token_type yylex(parser::semantic_type* yylval, location* loc) {
         parser::token_type tt = static_cast<parser::token_type>(lexer_.yylex());
         switch (tt) {
             case yy::parser::token_type::ERR:
-                lexer_.on_error();
+                lexer_.print_syntax_error(strlen(lexer_.YYText()));
                 break;
 
             case yy::parser::token_type::NUMBER:

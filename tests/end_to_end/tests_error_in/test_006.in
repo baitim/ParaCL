@@ -1,0 +1,13 @@
+if (1 > 2)
+    print 100;
+else {
+    x = 100;
+    y = 2;
+    print x + 2 * y;
+}
+if (3 > 2)
+    if (4 > 2)
+        if (5 > 2)
+        print x;
+    print 2;
+print 3;
