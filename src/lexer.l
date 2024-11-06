@@ -47,8 +47,7 @@ SCOLON   [;]+
 
 {SCOLON}        { return yy::parser::token_type::SCOLON; }
 
-.               { std::cout << print_red("error token <" << yytext << ">\n");
-                  return yy::parser::token_type::ERR; }
+.               { return yy::parser::token_type::ERR; }
 
 %%
 

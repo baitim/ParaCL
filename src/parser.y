@@ -31,7 +31,6 @@ Grammar:
 
 %code requires
 {
-    #include "ANSI_colors.hpp"
     #include "node.hpp"
     using namespace node;
     #include <iostream>
@@ -234,7 +233,7 @@ parser::token_type yylex(parser::semantic_type* yylval,
 }
 
 void parser::error(const location_type& loc, const std::string& message) {
-    std::cout << print_red("error at " << loc << ": " << message << "\n");
+    std::cout << print_red(message << " at " << loc << "\n");
     throw paracl::error_t{""};
 }
 }
