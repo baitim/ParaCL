@@ -14,13 +14,12 @@ Grammar:
     print        -> print rvalue
     assignment   -> lvalue = rvalue
 
-    rvalue       -> expression
-    expression   -> rstatement | expression_cmp
+    rvalue         -> rstatement | expression_cmp
     expression_cmp -> expression_pls bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_mul bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal     -> '(' expression ')' | lvalue | number | ? | bin_oper_pls terminal
-    lvalue       -> id
+    terminal       -> '(' rvalue ')' | lvalue | number | ? | bin_oper_pls terminal
+    lvalue         -> id
 */
 
 %language "c++"
@@ -100,7 +99,6 @@ Grammar:
 %nterm <node_t*> print
 %nterm <node_t*> assignment
 %nterm <node_t*> rvalue
-%nterm <node_t*> expression
 %nterm <node_t*> expression_cmp
 %nterm <node_t*> expression_pls
 %nterm <node_t*> expression_mul
@@ -177,11 +175,8 @@ print: PRINT rvalue { $$ = new node_print_t($2); }
 assignment: lvalue ASSIGN rvalue { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
-rvalue: expression { $$ = $1; }
-;
-
-expression: rstatement     { $$ = $1; }
-          | expression_cmp { $$ = $1; }
+rvalue: rstatement     { $$ = $1; }
+      | expression_cmp { $$ = $1; }
 ;
 
 expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = new node_bin_op_t($2, $1, $3); }
@@ -196,11 +191,11 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = new node_bin_o
               | terminal                                   { $$ = $1; }
 ;
 
-terminal: LBRACKET expression RBRACKET   { $$ = $2; }
-        | lvalue                         { $$ = $1; }
-        | NUMBER                         { $$ = new node_number_t($1); }
-        | INPUT                          { $$ = new node_input_t(); }
-        | bin_oper_pls terminal          { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
+terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
+        | lvalue                    { $$ = $1; }
+        | NUMBER                    { $$ = new node_number_t($1); }
+        | INPUT                     { $$ = new node_input_t(); }
+        | bin_oper_pls terminal     { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
 ;
 
 lvalue: ID {
