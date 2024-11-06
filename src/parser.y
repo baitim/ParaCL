@@ -1,7 +1,7 @@
 /*
 Grammar:
     scope        -> scope ustatement | scope; | empty
-    ustatement   -> statement | rstatement;             // universal
+    ustatement   -> statement | rvalue;                 // universal
     rstatement   -> print | assignment                  //    return
      statement   -> fork  | loop                        // no return
 
@@ -14,11 +14,12 @@ Grammar:
     print        -> print rvalue
     assignment   -> lvalue = rvalue
 
-    rvalue       -> rstatement | expression
-    expression   -> expression   bin_oper   expression_1 | expression_1
-    expression_1 -> expression_2 bin_oper_1 expression_2 | expression_2
-    expression_2 -> expression_2 bin_oper_2 terminal     | terminal
-    terminal     -> '(' expression ')' | lvalue | number | ? | bin_oper_1 terminal
+    rvalue       -> expression
+    expression   -> rstatement | expression_cmp
+    expression_cmp -> expression_pls bin_oper_cmp expression_pls | expression_pls
+    expression_pls -> expression_mul bin_oper_pls expression_mul | expression_mul
+    expression_mul -> expression_mul bin_oper_mul terminal       | terminal
+    terminal     -> '(' expression ')' | lvalue | number | ? | bin_oper_pls terminal
     lvalue       -> id
 */
 
@@ -100,13 +101,14 @@ Grammar:
 %nterm <node_t*> assignment
 %nterm <node_t*> rvalue
 %nterm <node_t*> expression
-%nterm <node_t*> expression_1
-%nterm <node_t*> expression_2
+%nterm <node_t*> expression_cmp
+%nterm <node_t*> expression_pls
+%nterm <node_t*> expression_mul
 %nterm <node_t*> terminal
 %nterm <node_t*> lvalue
-%nterm <binary_operators_e> bin_oper
-%nterm <binary_operators_e> bin_oper_1
-%nterm <binary_operators_e> bin_oper_2
+%nterm <binary_operators_e> bin_oper_cmp
+%nterm <binary_operators_e> bin_oper_pls
+%nterm <binary_operators_e> bin_oper_mul
 
 %code
 {
@@ -139,8 +141,8 @@ scope: %empty           { drill_down_to_scope($$); }
      | scope SCOLON     { $$ = $1; }
 ;
 
-ustatement:  statement        { $$ = $1; }
-          | rstatement SCOLON { $$ = $1; }
+ustatement: statement      { $$ = $1; }
+          | rvalue SCOLON  { $$ = $1; }
 ;
 
 rstatement: print      { $$ = $1; }
@@ -175,27 +177,30 @@ print: PRINT rvalue { $$ = new node_print_t($2); }
 assignment: lvalue ASSIGN rvalue { $$ = new node_bin_op_t(binary_operators_e::ASSIGN, $1, $3); }
 ;
 
-rvalue: rstatement { $$ = $1; }
-      | expression { $$ = $1; }
+rvalue: expression { $$ = $1; }
 ;
 
-expression  : expression   bin_oper   expression_1 { $$ = new node_bin_op_t($2, $1, $3); }
-            | expression_1                         { $$ = $1; }
+expression: rstatement     { $$ = $1; }
+          | expression_cmp { $$ = $1; }
 ;
 
-expression_1: expression_1 bin_oper_1 expression_2 { $$ = new node_bin_op_t($2, $1, $3); }
-            | expression_2                         { $$ = $1; }
+expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = new node_bin_op_t($2, $1, $3); }
+              | expression_pls                             { $$ = $1; }
 ;
 
-expression_2: expression_2 bin_oper_2 terminal     { $$ = new node_bin_op_t($2, $1, $3); }
-            | terminal                             { $$ = $1; }
+expression_pls: expression_pls bin_oper_pls expression_mul { $$ = new node_bin_op_t($2, $1, $3); }
+              | expression_mul                             { $$ = $1; }
+;
+
+expression_mul: expression_mul bin_oper_mul terminal       { $$ = new node_bin_op_t($2, $1, $3); }
+              | terminal                                   { $$ = $1; }
 ;
 
 terminal: LBRACKET expression RBRACKET   { $$ = $2; }
         | lvalue                         { $$ = $1; }
         | NUMBER                         { $$ = new node_number_t($1); }
         | INPUT                          { $$ = new node_input_t(); }
-        | bin_oper_1 terminal            { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
+        | bin_oper_pls terminal          { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
 ;
 
 lvalue: ID {
@@ -208,20 +213,20 @@ lvalue: ID {
             }
 ;
 
-bin_oper   : EQUAL    { $$ = binary_operators_e::EQ; }
-           | NEQUAL   { $$ = binary_operators_e::NE; }
-           | ELESS    { $$ = binary_operators_e::LE; }
-           | EGREATER { $$ = binary_operators_e::GE; }
-           | LESS     { $$ = binary_operators_e::LT; }
-           | GREATER  { $$ = binary_operators_e::GT; }
+bin_oper_cmp : EQUAL    { $$ = binary_operators_e::EQ; }
+             | NEQUAL   { $$ = binary_operators_e::NE; }
+             | ELESS    { $$ = binary_operators_e::LE; }
+             | EGREATER { $$ = binary_operators_e::GE; }
+             | LESS     { $$ = binary_operators_e::LT; }
+             | GREATER  { $$ = binary_operators_e::GT; }
 ;
 
-bin_oper_1 : ADD { $$ = binary_operators_e::ADD; }
-           | SUB { $$ = binary_operators_e::SUB; }
+bin_oper_pls : ADD { $$ = binary_operators_e::ADD; }
+             | SUB { $$ = binary_operators_e::SUB; }
 ;
 
-bin_oper_2 : MUL { $$ = binary_operators_e::MUL; }
-           | DIV { $$ = binary_operators_e::DIV; }
+bin_oper_mul : MUL { $$ = binary_operators_e::MUL; }
+             | DIV { $$ = binary_operators_e::DIV; }
 ;
 
 %%
