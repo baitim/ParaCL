@@ -204,7 +204,7 @@ terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
         | bin_oper_pls terminal     { $$ = new node_bin_op_t($1, new node_number_t(0), $2); }
         | ID                        {
                                         if (!current_scope->find_variable($1))
-                                            driver->report_undecl_error($1);
+                                            driver->report_undecl_error(@1, $1);
                                         $$ = current_scope->get_node($1);
                                     }
 ;
