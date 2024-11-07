@@ -1,6 +1,6 @@
 /*
 Grammar:
-    scope        -> scope ustatement | scope; | empty
+    scope        -> scope ustatement | scope; | '{' scope '}' | empty
     ustatement   -> statement | rvalue;                 // universal
     rstatement   -> print | assignment                  //    return
      statement   -> fork  | loop                        // no return
@@ -141,9 +141,10 @@ Grammar:
 program: scope { root = $1; }
 ;
 
-scope: %empty           { $$ = buf.add_node(node_scope_t{current_scope}); drill_down_to_scope($$); }
-     | scope ustatement { $$ = $1; $$->add_statement($2); }
-     | scope SCOLON     { $$ = $1; }
+scope: %empty               { $$ = buf.add_node(node_scope_t{current_scope}); drill_down_to_scope($$); }
+     | scope ustatement     { $$ = $1; $$->add_statement($2); }
+     | scope SCOLON         { $$ = $1; }
+     | LSCOPE scope RSCOPE  { $$ = $2; }
 ;
 
 ustatement: statement      { $$ = $1; }
