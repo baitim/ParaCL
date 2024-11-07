@@ -6,3 +6,7 @@ while (y > x) {
     y = y - 1;
     print -y * -+- y * 2;
 }
+
+z = 0;
+while ((z = z + 1) < 10);
+print z;

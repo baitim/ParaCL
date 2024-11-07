@@ -9,17 +9,17 @@ Grammar:
     loop         -> while condition body
 
     condition    -> '(' rvalue ')'
-    body         -> '{' scope '}' | lghost_scope ustatement rghost_scope;
+    body         -> '{' scope '}' | lghost_scope ustatement rghost_scope | ;
 
     print        -> print rvalue
     assignment   -> lvalue = rvalue
 
     rvalue         -> rstatement | expression_lgc
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
-    expression_cmp -> expression_pls bin_oper_cmp expression_pls | expression_pls
-    expression_pls -> expression_mul bin_oper_pls expression_mul | expression_mul
+    expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
+    expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' rvalue ')' | lvalue | number | ? | un_oper terminal
+    terminal       -> '(' rvalue ')' | number | ? | un_oper terminal | id
     lvalue         -> id
 */
 
