@@ -1,6 +1,8 @@
 /*
 Grammar:
-    scope        -> scope ustatement | scope; | '{' scope '}' | empty
+    program      -> statements
+    statements   -> statements ustatement | statements; | statements scope | empty
+    scope        -> '{' statements '}'
     ustatement   -> statement | rvalue;                 // universal
     rstatement   -> print | assignment                  //    return
      statement   -> fork  | loop                        // no return
@@ -9,7 +11,7 @@ Grammar:
     loop         -> while condition body
 
     condition    -> '(' rvalue ')'
-    body         -> '{' scope '}' | lghost_scope ustatement rghost_scope | ;
+    body         -> scope | lghost_scope ustatement rghost_scope | ;
 
     print        -> print rvalue
     assignment   -> lvalue = rvalue
@@ -91,6 +93,7 @@ Grammar:
 
 %token <int> NUMBER
 %token <std::string> ID
+%nterm <node_scope_t*> statements
 %nterm <node_scope_t*> scope
 %nterm <node_scope_t*> lghost_scope
 %nterm rghost_scope
@@ -118,19 +121,19 @@ Grammar:
 
 %code
 {
-    std::stack<node_scope_t*> scopes;
+    std::stack<node_scope_t*> scopes_stack;
     node_scope_t* current_scope = nullptr;
 
     void drill_down_to_scope(node_scope_t* scope) {
-        if (!scopes.empty())
-            scope->copy_variables(scopes.top()->get_variables());
-        scopes.push(scope);
+        if (!scopes_stack.empty())
+            scope->copy_variables(scopes_stack.top()->get_variables());
+        scopes_stack.push(scope);
         current_scope = scope;
     }
 
     void lift_up_from_scope() {
-        scopes.pop();
-        current_scope = scopes.top();
+        scopes_stack.pop();
+        current_scope = scopes_stack.top();
     }
 }
 
@@ -138,14 +141,16 @@ Grammar:
 
 %%
 
-program: scope { root = $1; }
+program: statements { root = $1; }
 ;
 
-scope: %empty               { $$ = buf.add_node(node_scope_t{current_scope}); drill_down_to_scope($$); }
-     | scope ustatement     { $$ = $1; $$->add_statement($2); }
-     | scope SCOLON         { $$ = $1; }
-     | LSCOPE scope RSCOPE  { $$ = $2; }
+statements: %empty                 { $$ = buf.add_node(node_scope_t{current_scope}); drill_down_to_scope($$); }
+          | statements ustatement  { $$ = $1; $$->add_statement($2); }
+          | statements SCOLON      { $$ = $1; }
+          | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
 ;
+
+scope: LSCOPE statements RSCOPE { $$ = $2; }
 
 ustatement: statement      { $$ = $1; }
           | rvalue SCOLON  { $$ = $1; }
@@ -169,7 +174,7 @@ loop: LOOP condition body { $$ = buf.add_node(node_loop_t{$2, $3}); }
 condition: LBRACKET rvalue RBRACKET { $$ = $2; }
 ;
 
-body: LSCOPE scope RSCOPE                   { $$ = $2; lift_up_from_scope(); }
+body: scope                                 { $$ = $1; lift_up_from_scope(); }
     | lghost_scope ustatement rghost_scope  { $1->add_statement($2); $$ = $1; }
     | SCOLON                                { $$ = nullptr; }
 ;
@@ -226,30 +231,30 @@ terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
 lvalue: ID { $$ = $1; }
 ;
 
-bin_oper_lgc : OR   { $$ = binary_operators_e::OR; }
-             | AND  { $$ = binary_operators_e::AND; }
+bin_oper_lgc: OR   { $$ = binary_operators_e::OR; }
+            | AND  { $$ = binary_operators_e::AND; }
 ;
 
-bin_oper_cmp : EQUAL    { $$ = binary_operators_e::EQ; }
-             | NEQUAL   { $$ = binary_operators_e::NE; }
-             | ELESS    { $$ = binary_operators_e::LE; }
-             | EGREATER { $$ = binary_operators_e::GE; }
-             | LESS     { $$ = binary_operators_e::LT; }
-             | GREATER  { $$ = binary_operators_e::GT; }
+bin_oper_cmp: EQUAL    { $$ = binary_operators_e::EQ; }
+            | NEQUAL   { $$ = binary_operators_e::NE; }
+            | ELESS    { $$ = binary_operators_e::LE; }
+            | EGREATER { $$ = binary_operators_e::GE; }
+            | LESS     { $$ = binary_operators_e::LT; }
+            | GREATER  { $$ = binary_operators_e::GT; }
 ;
 
-bin_oper_pls : ADD { $$ = binary_operators_e::ADD; }
-             | SUB { $$ = binary_operators_e::SUB; }
+bin_oper_pls: ADD { $$ = binary_operators_e::ADD; }
+            | SUB { $$ = binary_operators_e::SUB; }
 ;
 
-bin_oper_mul : MUL { $$ = binary_operators_e::MUL; }
-             | DIV { $$ = binary_operators_e::DIV; }
-             | MOD { $$ = binary_operators_e::MOD; }
+bin_oper_mul: MUL { $$ = binary_operators_e::MUL; }
+            | DIV { $$ = binary_operators_e::DIV; }
+            | MOD { $$ = binary_operators_e::MOD; }
 ;
 
-un_oper : ADD  { $$ = unary_operators_e::ADD; }
-        | SUB  { $$ = unary_operators_e::SUB; }
-        | NOT  { $$ = unary_operators_e::NOT; }
+un_oper: ADD  { $$ = unary_operators_e::ADD; }
+       | SUB  { $$ = unary_operators_e::SUB; }
+       | NOT  { $$ = unary_operators_e::NOT; }
 ;
 
 %%
