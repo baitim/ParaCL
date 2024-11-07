@@ -14,7 +14,8 @@ Grammar:
     print        -> print rvalue
     assignment   -> lvalue = rvalue
 
-    rvalue         -> rstatement | expression_cmp
+    rvalue         -> rstatement | expression_lgc
+    expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_pls bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_mul bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
@@ -70,11 +71,15 @@ Grammar:
     LESS
     GREATER
 
+    OR
+    AND
+
     ASSIGN
     ADD
     SUB
     MUL
     DIV
+    MOD
 
     SCOLON
     ERR
@@ -98,11 +103,13 @@ Grammar:
 %nterm <node_t*> print
 %nterm <node_t*> assignment
 %nterm <node_t*> rvalue
+%nterm <node_t*> expression_lgc
 %nterm <node_t*> expression_cmp
 %nterm <node_t*> expression_pls
 %nterm <node_t*> expression_mul
 %nterm <node_t*> terminal
 %nterm <std::string> lvalue
+%nterm <binary_operators_e> bin_oper_lgc
 %nterm <binary_operators_e> bin_oper_cmp
 %nterm <binary_operators_e> bin_oper_pls
 %nterm <binary_operators_e> bin_oper_mul
@@ -183,7 +190,11 @@ assignment: lvalue ASSIGN rvalue {
 ;
 
 rvalue: rstatement     { $$ = $1; }
-      | expression_cmp { $$ = $1; }
+      | expression_lgc { $$ = $1; }
+;
+
+expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node(node_bin_op_t{$2, $1, $3}); }
+              | expression_cmp                             { $$ = $1; }
 ;
 
 expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = buf.add_node(node_bin_op_t{$2, $1, $3}); }
@@ -212,6 +223,10 @@ terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
 lvalue: ID { $$ = $1; }
 ;
 
+bin_oper_lgc : OR   { $$ = binary_operators_e::OR; }
+             | AND  { $$ = binary_operators_e::AND; }
+;
+
 bin_oper_cmp : EQUAL    { $$ = binary_operators_e::EQ; }
              | NEQUAL   { $$ = binary_operators_e::NE; }
              | ELESS    { $$ = binary_operators_e::LE; }
@@ -226,6 +241,7 @@ bin_oper_pls : ADD { $$ = binary_operators_e::ADD; }
 
 bin_oper_mul : MUL { $$ = binary_operators_e::MUL; }
              | DIV { $$ = binary_operators_e::DIV; }
+             | MOD { $$ = binary_operators_e::MOD; }
 ;
 
 %%

@@ -65,11 +65,15 @@ namespace node {
         LT,
         GT,
 
+        OR,
+        AND,
+
         ASSIGN,
         ADD,
         SUB,
         MUL,
-        DIV
+        DIV,
+        MOD
     };
     class node_bin_op_t final : public node_t {
         binary_operators_e type_;
@@ -82,19 +86,23 @@ namespace node {
 
         int execute() {
             switch (type_) {
-                case binary_operators_e::EQ: return left_->execute() == right_->execute(); 
-                case binary_operators_e::NE: return left_->execute() != right_->execute(); 
-                case binary_operators_e::LE: return left_->execute() <= right_->execute(); 
-                case binary_operators_e::GE: return left_->execute() >= right_->execute(); 
-                case binary_operators_e::LT: return left_->execute() <  right_->execute(); 
-                case binary_operators_e::GT: return left_->execute() >  right_->execute(); 
+                case binary_operators_e::EQ: return left_->execute() == right_->execute();
+                case binary_operators_e::NE: return left_->execute() != right_->execute();
+                case binary_operators_e::LE: return left_->execute() <= right_->execute();
+                case binary_operators_e::GE: return left_->execute() >= right_->execute();
+                case binary_operators_e::LT: return left_->execute() <  right_->execute();
+                case binary_operators_e::GT: return left_->execute() >  right_->execute();
+
+                case binary_operators_e::OR:  return left_->execute() || right_->execute();
+                case binary_operators_e::AND: return left_->execute() && right_->execute();
 
                 case binary_operators_e::ASSIGN: { return left_->set_value(right_->execute()); }
 
-                case binary_operators_e::ADD: return left_->execute() + right_->execute(); 
-                case binary_operators_e::SUB: return left_->execute() - right_->execute(); 
-                case binary_operators_e::MUL: return left_->execute() * right_->execute(); 
-                case binary_operators_e::DIV: return left_->execute() / right_->execute(); 
+                case binary_operators_e::ADD: return left_->execute() + right_->execute();
+                case binary_operators_e::SUB: return left_->execute() - right_->execute();
+                case binary_operators_e::MUL: return left_->execute() * right_->execute();
+                case binary_operators_e::DIV: return left_->execute() / right_->execute();
+                case binary_operators_e::MOD: return left_->execute() % right_->execute();
             }
             throw error_t{"attempt to execute unknown binary operator"};
         }

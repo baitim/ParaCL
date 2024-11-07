@@ -39,11 +39,15 @@ SCOLON   [;]+
 "<"             { return yy::parser::token_type::LESS;     }
 ">"             { return yy::parser::token_type::GREATER;  }
 
+"||"            { return yy::parser::token_type::OR;   }
+"&&"            { return yy::parser::token_type::AND;  }
+
 "="             { return yy::parser::token_type::ASSIGN; }
 "+"             { return yy::parser::token_type::ADD;    }
 "-"             { return yy::parser::token_type::SUB;    }
 "*"             { return yy::parser::token_type::MUL;    }
 "/"             { return yy::parser::token_type::DIV;    }
+"%"             { return yy::parser::token_type::MOD;    }
 
 {SCOLON}        { return yy::parser::token_type::SCOLON; }
 

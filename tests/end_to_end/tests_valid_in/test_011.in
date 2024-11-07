@@ -1,0 +1,15 @@
+x = ?;
+while (x > 0) {
+    x_ = x;
+    cnt = 0;
+    while (x_ > 0) {
+        cnt = cnt + x_ % 2;
+        x_ = x_ / 2;
+    }
+    print(cnt);
+
+    x = x - 1;
+}
+
+print 1 || 0;
+print 1 && 0;
