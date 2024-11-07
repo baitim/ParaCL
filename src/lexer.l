@@ -12,10 +12,12 @@ NS       [\n]+
 NUMBER   [1-9][0-9]*|0
 ID       [a-zA-Z_][a-zA-Z0-9_]*
 SCOLON   [;]+
+COMMENTS "//".*
 
 %%
 
 {WS}            // nothing
+{COMMENTS}      // nothing
 {NS}            { update_new_line(); }
 
 "print"         { return yy::parser::token_type::PRINT; }

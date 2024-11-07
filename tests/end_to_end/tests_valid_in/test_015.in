@@ -1,0 +1,8 @@
+// comments test
+print 5; // comment
+if (?) // one more comment
+{ //
+    print ?; // print??
+}
+// print 1; print 2; print ?; //  print 4; /  print 5; //  print 6;
+print 10;
