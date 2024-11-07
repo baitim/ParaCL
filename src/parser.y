@@ -19,7 +19,7 @@ Grammar:
     expression_cmp -> expression_pls bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_mul bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' rvalue ')' | lvalue | number | ? | bin_oper_pls terminal
+    terminal       -> '(' rvalue ')' | lvalue | number | ? | un_oper terminal
     lvalue         -> id
 */
 
@@ -73,6 +73,7 @@ Grammar:
 
     OR
     AND
+    NOT
 
     ASSIGN
     ADD
@@ -113,6 +114,7 @@ Grammar:
 %nterm <binary_operators_e> bin_oper_cmp
 %nterm <binary_operators_e> bin_oper_pls
 %nterm <binary_operators_e> bin_oper_mul
+%nterm <unary_operators_e> un_oper
 
 %code
 {
@@ -212,7 +214,7 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node(n
 terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
         | NUMBER                    { $$ = buf.add_node(node_number_t{$1}); }
         | INPUT                     { $$ = buf.add_node(node_input_t{}); }
-        | bin_oper_pls terminal     { $$ = buf.add_node(node_bin_op_t($1, buf.add_node(node_number_t{0}), $2)); }
+        | un_oper terminal          { $$ = buf.add_node(node_un_op_t($1, $2)); }
         | ID                        {
                                         if (!current_scope->find_variable($1))
                                             driver->report_undecl_error(@1, $1);
@@ -242,6 +244,11 @@ bin_oper_pls : ADD { $$ = binary_operators_e::ADD; }
 bin_oper_mul : MUL { $$ = binary_operators_e::MUL; }
              | DIV { $$ = binary_operators_e::DIV; }
              | MOD { $$ = binary_operators_e::MOD; }
+;
+
+un_oper : ADD  { $$ = unary_operators_e::ADD; }
+        | SUB  { $$ = unary_operators_e::SUB; }
+        | NOT  { $$ = unary_operators_e::NOT; }
 ;
 
 %%

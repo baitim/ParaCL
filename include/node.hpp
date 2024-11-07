@@ -18,6 +18,7 @@ namespace node {
         ID,
         NUMBER,
         BIN_OP,
+        UN_OP,
         SCOPE,
         PRINT,
         INPUT,
@@ -108,6 +109,33 @@ namespace node {
         }
 
         node_type_e get_type() const { return node_type_e::BIN_OP; }
+    };
+
+    /* ----------------------------------------------------- */
+
+    enum class unary_operators_e {
+        ADD,
+        SUB,
+        NOT
+    };
+    class node_un_op_t final : public node_t {
+        unary_operators_e type_;
+        node_t* node_;
+
+    public:
+        node_un_op_t(unary_operators_e type, node_t* node)
+        : type_(type), node_(node) {}
+
+        int execute() {
+            switch (type_) {
+                case unary_operators_e::ADD: return  node_->execute();
+                case unary_operators_e::SUB: return -node_->execute();
+                case unary_operators_e::NOT: return !node_->execute();
+            }
+            throw error_t{"attempt to execute unknown unary operator"};
+        }
+
+        node_type_e get_type() const { return node_type_e::UN_OP; }
     };
 
     /* ----------------------------------------------------- */
