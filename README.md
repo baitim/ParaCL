@@ -31,6 +31,13 @@
     - End to end <br>
         <code>ctest --test-dir build --output-on-failure</code>
 
+## Compile errors
+
+* Undeclared variable
+    <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/compile_err_undecl.png" width="75%"></p>
+* Syntax error
+    <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/compile_err_syntax.png" width="75%"></p>
+
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
 ## Support
