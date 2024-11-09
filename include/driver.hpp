@@ -4,8 +4,12 @@
 #include "ast.hpp"
 #include "lexer.hpp"
 #include <cstring>
+#include <ranges>
 
 namespace yy {
+
+    namespace rng  = std::ranges;
+    namespace view = rng::views;
 
     struct error_t final {
         std::string msg_;
@@ -31,7 +35,7 @@ namespace yy {
         const std::pair<int, int> location = get_location2pair(loc);
 
         int line = 0;
-        for (int i = 0, end = location.first; i < end; ++i)
+        for ([[maybe_unused]]auto _ : view::iota(0, location.first))
             line = program_str.find('\n', line + 1);
 
         if (line > 0)
@@ -53,7 +57,8 @@ namespace yy {
                   << print_red(line.substr(loc, length))
                   << line.substr(loc + length, line.length()) << "\n";
 
-        for (int i = 0, end = line.length(); i < end; ++i) {
+        const int line_len = line.length();
+        for (int i : view::iota(0, line_len)) {
             if (i >= loc && i < loc + length)
                 std::cout << print_red("^");
             else
