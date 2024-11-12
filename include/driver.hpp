@@ -11,10 +11,13 @@ namespace yy {
     namespace rng  = std::ranges;
     namespace view = rng::views;
 
-    struct error_t final {
+    class error_t final : std::exception {
         std::string msg_;
+    
+    public:
         error_t(const char*        msg) : msg_(msg) {}
         error_t(const std::string& msg) : msg_(msg) {}
+        const char* what() const noexcept { return msg_.c_str(); }
     };
 
     inline std::string get_location2str(const location& loc) {
@@ -35,7 +38,7 @@ namespace yy {
         const std::pair<int, int> location = get_location2pair(loc);
 
         int line = 0;
-        for ([[maybe_unused]]auto _ : view::iota(0, location.first))
+        for ([[maybe_unused]]int _ : view::iota(0, location.first))
             line = program_str.find('\n', line + 1);
 
         if (line > 0)
@@ -57,8 +60,7 @@ namespace yy {
                   << print_red(line.substr(loc, length))
                   << line.substr(loc + length, line.length()) << "\n";
 
-        const int line_len = line.length();
-        for (int i : view::iota(0, line_len)) {
+        for (int i : view::iota(0, static_cast<int>(line.length()))) {
             if (i >= loc && i < loc + length)
                 std::cout << print_red("^");
             else

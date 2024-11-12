@@ -8,10 +8,13 @@
 
 namespace node {
 
-    struct error_t final {
+    class error_t final : std::exception {
         std::string msg_;
+    
+    public:
         error_t(const char*        msg) : msg_(msg) {}
         error_t(const std::string& msg) : msg_(msg) {}
+        const char* what() const noexcept { return msg_.c_str(); }
     };
 
     enum class node_type_e {
