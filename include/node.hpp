@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <iostream>
 #include <memory>
 #include <exception>
@@ -12,8 +13,8 @@ namespace node {
         std::string msg_;
     
     public:
-        error_t(const char*        msg) : msg_(msg) {}
-        error_t(const std::string& msg) : msg_(msg) {}
+        error_t(const char*      msg) : msg_(msg) {}
+        error_t(std::string_view msg) : msg_(msg) {}
         const char* what() const noexcept { return msg_.c_str(); }
     };
 
@@ -38,9 +39,11 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_id_t final : public node_t {
+        std::string id_;
         int value_;
 
     public:
+        node_id_t(std::string_view id) : id_(id) {}
         int set_value(int value) { return value_ = value; }
         int execute  ()          { return value_; }
     };
@@ -151,9 +154,12 @@ namespace node {
     public:
         node_scope_t(node_scope_t* parent) : parent_(parent) {}
         void    add_statement(node_t* node) { statements_.push_back(node); }
-        void    add_variable (const std::string& name, node_t* node) { variables_.emplace(name, node); }
-        bool    find_variable(const std::string& name) { return variables_.find(name) != variables_.end(); }
-        node_t* get_node     (const std::string& name) { return variables_.find(name)->second; }
+        void    add_variable (std::string_view name, node_t* node) { variables_.emplace(name, node); }
+        bool    contains     (const std::string& name) { return variables_.find(name) != variables_.end(); }
+        node_t* get_node     (const std::string& name) {
+            assert(contains(name));
+            return variables_.find(name)->second;
+        }
 
         const vars_container& get_variables() { return variables_; }
         void copy_variables(const vars_container& variables) { variables_ = variables;  }
@@ -246,7 +252,7 @@ namespace node {
 
     public:
         template <typename NodeT>
-        NodeT* add_node(NodeT node) {
+        NodeT* add_node(const NodeT& node) {
             return static_cast<NodeT*>((nodes_.emplace_back(std::make_unique<NodeT>(node))).get());
         }
     };

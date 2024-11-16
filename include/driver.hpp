@@ -15,8 +15,8 @@ namespace yy {
         std::string msg_;
     
     public:
-        error_t(const char*        msg) : msg_(msg) {}
-        error_t(const std::string& msg) : msg_(msg) {}
+        error_t(const char*      msg) : msg_(msg) {}
+        error_t(std::string_view msg) : msg_(msg) {}
         const char* what() const noexcept { return msg_.c_str(); }
     };
 
@@ -87,7 +87,7 @@ namespace yy {
             }
         }
 
-        void report_undecl_error(const location& loc, const std::string& variable) {
+        void report_undecl_error(const location& loc, std::string_view variable) {
             print_error_line(loc, program_str_, variable.length());
             std::cout << print_red("declaration error at " << loc
                       << ": \"" << variable << "\" - undeclared variable\n");

@@ -187,10 +187,10 @@ print: PRINT rvalue { $$ = buf.add_node(node_print_t{$2}); }
 
 assignment: lvalue ASSIGN rvalue {
                                     node_t* lvalue_node;
-                                    if (current_scope->find_variable($1)) {
+                                    if (current_scope->contains($1)) {
                                         lvalue_node = current_scope->get_node($1);
                                     } else {
-                                        lvalue_node = buf.add_node(node_id_t{});
+                                        lvalue_node = buf.add_node(node_id_t{$1});
                                         current_scope->add_variable($1, lvalue_node);
                                     }
                                     $$ = buf.add_node(node_bin_op_t{binary_operators_e::ASSIGN, lvalue_node, $3});
@@ -222,7 +222,7 @@ terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
         | INPUT                     { $$ = buf.add_node(node_input_t{}); }
         | un_oper terminal          { $$ = buf.add_node(node_un_op_t($1, $2)); }
         | ID                        {
-                                        if (!current_scope->find_variable($1))
+                                        if (!current_scope->contains($1))
                                             driver->report_undecl_error(@1, $1);
                                         $$ = current_scope->get_node($1);
                                     }
