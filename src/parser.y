@@ -190,7 +190,7 @@ assignment: lvalue ASSIGN rvalue {
                                     if (current_scope->contains($1)) {
                                         lvalue_node = current_scope->get_node($1);
                                     } else {
-                                        lvalue_node = buf.add_node(node_id_t{$1});
+                                        lvalue_node = buf.add_node(node_lvalue_t{$1});
                                         current_scope->add_variable($1, lvalue_node);
                                     }
                                     $$ = buf.add_node(node_bin_op_t{binary_operators_e::ASSIGN, lvalue_node, $3});

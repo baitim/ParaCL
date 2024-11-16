@@ -38,12 +38,12 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_id_t final : public node_t {
+    class node_lvalue_t final : public node_t {
         std::string id_;
         int value_;
 
     public:
-        node_id_t(std::string_view id) : id_(id) {}
+        node_lvalue_t(std::string_view id) : id_(id) {}
         int set_value(int value) { return value_ = value; }
         int execute  ()          { return value_; }
     };
