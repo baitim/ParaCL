@@ -31,8 +31,8 @@ namespace node {
     class node_t {
     public:
         virtual ~node_t() {}
-        virtual int set_value(int value)     { throw error_t{"attempt to set value to base node"}; }
-        virtual int execute()                { throw error_t{"attempt to execute base node"}; }
+        virtual int set_value(int value) = 0;
+        virtual int execute()            = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -52,6 +52,7 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_number_t"}; }
         int execute() { return number_; }
     };
 
@@ -83,6 +84,7 @@ namespace node {
     public:
         node_bin_op_t(binary_operators_e type, node_t* left, node_t* right)
         : type_(type), left_(left), right_(right) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_bin_op_t"}; }
 
         int execute() {
             switch (type_) {
@@ -122,6 +124,7 @@ namespace node {
     public:
         node_un_op_t(unary_operators_e type, node_t* node)
         : type_(type), node_(node) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_un_op_t"}; }
 
         int execute() {
             switch (type_) {
@@ -152,6 +155,8 @@ namespace node {
         const vars_container& get_variables() { return variables_; }
         void copy_variables(const vars_container& variables) { variables_ = variables;  }
 
+        int set_value(int value) { throw error_t{"attempt to set value for node_scope_t"}; }
+
         int execute() {
             int result;
             for (auto node : statements_)
@@ -167,6 +172,7 @@ namespace node {
 
     public:
         node_print_t(node_t* argument) : argument_(argument) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_print_t"}; }
 
         int execute() {
             int value = argument_->execute();
@@ -179,6 +185,7 @@ namespace node {
 
     class node_input_t final : public node_t {
     public:
+        int set_value(int value) { throw error_t{"attempt to set value for node_input_t"}; }
         int execute() {
             int value;
             std::cin >> value;
@@ -196,6 +203,7 @@ namespace node {
 
     public:
         node_loop_t(node_t* condition, node_t* body) : condition_(condition), body_(body) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_loop_t"}; }
 
         int execute() {
             while (condition_->execute()) {
@@ -216,6 +224,7 @@ namespace node {
     public:
         node_fork_t(node_t* condition, node_t* body1, node_t* body2)
         : condition_(condition), body1_(body1), body2_(body2) {}
+        int set_value(int value) { throw error_t{"attempt to set value for node_fork_t"}; }
 
         int execute() {
             if (condition_->execute()) {

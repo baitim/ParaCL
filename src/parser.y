@@ -57,8 +57,8 @@ Grammar:
 %token
     PRINT
     INPUT
-    FORK1
-    FORK2
+    IF
+    ELSE
     LOOP
 
     LBRACKET
@@ -89,7 +89,7 @@ Grammar:
 ;
 
 %precedence "then"
-%precedence FORK2
+%precedence ELSE
 
 %token <int> NUMBER
 %token <std::string> ID
@@ -164,8 +164,8 @@ statement: fork       { $$ = $1; }
          | loop       { $$ = $1; }
 ;
 
-fork: FORK1 condition body %prec "then" { $$ = buf.add_node(node_fork_t{$2, $3, nullptr}); }
-    | FORK1 condition body FORK2 body   { $$ = buf.add_node(node_fork_t{$2, $3, $5}); }
+fork: IF condition body %prec "then" { $$ = buf.add_node(node_fork_t{$2, $3, nullptr}); }
+    | IF condition body ELSE body    { $$ = buf.add_node(node_fork_t{$2, $3, $5}); }
 ;
 
 loop: LOOP condition body { $$ = buf.add_node(node_loop_t{$2, $3}); }

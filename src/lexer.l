@@ -22,8 +22,8 @@ COMMENTS "//".*
 
 "print"         { return yy::parser::token_type::PRINT; }
 "?"             { return yy::parser::token_type::INPUT; }
-"if"            { return yy::parser::token_type::FORK1; }
-"else"          { return yy::parser::token_type::FORK2; }
+"if"            { return yy::parser::token_type::IF;    }
+"else"          { return yy::parser::token_type::ELSE;  }
 "while"         { return yy::parser::token_type::LOOP;  }
 
 {NUMBER}        { return yy::parser::token_type::NUMBER; }
