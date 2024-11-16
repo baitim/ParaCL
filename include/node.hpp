@@ -33,7 +33,6 @@ namespace node {
         virtual ~node_t() {}
         virtual int set_value(int value)     { throw error_t{"attempt to set value to base node"}; }
         virtual int execute()                { throw error_t{"attempt to execute base node"}; }
-        virtual node_type_e get_type() const { throw error_t{"attempt to get type of base node"}; }
     };
 
     /* ----------------------------------------------------- */
@@ -44,8 +43,6 @@ namespace node {
     public:
         int set_value(int value) { return value_ = value; }
         int execute  ()          { return value_; }
-
-        node_type_e get_type() const { return node_type_e::ID; }
     };
 
     /* ----------------------------------------------------- */
@@ -56,7 +53,6 @@ namespace node {
     public:
         node_number_t(int number) : number_(number) {}
         int execute() { return number_; }
-        node_type_e get_type() const { return node_type_e::NUMBER; }
     };
 
     /* ----------------------------------------------------- */
@@ -110,8 +106,6 @@ namespace node {
             }
             throw error_t{"attempt to execute unknown binary operator"};
         }
-
-        node_type_e get_type() const { return node_type_e::BIN_OP; }
     };
 
     /* ----------------------------------------------------- */
@@ -137,8 +131,6 @@ namespace node {
             }
             throw error_t{"attempt to execute unknown unary operator"};
         }
-
-        node_type_e get_type() const { return node_type_e::UN_OP; }
     };
 
     /* ----------------------------------------------------- */
@@ -166,8 +158,6 @@ namespace node {
                 result = node->execute();
             return result;
         }
-
-        node_type_e get_type() const { return node_type_e::SCOPE; }
     };
 
     /* ----------------------------------------------------- */
@@ -183,8 +173,6 @@ namespace node {
             std::cout << value << "\n";
             return value;
         }
-
-        node_type_e get_type() const { return node_type_e::PRINT; }
     };
 
     /* ----------------------------------------------------- */
@@ -198,8 +186,6 @@ namespace node {
                 throw error_t{"invalid input: need integer"};
             return value;
         }
-
-        node_type_e get_type() const { return node_type_e::INPUT; }
     };
 
     /* ----------------------------------------------------- */
@@ -218,8 +204,6 @@ namespace node {
             }
             return 0;
         }
-
-        node_type_e get_type() const { return node_type_e::LOOP; }
     };
 
     /* ----------------------------------------------------- */
@@ -243,8 +227,6 @@ namespace node {
             }
             return 0;
         }
-
-        node_type_e get_type() const { return node_type_e::FORK; }
     };
 
     struct buffer_t final {

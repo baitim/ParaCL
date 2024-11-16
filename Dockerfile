@@ -4,7 +4,6 @@ COPY . .
 
 RUN apt-get -y update
 RUN apt-get -y upgrade
-RUN apt-get -y install git
 RUN apt-get -y install sudo
 RUN apt-get -y install cmake
 RUN apt-get -y install pkg-config
