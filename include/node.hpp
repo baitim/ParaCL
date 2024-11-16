@@ -3,7 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <exception>
-#include <list>
+#include <vector>
 #include <unordered_map>
 
 namespace node {
@@ -87,24 +87,26 @@ namespace node {
         int set_value(int value) { throw error_t{"attempt to set value for node_bin_op_t"}; }
 
         int execute() {
+            int LHS = left_->execute();
+            int RHS = right_->execute();
             switch (type_) {
-                case binary_operators_e::EQ: return left_->execute() == right_->execute();
-                case binary_operators_e::NE: return left_->execute() != right_->execute();
-                case binary_operators_e::LE: return left_->execute() <= right_->execute();
-                case binary_operators_e::GE: return left_->execute() >= right_->execute();
-                case binary_operators_e::LT: return left_->execute() <  right_->execute();
-                case binary_operators_e::GT: return left_->execute() >  right_->execute();
+                case binary_operators_e::EQ: return LHS == RHS;
+                case binary_operators_e::NE: return LHS != RHS;
+                case binary_operators_e::LE: return LHS <= RHS;
+                case binary_operators_e::GE: return LHS >= RHS;
+                case binary_operators_e::LT: return LHS <  RHS;
+                case binary_operators_e::GT: return LHS >  RHS;
 
-                case binary_operators_e::OR:  return left_->execute() || right_->execute();
-                case binary_operators_e::AND: return left_->execute() && right_->execute();
+                case binary_operators_e::OR:  return LHS || RHS;
+                case binary_operators_e::AND: return LHS && RHS;
 
-                case binary_operators_e::ASSIGN: { return left_->set_value(right_->execute()); }
+                case binary_operators_e::ASSIGN: { return left_->set_value(RHS); }
 
-                case binary_operators_e::ADD: return left_->execute() + right_->execute();
-                case binary_operators_e::SUB: return left_->execute() - right_->execute();
-                case binary_operators_e::MUL: return left_->execute() * right_->execute();
-                case binary_operators_e::DIV: return left_->execute() / right_->execute();
-                case binary_operators_e::MOD: return left_->execute() % right_->execute();
+                case binary_operators_e::ADD: return LHS + RHS;
+                case binary_operators_e::SUB: return LHS - RHS;
+                case binary_operators_e::MUL: return LHS * RHS;
+                case binary_operators_e::DIV: return LHS / RHS;
+                case binary_operators_e::MOD: return LHS % RHS;
             }
             throw error_t{"attempt to execute unknown binary operator"};
         }
@@ -127,10 +129,11 @@ namespace node {
         int set_value(int value) { throw error_t{"attempt to set value for node_un_op_t"}; }
 
         int execute() {
+            int res_exec = node_->execute();
             switch (type_) {
-                case unary_operators_e::ADD: return  node_->execute();
-                case unary_operators_e::SUB: return -node_->execute();
-                case unary_operators_e::NOT: return !node_->execute();
+                case unary_operators_e::ADD: return  res_exec;
+                case unary_operators_e::SUB: return -res_exec;
+                case unary_operators_e::NOT: return !res_exec;
             }
             throw error_t{"attempt to execute unknown unary operator"};
         }
@@ -139,7 +142,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_scope_t final : public node_t {
-        std::list<node_t*> statements_;
+        std::vector<node_t*> statements_;
         node_scope_t* parent_;
 
         using vars_container = std::unordered_map<std::string, node_t*>;
@@ -238,9 +241,10 @@ namespace node {
         }
     };
 
-    struct buffer_t final {
-        std::list<std::unique_ptr<node::node_t>> nodes_;
+    class buffer_t final {
+        std::vector<std::unique_ptr<node::node_t>> nodes_;
 
+    public:
         template <typename NodeT>
         NodeT* add_node(NodeT node) {
             return static_cast<NodeT*>((nodes_.emplace_back(std::make_unique<NodeT>(node))).get());
