@@ -186,14 +186,14 @@ print: PRINT rvalue { $$ = buf.add_node(node_print_t{$2}); }
 ;
 
 assignment: lvalue ASSIGN rvalue {
-                                    node_t* lvalue_node;
+                                    node_var_t* lvalue_node;
                                     if (current_scope->contains($1)) {
                                         lvalue_node = current_scope->get_node($1);
                                     } else {
-                                        lvalue_node = buf.add_node(node_lvalue_t{$1});
-                                        current_scope->add_variable($1, lvalue_node);
+                                        lvalue_node = buf.add_node(node_var_t{$1});
+                                        current_scope->add_variable(lvalue_node);
                                     }
-                                    $$ = buf.add_node(node_bin_op_t{binary_operators_e::ASSIGN, lvalue_node, $3});
+                                    $$ = buf.add_node(node_assign_t{lvalue_node, $3});
                                  }
 ;
 
