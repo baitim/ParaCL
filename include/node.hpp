@@ -147,16 +147,30 @@ namespace node {
 
     public:
         node_scope_t(node_scope_t* parent) : parent_(parent) {}
-        void    add_statement(node_t* node) { statements_.push_back(node); }
-        void    add_variable (node_var_t* node) { variables_.emplace(node->get_name(), node); }
-        bool    contains     (std::string_view name) { return variables_.find(name) != variables_.end(); }
-        node_var_t* get_node (std::string_view name) {
-            assert(contains(name));
-            return variables_.find(name)->second;
+        void add_statement(node_t* node) { statements_.push_back(node); }
+        void add_variable (node_var_t* node) { variables_.emplace(node->get_name(), node); }
+
+        bool contains(std::string_view name) const {
+            for (auto scope = this; scope; scope = scope->parent_) {
+                auto& scope_vars = scope->get_variables();
+                if (scope_vars.find(name) != scope_vars.end())
+                    return true;
+            }
+            return false;
         }
 
-        const vars_container& get_variables() { return variables_; }
-        void copy_variables(const vars_container& variables) { variables_ = variables;  }
+        node_var_t* get_node(std::string_view name) const {
+            assert(contains(name));
+            for (auto scope = this; scope; scope = scope->parent_) {
+                auto& scope_vars = scope->get_variables();
+                auto name_iter = scope_vars.find(name);
+                if (name_iter != scope_vars.end())
+                    return name_iter->second;
+            }
+            throw error_t{"attempt to access node, which is not exist, but node_scope_t contains"};
+        }
+
+        const vars_container& get_variables() const { return variables_; }
 
         int execute() {
             int result;

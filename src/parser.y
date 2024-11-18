@@ -125,8 +125,6 @@ Grammar:
     node_scope_t* current_scope = nullptr;
 
     void drill_down_to_scope(node_scope_t* scope) {
-        if (!scopes_stack.empty())
-            scope->copy_variables(scopes_stack.top()->get_variables());
         scopes_stack.push(scope);
         current_scope = scope;
     }
