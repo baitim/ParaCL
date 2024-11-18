@@ -162,10 +162,10 @@ namespace node {
         node_var_t* get_node(std::string_view name) const {
             assert(contains(name));
             for (auto scope = this; scope; scope = scope->parent_) {
-                auto& scope_vars = scope->get_variables();
-                auto name_iter = scope_vars.find(name);
-                if (name_iter != scope_vars.end())
-                    return name_iter->second;
+                auto scope_vars = scope->get_variables();
+                auto var_iter   = scope_vars.find(name);
+                if (var_iter != scope_vars.end())
+                    return var_iter->second;
             }
             throw error_t{"attempt to access node, which is not exist, but node_scope_t contains"};
         }
@@ -218,11 +218,12 @@ namespace node {
         node_loop_t(node_t* condition, node_t* body) : condition_(condition), body_(body) {}
 
         int execute() {
+            int result = 0;
             while (condition_->execute()) {
                 if (body_)
-                    body_->execute();
+                    result = body_->execute();
             }
-            return 0;
+            return result;
         }
     };
 
@@ -238,14 +239,15 @@ namespace node {
         : condition_(condition), body1_(body1), body2_(body2) {}
 
         int execute() {
+            int result = 0;
             if (condition_->execute()) {
                 if(body1_)
-                    body1_->execute();
+                    result = body1_->execute();
             } else {
                 if(body2_)
-                    body2_->execute();
+                    result = body2_->execute();
             }
-            return 0;
+            return result;
         }
     };
 
