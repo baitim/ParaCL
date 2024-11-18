@@ -123,7 +123,7 @@ namespace yy {
             return tt;
         }
 
-        bool parse(const std::string& file_name, node::buffer_t& buf, node::node_t*& root) {
+        bool parse(const std::string& file_name, node::buffer_t& buf, node::node_scope_t*& root) {
             init(file_name);
             std::ifstream input_file(file_name);
             lexer_.switch_streams(input_file, std::cout);

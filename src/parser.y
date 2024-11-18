@@ -42,7 +42,7 @@ Grammar:
 
 %param       { yy::Driver_t* driver }
 %parse-param { node::buffer_t& buf }
-%parse-param { node::node_t*&  root }
+%parse-param { node::node_scope_t*& root }
 
 %code
 {
@@ -88,36 +88,44 @@ Grammar:
     ERR
 ;
 
-%precedence "then"
+%precedence THEN
 %precedence ELSE
 
-%token <int> NUMBER
-%token <std::string> ID
-%nterm <node_scope_t*> statements
-%nterm <node_scope_t*> scope
-%nterm <node_scope_t*> lghost_scope
-%nterm rghost_scope
-%nterm <node_t*> ustatement
-%nterm <node_t*> rstatement
-%nterm <node_t*>  statement
-%nterm <node_t*> fork
-%nterm <node_t*> loop
-%nterm <node_t*> condition
-%nterm <node_t*> body
-%nterm <node_t*> print
-%nterm <node_t*> assignment
-%nterm <node_t*> rvalue
-%nterm <node_t*> expression_lgc
-%nterm <node_t*> expression_cmp
-%nterm <node_t*> expression_pls
-%nterm <node_t*> expression_mul
-%nterm <node_t*> terminal
-%nterm <std::string> lvalue
+%token <int>                NUMBER
+%token <std::string>        ID
+
+%nterm <node_scope_t*>      statements
+%nterm <node_scope_t*>      scope
+%nterm <node_scope_t*>      body
+%nterm <node_scope_t*>      lghost_scope
+%nterm                      rghost_scope
+
+%nterm <node_statement_t*>  ustatement
+%nterm <node_expression_t*> rstatement
+%nterm <node_statement_t*>   statement
+
+%nterm <node_statement_t*>  fork
+%nterm <node_statement_t*>  loop
+%nterm <node_expression_t*> condition
+
+%nterm <node_expression_t*> print
+%nterm <node_expression_t*> assignment
+
+%nterm <node_expression_t*> rvalue
+%nterm <std::string>        lvalue
+%nterm <node_expression_t*> terminal
+
+%nterm <node_expression_t*> expression_lgc
+%nterm <node_expression_t*> expression_cmp
+%nterm <node_expression_t*> expression_pls
+%nterm <node_expression_t*> expression_mul
+
 %nterm <binary_operators_e> bin_oper_lgc
 %nterm <binary_operators_e> bin_oper_cmp
 %nterm <binary_operators_e> bin_oper_pls
 %nterm <binary_operators_e> bin_oper_mul
-%nterm <unary_operators_e> un_oper
+
+%nterm <unary_operators_e>  un_oper
 
 %code
 {
@@ -151,7 +159,7 @@ statements: %empty                 { $$ = buf.add_node(node_scope_t{current_scop
 scope: LSCOPE statements RSCOPE { $$ = $2; }
 
 ustatement: statement      { $$ = $1; }
-          | rvalue SCOLON  { $$ = $1; }
+          | rvalue SCOLON  { $$ = buf.add_node(node_statement_t{$1}); }
 ;
 
 rstatement: print      { $$ = $1; }
@@ -162,8 +170,8 @@ statement: fork       { $$ = $1; }
          | loop       { $$ = $1; }
 ;
 
-fork: IF condition body %prec "then" { $$ = buf.add_node(node_fork_t{$2, $3, nullptr}); }
-    | IF condition body ELSE body    { $$ = buf.add_node(node_fork_t{$2, $3, $5}); }
+fork: IF condition body %prec THEN { $$ = buf.add_node(node_fork_t{$2, $3, nullptr}); }
+    | IF condition body ELSE body  { $$ = buf.add_node(node_fork_t{$2, $3, $5}); }
 ;
 
 loop: LOOP condition body { $$ = buf.add_node(node_loop_t{$2, $3}); }

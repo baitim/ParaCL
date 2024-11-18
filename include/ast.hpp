@@ -4,13 +4,14 @@
 
 namespace ast {
     struct ast_t final {
-        node::node_t* root_ = nullptr;
+        node::node_scope_t* root_ = nullptr;
         node::buffer_t buffer_;
 
-        int execute() {
+        void execute() {
             if (root_)
-                return root_->execute();
-            throw "execute by nullptr";
+                root_->execute();
+            else
+                throw node::error_t{"execute by nullptr"};
         }
     };
 }

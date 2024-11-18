@@ -18,15 +18,41 @@ namespace node {
         const char* what() const noexcept { return msg_.c_str(); }
     };
 
+    /* ----------------------------------------------------- */
+    
     class node_t {
     public:
         virtual ~node_t() {}
+    };
+
+    /* ----------------------------------------------------- */
+    
+    class node_expression_t : public node_t {
+    public:
         virtual int execute() = 0;
+        virtual ~node_expression_t() {}
+    };
+
+    /* ----------------------------------------------------- */
+    
+    class node_statement_t : public node_t {
+        node_expression_t* expr_ = nullptr;
+
+    public:
+        node_statement_t() {}
+        node_statement_t(node_expression_t* expr) : expr_(expr) {}
+
+        virtual void execute() {
+            if (expr_)
+                expr_->execute();
+        };
+
+        virtual ~node_statement_t() {}
     };
 
     /* ----------------------------------------------------- */
 
-    class node_var_t final : public node_t {
+    class node_var_t final : public node_expression_t {
         std::string id_;
         int value_;
 
@@ -39,7 +65,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_number_t final : public node_t {
+    class node_number_t final : public node_expression_t {
         int number_;
 
     public:
@@ -49,12 +75,13 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_assign_t final : public node_t {
-        node_var_t* lvalue_;
-        node_t*     rvalue_;
+    class node_assign_t final : public node_expression_t {
+        node_var_t*        lvalue_;
+        node_expression_t* rvalue_;
 
     public:
-        node_assign_t(node_var_t* lvalue, node_t* rvalue) : lvalue_(lvalue), rvalue_(rvalue) {}
+        node_assign_t(node_var_t* lvalue, node_expression_t* rvalue)
+        : lvalue_(lvalue), rvalue_(rvalue) {}
         int execute() { return lvalue_->set_value(rvalue_->execute()); }
     };
 
@@ -77,13 +104,13 @@ namespace node {
         DIV,
         MOD
     };
-    class node_bin_op_t final : public node_t {
+    class node_bin_op_t final : public node_expression_t {
         binary_operators_e type_;
-        node_t* left_;
-        node_t* right_;
+        node_expression_t* left_;
+        node_expression_t* right_;
 
     public:
-        node_bin_op_t(binary_operators_e type, node_t* left, node_t* right)
+        node_bin_op_t(binary_operators_e type, node_expression_t* left, node_expression_t* right)
         : type_(type), left_(left), right_(right) {}
 
         int execute() {
@@ -117,12 +144,12 @@ namespace node {
         SUB,
         NOT
     };
-    class node_un_op_t final : public node_t {
-        unary_operators_e type_;
-        node_t* node_;
+    class node_un_op_t final : public node_expression_t {
+        unary_operators_e  type_;
+        node_expression_t* node_;
 
     public:
-        node_un_op_t(unary_operators_e type, node_t* node)
+        node_un_op_t(unary_operators_e type, node_expression_t* node)
         : type_(type), node_(node) {}
 
         int execute() {
@@ -138,8 +165,8 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_t final : public node_t {
-        std::vector<node_t*> statements_;
+    class node_scope_t final : public node_statement_t {
+        std::vector<node_statement_t*> statements_;
         node_scope_t* parent_;
 
         using vars_container = std::unordered_map<std::string_view, node_var_t*>;
@@ -147,7 +174,7 @@ namespace node {
 
     public:
         node_scope_t(node_scope_t* parent) : parent_(parent) {}
-        void add_statement(node_t* node) { statements_.push_back(node); }
+        void add_statement(node_statement_t* node) { statements_.push_back(node); }
         void add_variable (node_var_t* node) { variables_.emplace(node->get_name(), node); }
 
         bool contains(std::string_view name) const {
@@ -172,21 +199,19 @@ namespace node {
 
         const vars_container& get_variables() const { return variables_; }
 
-        int execute() {
-            int result;
+        void execute() {
             for (auto node : statements_)
-                result = node->execute();
-            return result;
+                node->execute();
         }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_print_t final : public node_t {
-        node_t* argument_;
+    class node_print_t final : public node_expression_t {
+        node_expression_t* argument_;
 
     public:
-        node_print_t(node_t* argument) : argument_(argument) {}
+        node_print_t(node_expression_t* argument) : argument_(argument) {}
 
         int execute() {
             int value = argument_->execute();
@@ -197,7 +222,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_input_t final : public node_t {
+    class node_input_t final : public node_expression_t {
     public:
         int execute() {
             int value;
@@ -210,44 +235,41 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_loop_t final : public node_t {
-        node_t* condition_;
-        node_t* body_;
+    class node_loop_t final : public node_statement_t {
+        node_expression_t* condition_;
+        node_scope_t* body_;
 
     public:
-        node_loop_t(node_t* condition, node_t* body) : condition_(condition), body_(body) {}
+        node_loop_t(node_expression_t* condition, node_scope_t* body)
+        : condition_(condition), body_(body) {}
 
-        int execute() {
-            int result = 0;
+        void execute() {
             while (condition_->execute()) {
                 if (body_)
-                    result = body_->execute();
+                    body_->execute();
             }
-            return result;
         }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_fork_t final : public node_t {
-        node_t* condition_;
-        node_t* body1_;
-        node_t* body2_;
+    class node_fork_t final : public node_statement_t {
+        node_expression_t* condition_;
+        node_scope_t* body1_;
+        node_scope_t* body2_;
 
     public:
-        node_fork_t(node_t* condition, node_t* body1, node_t* body2)
+        node_fork_t(node_expression_t* condition, node_scope_t* body1, node_scope_t* body2)
         : condition_(condition), body1_(body1), body2_(body2) {}
 
-        int execute() {
-            int result = 0;
+        void execute() {
             if (condition_->execute()) {
                 if(body1_)
-                    result = body1_->execute();
+                    body1_->execute();
             } else {
                 if(body2_)
-                    result = body2_->execute();
+                    body2_->execute();
             }
-            return result;
         }
     };
 
