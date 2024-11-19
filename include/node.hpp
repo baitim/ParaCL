@@ -182,24 +182,14 @@ namespace node {
         void add_statement(node_statement_t* node) { statements_.push_back(node); }
         void add_variable (node_var_t* node) { variables_.emplace(node->get_name(), node); }
 
-        bool contains(std::string_view name) const {
-            for (auto scope = this; scope; scope = scope->parent_) {
-                auto& scope_vars = scope->get_variables();
-                if (scope_vars.find(name) != scope_vars.end())
-                    return true;
-            }
-            return false;
-        }
-
         node_var_t* get_node(std::string_view name) const {
-            assert(contains(name));
             for (auto scope = this; scope; scope = scope->parent_) {
                 auto scope_vars = scope->get_variables();
                 auto var_iter   = scope_vars.find(name);
                 if (var_iter != scope_vars.end())
                     return var_iter->second;
             }
-            throw error_t{"attempt to access node, which is not exist, but node_scope_t contains"};
+            return nullptr;
         }
 
         const vars_container& get_variables() const { return variables_; }
