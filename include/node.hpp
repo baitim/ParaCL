@@ -36,18 +36,23 @@ namespace node {
     /* ----------------------------------------------------- */
     
     class node_statement_t : public node_t {
+    public:
+        virtual void execute() = 0;
+        virtual ~node_statement_t() {}
+    };
+
+    /* ----------------------------------------------------- */
+    
+    class node_instruction_t : public node_statement_t {
         node_expression_t* expr_ = nullptr;
 
     public:
-        node_statement_t() {}
-        node_statement_t(node_expression_t* expr) : expr_(expr) {}
+        node_instruction_t(node_expression_t* expr) : expr_(expr) {}
 
-        virtual void execute() {
+        void execute() {
             if (expr_)
                 expr_->execute();
         };
-
-        virtual ~node_statement_t() {}
     };
 
     /* ----------------------------------------------------- */

@@ -159,7 +159,7 @@ statements: %empty                 { $$ = buf.add_node(node_scope_t{current_scop
 scope: LSCOPE statements RSCOPE { $$ = $2; }
 
 ustatement: statement      { $$ = $1; }
-          | rvalue SCOLON  { $$ = buf.add_node(node_statement_t{$1}); }
+          | rvalue SCOLON  { $$ = buf.add_node(node_instruction_t{$1}); }
 ;
 
 rstatement: print      { $$ = $1; }
