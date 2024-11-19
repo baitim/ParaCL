@@ -49,7 +49,7 @@ namespace node {
     public:
         node_instruction_t(node_expression_t* expr) : expr_(expr) {}
 
-        void execute() {
+        void execute() override {
             if (expr_)
                 expr_->execute();
         };
@@ -64,7 +64,7 @@ namespace node {
     public:
         node_var_t(std::string_view id) : id_(id) {}
         int set_value(int value) { return value_ = value; }
-        int execute  ()          { return value_; }
+        int execute  () override { return value_; }
         std::string_view get_name() const { return id_; }
     };
 
@@ -75,7 +75,7 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        int execute() { return number_; }
+        int execute() override { return number_; }
     };
 
     /* ----------------------------------------------------- */
@@ -87,7 +87,7 @@ namespace node {
     public:
         node_assign_t(node_var_t* lvalue, node_expression_t* rvalue)
         : lvalue_(lvalue), rvalue_(rvalue) {}
-        int execute() { return lvalue_->set_value(rvalue_->execute()); }
+        int execute() override { return lvalue_->set_value(rvalue_->execute()); }
     };
 
     /* ----------------------------------------------------- */
@@ -118,7 +118,7 @@ namespace node {
         node_bin_op_t(binary_operators_e type, node_expression_t* left, node_expression_t* right)
         : type_(type), left_(left), right_(right) {}
 
-        int execute() {
+        int execute() override {
             int LHS = left_->execute();
             int RHS = right_->execute();
             switch (type_) {
@@ -157,7 +157,7 @@ namespace node {
         node_un_op_t(unary_operators_e type, node_expression_t* node)
         : type_(type), node_(node) {}
 
-        int execute() {
+        int execute() override {
             int res_exec = node_->execute();
             switch (type_) {
                 case unary_operators_e::ADD: return  res_exec;
@@ -204,7 +204,7 @@ namespace node {
 
         const vars_container& get_variables() const { return variables_; }
 
-        void execute() {
+        void execute() override {
             for (auto node : statements_)
                 node->execute();
         }
@@ -218,7 +218,7 @@ namespace node {
     public:
         node_print_t(node_expression_t* argument) : argument_(argument) {}
 
-        int execute() {
+        int execute() override {
             int value = argument_->execute();
             std::cout << value << "\n";
             return value;
@@ -229,7 +229,7 @@ namespace node {
 
     class node_input_t final : public node_expression_t {
     public:
-        int execute() {
+        int execute() override {
             int value;
             std::cin >> value;
             if (!std::cin.good())
@@ -248,7 +248,7 @@ namespace node {
         node_loop_t(node_expression_t* condition, node_scope_t* body)
         : condition_(condition), body_(body) {}
 
-        void execute() {
+        void execute() override {
             while (condition_->execute()) {
                 if (body_)
                     body_->execute();
@@ -267,7 +267,7 @@ namespace node {
         node_fork_t(node_expression_t* condition, node_scope_t* body1, node_scope_t* body2)
         : condition_(condition), body1_(body1), body2_(body2) {}
 
-        void execute() {
+        void execute() override {
             if (condition_->execute()) {
                 if(body1_)
                     body1_->execute();
