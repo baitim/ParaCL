@@ -272,9 +272,11 @@ namespace node {
         std::vector<std::unique_ptr<node::node_t>> nodes_;
 
     public:
-        template <typename NodeT>
-        NodeT* add_node(const NodeT& node) {
-            return static_cast<NodeT*>((nodes_.emplace_back(std::make_unique<NodeT>(node))).get());
+        template <typename NodeT, typename ...ArgsT>
+        NodeT* add_node(ArgsT&&... args) {
+            return static_cast<NodeT*>(
+                (nodes_.emplace_back(std::make_unique<NodeT>(std::forward<ArgsT>(args)...))).get()
+            );
         }
     };
 }
