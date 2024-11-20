@@ -50,8 +50,8 @@ namespace node {
         node_instruction_t(node_expression_t* expr) : expr_(expr) {}
 
         void execute() override {
-            if (expr_)
-                expr_->execute();
+            assert(expr_);
+            expr_->execute();
         };
     };
 

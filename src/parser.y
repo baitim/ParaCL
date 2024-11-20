@@ -1,22 +1,21 @@
 /*
 Grammar:
     program      -> statements
-    statements   -> statements ustatement | statements; | statements scope | empty
+    statements   -> statements statement | statements; | statements scope | empty
     scope        -> '{' statements '}'
-    ustatement   -> statement | rvalue;                 // universal
-    rstatement   -> print | assignment                  //    return
-     statement   -> fork  | loop                        // no return
+    statement    -> fork  | loop | rvalue;
+    instruction  -> rvalue;
+    rvalue       -> print | assignment | expression_lgc
 
     fork         -> if condition body | if condition body else body
     loop         -> while condition body
 
     condition    -> '(' rvalue ')'
-    body         -> scope | lghost_scope ustatement rghost_scope | ;
+    body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print rvalue
     assignment   -> lvalue = rvalue
 
-    rvalue         -> rstatement | expression_lgc
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
@@ -100,9 +99,8 @@ Grammar:
 %nterm <node_scope_t*>      lghost_scope
 %nterm                      rghost_scope
 
-%nterm <node_statement_t*>  ustatement
-%nterm <node_expression_t*> rstatement
-%nterm <node_statement_t*>   statement
+%nterm <node_statement_t*>  statement
+%nterm <node_statement_t*>  instruction
 
 %nterm <node_statement_t*>  fork
 %nterm <node_statement_t*>  loop
@@ -151,23 +149,24 @@ program: statements { root = $1; }
 ;
 
 statements: %empty                 { $$ = buf.add_node<node_scope_t>(current_scope); drill_down_to_scope($$); }
-          | statements ustatement  { $$ = $1; $$->add_statement($2); }
+          | statements statement   { $$ = $1; $$->add_statement($2); }
           | statements SCOLON      { $$ = $1; }
           | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
 ;
 
 scope: LSCOPE statements RSCOPE { $$ = $2; }
 
-ustatement: statement      { $$ = $1; }
-          | rvalue SCOLON  { $$ = buf.add_node<node_instruction_t>($1); }
+statement: fork         { $$ = $1; }
+         | loop         { $$ = $1; }
+         | instruction  { $$ = $1; }
 ;
 
-rstatement: print      { $$ = $1; }
-          | assignment { $$ = $1; }
+instruction: rvalue SCOLON { $$ = buf.add_node<node_instruction_t>($1); }
 ;
 
-statement: fork       { $$ = $1; }
-         | loop       { $$ = $1; }
+rvalue: print          { $$ = $1; }
+      | assignment     { $$ = $1; }
+      | expression_lgc { $$ = $1; }
 ;
 
 fork: IF condition body %prec THEN { $$ = buf.add_node<node_fork_t>($2, $3, nullptr); }
@@ -181,7 +180,7 @@ condition: LBRACKET rvalue RBRACKET { $$ = $2; }
 ;
 
 body: scope                                 { $$ = $1; lift_up_from_scope(); }
-    | lghost_scope ustatement rghost_scope  { $1->add_statement($2); $$ = $1; }
+    | lghost_scope statement rghost_scope   { $1->add_statement($2); $$ = $1; }
     | SCOLON                                { $$ = nullptr; }
 ;
 
@@ -199,10 +198,6 @@ assignment: lvalue ASSIGN rvalue {
                                     }
                                     $$ = buf.add_node<node_assign_t>(lvalue_node, $3);
                                  }
-;
-
-rvalue: rstatement     { $$ = $1; }
-      | expression_lgc { $$ = $1; }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node<node_bin_op_t>($2, $1, $3); }
