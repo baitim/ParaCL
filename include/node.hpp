@@ -239,10 +239,8 @@ namespace node {
         : condition_(condition), body_(body) {}
 
         void execute() override {
-            while (condition_->execute()) {
-                if (body_)
-                    body_->execute();
-            }
+            while (condition_->execute())
+                body_->execute();
         }
     };
 
@@ -258,13 +256,10 @@ namespace node {
         : condition_(condition), body1_(body1), body2_(body2) {}
 
         void execute() override {
-            if (condition_->execute()) {
-                if(body1_)
-                    body1_->execute();
-            } else {
-                if(body2_)
-                    body2_->execute();
-            }
+            if (condition_->execute())
+                body1_->execute();
+            else
+                body2_->execute();
         }
     };
 

@@ -169,8 +169,11 @@ rvalue: print          { $$ = $1; }
       | expression_lgc { $$ = $1; }
 ;
 
-fork: IF condition body %prec THEN { $$ = buf.add_node<node_fork_t>($2, $3, nullptr); }
-    | IF condition body ELSE body  { $$ = buf.add_node<node_fork_t>($2, $3, $5); }
+fork: IF condition body %prec THEN  { 
+                                        $$ = buf.add_node<node_fork_t>(
+                                                $2, $3, buf.add_node<node_scope_t>(current_scope));
+                                    }
+    | IF condition body ELSE body   { $$ = buf.add_node<node_fork_t>($2, $3, $5); }
 ;
 
 loop: LOOP condition body { $$ = buf.add_node<node_loop_t>($2, $3); }
@@ -181,7 +184,7 @@ condition: LBRACKET rvalue RBRACKET { $$ = $2; }
 
 body: scope                                 { $$ = $1; lift_up_from_scope(); }
     | lghost_scope statement rghost_scope   { $1->add_statement($2); $$ = $1; }
-    | SCOLON                                { $$ = nullptr; }
+    | SCOLON                                { $$ = buf.add_node<node_scope_t>(current_scope); }
 ;
 
 lghost_scope: %empty { $$ = buf.add_node<node_scope_t>(current_scope); drill_down_to_scope($$); }
