@@ -12,7 +12,7 @@
 
 namespace yy {
 
-    class Lexer_t : public yyFlexLexer {
+    class Lexer_t final : public yyFlexLexer {
         location loc_;
 
     public:
@@ -26,7 +26,7 @@ namespace yy {
             loc_.step();
         }
 
-        location get_location() const { return loc_; }
+        location get_location() const noexcept { return loc_; }
 
         int yylex() override;
     };

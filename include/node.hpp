@@ -43,7 +43,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
     
-    class node_instruction_t : public node_statement_t {
+    class node_instruction_t final : public node_statement_t {
         node_expression_t* expr_ = nullptr;
 
     public:

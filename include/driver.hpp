@@ -69,7 +69,7 @@ namespace yy {
         std::cout << "\n";
     }
 
-    class Driver_t {
+    class Driver_t final {
         Lexer_t lexer_;
         std::string program_str_;
         std::string last_token_;
@@ -87,14 +87,14 @@ namespace yy {
             }
         }
 
-        void report_undecl_error(const location& loc, std::string_view variable) {
+        void report_undecl_error(const location& loc, std::string_view variable) const {
             print_error_line(loc, program_str_, variable.length());
             std::cout << print_red("declaration error at " << loc
                       << ": \"" << variable << "\" - undeclared variable\n");
             throw error_t{""};
         }
 
-        void report_syntax_error(const location& loc) {
+        void report_syntax_error(const location& loc) const {
             print_error_line(loc, program_str_, last_token_.length());
             std::cout << print_red("syntax error at " << loc
                       << ": \"" << last_token_ << "\" - token that breaks\n");

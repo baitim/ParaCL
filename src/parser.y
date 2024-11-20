@@ -224,9 +224,9 @@ terminal: LBRACKET rvalue RBRACKET  { $$ = $2; }
         | INPUT                     { $$ = buf.add_node<node_input_t>(); }
         | un_oper terminal          { $$ = buf.add_node<node_un_op_t>($1, $2); }
         | ID                        {
-                                        if (!current_scope->get_node($1))
-                                            driver->report_undecl_error(@1, $1);
                                         $$ = current_scope->get_node($1);
+                                        if (!$$)
+                                            driver->report_undecl_error(@1, $1);
                                     }
 ;
 
