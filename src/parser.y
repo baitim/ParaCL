@@ -101,6 +101,7 @@ Grammar:
 
 %nterm <node_statement_t*>  statement
 %nterm <node_statement_t*>  instruction
+%nterm <node_expression_t*> expression
 
 %nterm <node_statement_t*>  fork
 %nterm <node_statement_t*>  loop
@@ -109,7 +110,6 @@ Grammar:
 %nterm <node_expression_t*> print
 %nterm <node_expression_t*> assignment
 
-%nterm <node_expression_t*> expression
 %nterm <std::string>        lvalue
 %nterm <node_expression_t*> terminal
 
