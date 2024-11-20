@@ -3,7 +3,7 @@ Grammar:
     program      -> statements
     statements   -> statements statement | statements; | statements scope | empty
     scope        -> '{' statements '}'
-    statement    -> fork  | loop | rvalue;
+    statement    -> fork  | loop | instruction
     instruction  -> rvalue;
     rvalue       -> print | assignment | expression_lgc
 
