@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
     try {
         driver.parse(argv[1], ast.buffer_, ast.root_);
     } catch (const yy::error_t& error) {
-        std::cout << print_red(error.what()) << "\n";
+        std::cout << error.what() << "\n";
         return 1;
     }
 
