@@ -11,58 +11,6 @@ namespace yy {
     namespace rng  = std::ranges;
     namespace view = rng::views;
 
-    inline std::string get_location2str(const location& loc) {
-        std::stringstream ss;
-        ss << loc;
-        return ss.str();
-    }
-
-    inline std::pair<int, int> get_location2pair(const location& loc) {
-        std::string loc_str = get_location2str(loc);
-        size_t dot_location = loc_str.find('.');
-        int line   = stoi(loc_str.substr(0, dot_location));
-        int column = stoi(loc_str.substr(dot_location + 1));
-        return std::make_pair(line - 1, column);
-    };
-
-    inline std::pair<std::string, int> get_current_line(const location& loc, const std::string& program_str) {
-        const std::pair<int, int> location = get_location2pair(loc);
-
-        int line = 0;
-        for ([[maybe_unused]]int _ : view::iota(0, location.first))
-            line = program_str.find('\n', line + 1);
-
-        if (line > 0)
-            line++;
-
-        int end_of_line = program_str.find('\n', line);
-        if (end_of_line == -1)
-            end_of_line = program_str.length();
-
-        return std::make_pair(program_str.substr(line, end_of_line - line), location.second - 2);
-    };
-
-    inline std::string get_error_line(const location& loc_, const std::string& program_str, int length) {
-        std::stringstream error_line;
-
-        std::pair<std::string, int> line_info = get_current_line(loc_, program_str);
-        std::string line = line_info.first;
-        int loc = line_info.second - length + 1;
-
-        error_line << line.substr(0, loc)
-                    << print_red(line.substr(loc, length))
-                    << line.substr(loc + length, line.length()) << "\n";
-
-        for (int i : view::iota(0, static_cast<int>(line.length()))) {
-            if (i >= loc && i < loc + length)
-                error_line << print_red("^");
-            else
-                error_line << " ";
-        }
-        error_line << "\n";
-        return error_line.str();
-    }
-
     template <typename MsgT>
     concept error_str =
     std::is_constructible_v<std::string, MsgT> &&
@@ -90,8 +38,6 @@ namespace yy {
 
         virtual const char* what() const { return msg_.c_str(); }
 
-        std::string_view get_msg() const { return msg_; }
-
         virtual ~error_t() {};
     };
 
@@ -100,15 +46,72 @@ namespace yy {
     class parse_error_t : public error_t {
         location loc_;
         std::string program_str_;
+        int length_;
+
+    private:
+        std::string get_location2str(const location& loc) const {
+            std::stringstream ss;
+            ss << loc;
+            return ss.str();
+        }
+
+        std::pair<int, int> get_location2pair(const location& loc) const {
+            std::string loc_str = get_location2str(loc);
+            size_t dot_location = loc_str.find('.');
+            int line   = stoi(loc_str.substr(0, dot_location));
+            int column = stoi(loc_str.substr(dot_location + 1));
+            return std::make_pair(line - 1, column);
+        };
+
+        std::pair<std::string, int> get_current_line(const location& loc,
+                                                     const std::string& program_str) const {
+            const std::pair<int, int> location = get_location2pair(loc);
+
+            int line = 0;
+            for ([[maybe_unused]]int _ : view::iota(0, location.first))
+                line = program_str.find('\n', line + 1);
+
+            if (line > 0)
+                line++;
+
+            int end_of_line = program_str.find('\n', line);
+            if (end_of_line == -1)
+                end_of_line = program_str.length();
+
+            return std::make_pair(program_str.substr(line, end_of_line - line), location.second - 2);
+        };
+
+        std::string get_error_line(const location& loc_,
+                                   const std::string& program_str,
+                                   int length) const {
+            std::stringstream error_line;
+
+            std::pair<std::string, int> line_info = get_current_line(loc_, program_str);
+            std::string line = line_info.first;
+            int loc = line_info.second - length + 1;
+
+            error_line << line.substr(0, loc)
+                        << print_red(line.substr(loc, length))
+                        << line.substr(loc + length, line.length()) << "\n";
+
+            for (int i : view::iota(0, static_cast<int>(line.length()))) {
+                if (i >= loc && i < loc + length)
+                    error_line << print_red("^");
+                else
+                    error_line << " ";
+            }
+            error_line << "\n";
+            return error_line.str();
+        }
 
     protected:
-        std::string get_parse_error(int length) const {
-            return get_error_line(loc_, program_str_, length);
+        std::string get_parse_error() const {
+            return get_error_line(loc_, program_str_, length_);
         }
 
     public:
-        parse_error_t(const location& loc, const std::string& program_str)
-        : loc_(loc), program_str_(program_str) {}
+        parse_error_t(const location& loc, const std::string& program_str, int length)
+        : loc_(loc), program_str_(program_str), length_(length) {}
 
         const location& get_loc() const { return loc_; }
     };
@@ -121,7 +124,7 @@ namespace yy {
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_parse_error(variable_.length());
+            description << parse_error_t::get_parse_error();
             description << print_red("declaration error at " << parse_error_t::get_loc()
                         << ": \"" << variable_ << "\" - undeclared variable");
 
@@ -130,7 +133,7 @@ namespace yy {
 
     public:
         undecl_error_t(const location& loc, const std::string& program_str, std::string_view variable)
-        : parse_error_t(loc, program_str), variable_(variable) {
+        : parse_error_t(loc, program_str, variable.length()), variable_(variable) {
             error_t::msg_ = get_info();
         }
     };
@@ -143,7 +146,7 @@ namespace yy {
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_parse_error(token_.length());
+            description << parse_error_t::get_parse_error();
             description << print_red("syntax error at " << parse_error_t::get_loc()
                         << ": \"" << token_ << "\" - token that breaks");
 
@@ -152,7 +155,7 @@ namespace yy {
 
     public:
         syntax_error_t(const location& loc, const std::string& program_str, std::string_view token)
-        : parse_error_t(loc, program_str), token_(token) {
+        : parse_error_t(loc, program_str, token.length()), token_(token) {
             error_t::msg_ = get_info();
         }
     };
