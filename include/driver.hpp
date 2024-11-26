@@ -49,13 +49,13 @@ namespace yy {
         int length_;
 
     private:
-        std::string get_location2str(const location& loc) const {
+        static std::string get_location2str(const location& loc) {
             std::stringstream ss;
             ss << loc;
             return ss.str();
         }
 
-        std::pair<int, int> get_location2pair(const location& loc) const {
+        static std::pair<int, int> get_location2pair(const location& loc) {
             std::string loc_str = get_location2str(loc);
             size_t dot_location = loc_str.find('.');
             int line   = stoi(loc_str.substr(0, dot_location));
@@ -63,8 +63,8 @@ namespace yy {
             return std::make_pair(line - 1, column);
         };
 
-        std::pair<std::string, int> get_current_line(const location& loc,
-                                                     const std::string& program_str) const {
+        static std::pair<std::string, int> get_current_line(const location& loc,
+                                                            const std::string& program_str) {
             const std::pair<int, int> location = get_location2pair(loc);
 
             int line = 0;
