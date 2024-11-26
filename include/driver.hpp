@@ -81,32 +81,26 @@ namespace yy {
             return std::make_pair(program_str.substr(line, end_of_line - line), location.second - 2);
         };
 
-        std::string get_error_line(const location& loc_,
-                                   const std::string& program_str,
-                                   int length) const {
+    protected:
+        std::string get_error_line() const {
             std::stringstream error_line;
 
-            std::pair<std::string, int> line_info = get_current_line(loc_, program_str);
+            std::pair<std::string, int> line_info = get_current_line(loc_, program_str_);
             std::string line = line_info.first;
-            int loc = line_info.second - length + 1;
+            int loc = line_info.second - length_ + 1;
 
             error_line << line.substr(0, loc)
-                        << print_red(line.substr(loc, length))
-                        << line.substr(loc + length, line.length()) << "\n";
+                        << print_red(line.substr(loc, length_))
+                        << line.substr(loc + length_, line.length()) << "\n";
 
             for (int i : view::iota(0, static_cast<int>(line.length()))) {
-                if (i >= loc && i < loc + length)
+                if (i >= loc && i < loc + length_)
                     error_line << print_red("^");
                 else
                     error_line << " ";
             }
             error_line << "\n";
             return error_line.str();
-        }
-
-    protected:
-        std::string get_parse_error() const {
-            return get_error_line(loc_, program_str_, length_);
         }
 
     public:
@@ -124,7 +118,7 @@ namespace yy {
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_parse_error();
+            description << parse_error_t::get_error_line();
             description << print_red("declaration error at " << parse_error_t::get_loc()
                         << ": \"" << variable_ << "\" - undeclared variable");
 
@@ -146,7 +140,7 @@ namespace yy {
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_parse_error();
+            description << parse_error_t::get_error_line();
             description << print_red("syntax error at " << parse_error_t::get_loc()
                         << ": \"" << token_ << "\" - token that breaks");
 
