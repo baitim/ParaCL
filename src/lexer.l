@@ -25,6 +25,7 @@ COMMENTS "//".*
 "if"            { return yy::parser::token_type::IF;    }
 "else"          { return yy::parser::token_type::ELSE;  }
 "while"         { return yy::parser::token_type::LOOP;  }
+"undef"         { return yy::parser::token_type::UNDEF; }
 
 {NUMBER}        { return yy::parser::token_type::NUMBER; }
 {ID}            { return yy::parser::token_type::ID;     }

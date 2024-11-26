@@ -79,6 +79,13 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
+    class node_undef_t final : public node_expression_t {
+    public:
+        int execute() override { return 0; }
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_assign_t final : public node_expression_t {
         node_var_t*        lvalue_;
         node_expression_t* rvalue_;

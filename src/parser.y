@@ -20,7 +20,7 @@ Grammar:
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' expression ')' | number | ? | un_oper terminal | id
+    terminal       -> '(' expression ')' | number | undef | ? | un_oper terminal | id
     lvalue         -> id
 */
 
@@ -59,6 +59,7 @@ Grammar:
     IF
     ELSE
     LOOP
+    UNDEF
 
     LBRACKET
     RBRACKET
@@ -221,6 +222,7 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node<n
 
 terminal: LBRACKET expression RBRACKET  { $$ = $2; }
         | NUMBER                        { $$ = buf.add_node<node_number_t>($1); }
+        | UNDEF                         { $$ = buf.add_node<node_undef_t>(); }
         | INPUT                         { $$ = buf.add_node<node_input_t>(); }
         | un_oper terminal              { $$ = buf.add_node<node_un_op_t>($1, $2); }
         | ID                            {
