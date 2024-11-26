@@ -22,15 +22,15 @@ namespace node {
     
     class node_t {
     public:
-        virtual ~node_t() {}
+        virtual ~node_t() = 0;
     };
+    inline node_t::~node_t() {};
 
     /* ----------------------------------------------------- */
     
     class node_expression_t : public node_t {
     public:
         virtual int execute() = 0;
-        virtual ~node_expression_t() {}
     };
 
     /* ----------------------------------------------------- */
@@ -38,7 +38,6 @@ namespace node {
     class node_statement_t : public node_t {
     public:
         virtual void execute() = 0;
-        virtual ~node_statement_t() {}
     };
 
     /* ----------------------------------------------------- */
