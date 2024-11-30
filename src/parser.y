@@ -195,9 +195,9 @@ print: PRINT expression { $$ = buf.add_node<node_print_t>($2); }
 ;
 
 assignment: lvalue ASSIGN expression {
-                                        node_var_t* lvalue_node = current_scope->get_node($1);
+                                        node_variable_t* lvalue_node = current_scope->get_node($1);
                                         if (!lvalue_node) {
-                                            lvalue_node = buf.add_node<node_var_t>($1);
+                                            lvalue_node = buf.add_node<node_variable_t>($1);
                                             current_scope->add_variable(lvalue_node);
                                         }
                                         $$ = buf.add_node<node_assign_t>(lvalue_node, $3);

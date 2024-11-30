@@ -56,15 +56,23 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_var_t final : public node_expression_t {
+    class node_id_t {
         std::string id_;
+
+    public:
+        node_id_t(std::string_view id) : id_(id) {}
+        std::string_view get_name() const { return id_; }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_variable_t final : public node_id_t, public node_expression_t {
         int value_;
 
     public:
-        node_var_t(std::string_view id) : id_(id) {}
+        node_variable_t(std::string_view id) : node_id_t(id) {}
         int set_value(int value) { return value_ = value; }
         int execute  () override { return value_; }
-        std::string_view get_name() const { return id_; }
     };
 
     /* ----------------------------------------------------- */
@@ -87,11 +95,11 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_assign_t final : public node_expression_t {
-        node_var_t*        lvalue_;
+        node_variable_t*   lvalue_;
         node_expression_t* rvalue_;
 
     public:
-        node_assign_t(node_var_t* lvalue, node_expression_t* rvalue)
+        node_assign_t(node_variable_t* lvalue, node_expression_t* rvalue)
         : lvalue_(lvalue), rvalue_(rvalue) {}
         int execute() override { return lvalue_->set_value(rvalue_->execute()); }
     };
@@ -175,30 +183,43 @@ namespace node {
     };
 
     /* ----------------------------------------------------- */
-
-    class node_scope_t final : public node_statement_t {
-        std::vector<node_statement_t*> statements_;
-        node_scope_t* parent_;
-
-        using vars_container = std::unordered_map<std::string_view, node_var_t*>;
+    
+    class name_table_t {
+    protected:
+        using vars_container = std::unordered_map<std::string_view, node_id_t*>;
         vars_container variables_;
 
     public:
-        node_scope_t(node_scope_t* parent) : parent_(parent) {}
-        void add_statement(node_statement_t* node) { statements_.push_back(node); }
-        void add_variable (node_var_t* node) { variables_.emplace(node->get_name(), node); }
+        void add_variable(node_id_t* node) { variables_.emplace(node->get_name(), node); }
 
-        node_var_t* get_node(std::string_view name) const {
-            for (auto scope = this; scope; scope = scope->parent_) {
-                auto scope_vars = scope->get_variables();
-                auto var_iter   = scope_vars.find(name);
-                if (var_iter != scope_vars.end())
-                    return var_iter->second;
-            }
+        node_id_t* get_var_node(std::string_view name) const {
+            auto var_iter = variables_.find(name);
+            if (var_iter != variables_.end())
+                return var_iter->second;
             return nullptr;
         }
 
-        const vars_container& get_variables() const { return variables_; }
+        virtual ~name_table_t() {};
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_scope_t final : public node_statement_t, public name_table_t {
+        node_scope_t* parent_;
+        std::vector<node_statement_t*> statements_;
+
+    public:
+        node_scope_t(node_scope_t* parent) : parent_(parent) {} 
+        void add_statement(node_statement_t* node) { statements_.push_back(node); }
+
+        node_variable_t* get_node(std::string_view name) const {
+            for (auto scope = this; scope; scope = scope->parent_) {
+                node_id_t* var_node = scope->get_var_node(name);
+                if (var_node)
+                    return static_cast<node_variable_t*>(var_node);
+            }
+            return nullptr;
+        }
 
         void execute() override {
             for (auto node : statements_)
