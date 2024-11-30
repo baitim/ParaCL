@@ -14,14 +14,24 @@ Grammar:
     body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print expression
-    assignment   -> lvalue = expression
+    assignment   -> lvalue_decl = lvalue_ctor
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' expression ')' | number | undef | ? | un_oper terminal | id
-    lvalue         -> id
+    terminal       -> '(' expression ')' | number | undef | ? | un_oper terminal | lvalue
+
+    lvalue         -> variable | variable indexes
+    lvalue_decl    -> variable | variable indexes
+    lvalue_ctor    -> expression | array
+
+    array          -> array '(' args_list ')'
+    args_list      -> args_list, lvalue_ctor | lvalue_ctor
+
+    indexes        -> indexes index | index
+    index          -> '[' expression ']'
+    variable       -> id
 */
 
 %language "c++"
@@ -59,12 +69,17 @@ Grammar:
     IF
     ELSE
     LOOP
-    UNDEF
 
-    LBRACKET
-    RBRACKET
-    LSCOPE
-    RSCOPE
+    UNDEF
+    COMMA
+    ARRAY
+
+    LBRACKET_ROUND
+    RBRACKET_ROUND
+    LBRACKET_SQUARE
+    RBRACKET_SQUARE
+    LBRACKET_CURLY
+    RBRACKET_CURLY
 
     EQUAL
     NEQUAL
@@ -111,13 +126,22 @@ Grammar:
 %nterm <node_expression_t*> print
 %nterm <node_expression_t*> assignment
 
-%nterm <std::string>        lvalue
-%nterm <node_expression_t*> terminal
-
 %nterm <node_expression_t*> expression_lgc
 %nterm <node_expression_t*> expression_cmp
 %nterm <node_expression_t*> expression_pls
 %nterm <node_expression_t*> expression_mul
+
+%nterm <node_expression_t*> terminal
+
+%nterm <node_variable_t*> lvalue
+%nterm <node_variable_t*> lvalue_decl
+%nterm <node_argument_t*> lvalue_ctor
+
+%nterm <node_array_t*>           array
+%nterm <node_arguments_list_t*>  args_list
+%nterm <node_expression_list_t*> indexes
+%nterm <node_expression_t*>      index
+%nterm <std::string>             variable
 
 %nterm <binary_operators_e> bin_oper_lgc
 %nterm <binary_operators_e> bin_oper_cmp
@@ -140,6 +164,22 @@ Grammar:
         scopes_stack.pop();
         current_scope = scopes_stack.top();
     }
+
+    node_var_t* decl_var(const std::string& name, node::buffer_t& buf) {
+        node_var_t* var_node = current_scope->get_node(name);
+        if (!var_node) {
+            var_node = buf.add_node<node_var_t>(name);
+            current_scope->add_variable(var_node);
+        }
+        return var_node;
+    }
+
+    node_var_t* get_var(const std::string& name, const yy::location& loc, const yy::Driver_t* driver) {
+        node_var_t* var_node = current_scope->get_node(name);
+        if (!var_node)
+            driver->report_undecl_error(loc, name);
+        return var_node;
+    }
 }
 
 %start program
@@ -155,7 +195,7 @@ statements: %empty                 { $$ = buf.add_node<node_scope_t>(current_sco
           | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
 ;
 
-scope: LSCOPE statements RSCOPE { $$ = $2; }
+scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
 
 statement: fork         { $$ = $1; }
          | loop         { $$ = $1; }
@@ -180,7 +220,7 @@ fork: IF condition body %prec THEN  {
 loop: LOOP condition body { $$ = buf.add_node<node_loop_t>($2, $3); }
 ;
 
-condition: LBRACKET expression RBRACKET { $$ = $2; }
+condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 ;
 
 body: scope                                 { $$ = $1; lift_up_from_scope(); }
@@ -194,14 +234,7 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = buf.add_node<node_print_t>($2); }
 ;
 
-assignment: lvalue ASSIGN expression {
-                                        node_var_t* lvalue_node = current_scope->get_node($1);
-                                        if (!lvalue_node) {
-                                            lvalue_node = buf.add_node<node_var_t>($1);
-                                            current_scope->add_variable(lvalue_node);
-                                        }
-                                        $$ = buf.add_node<node_assign_t>(lvalue_node, $3);
-                                     }
+assignment: lvalue_decl ASSIGN lvalue_ctor { $$ = buf.add_node<node_assign_t>($1, $3); }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node<node_bin_op_t>($2, $1, $3); }
@@ -220,19 +253,49 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node<n
               | terminal                                   { $$ = $1; }
 ;
 
-terminal: LBRACKET expression RBRACKET  { $$ = $2; }
-        | NUMBER                        { $$ = buf.add_node<node_number_t>($1); }
-        | UNDEF                         { $$ = buf.add_node<node_undef_t>(); }
-        | INPUT                         { $$ = buf.add_node<node_input_t>(); }
-        | un_oper terminal              { $$ = buf.add_node<node_un_op_t>($1, $2); }
-        | ID                            {
-                                            $$ = current_scope->get_node($1);
-                                            if (!$$)
-                                                driver->report_undecl_error(@1, $1);
-                                        }
+terminal: LBRACKET_ROUND expression RBRACKET_ROUND  { $$ = $2; }
+        | NUMBER            { $$ = buf.add_node<node_number_t>($1); }
+        | UNDEF             { $$ = buf.add_node<node_undef_t>(); }
+        | INPUT             { $$ = buf.add_node<node_input_t>(); }
+        | un_oper terminal  { $$ = buf.add_node<node_un_op_t>($1, $2); }
+        | lvalue            { $$ = $1; }
 ;
 
-lvalue: ID { $$ = $1; }
+lvalue: variable            {
+                                $$ = get_var($1, @1, driver);
+                            }
+      |  variable indexes   {
+                                $$ = get_var($1, @1, driver);
+                            }
+;
+
+lvalue_decl: variable           {
+                                    $$ = decl_var($1, buf);
+                                }
+           | variable indexes   {
+                                    $$ = decl_var($1, buf);
+                                }
+;
+
+lvalue_ctor: expression { $$ = $1; }
+           | array      { $$ = $1; }
+;
+
+array: ARRAY LBRACKET_ROUND args_list RBRACKET_ROUND { $$ = buf.add_node<node_array_t>($3); }
+;
+
+args_list: args_list COMMA lvalue_ctor { $$ = $1; $$->add_arg($3); }
+         | lvalue_ctor { $$ = buf.add_node<node_variables_list_t<node_var_int_t>>(); $$->add_arg($1); }
+;       /////////////////////////////// счётчик добавленных -> тип
+
+indexes: indexes index { $$ = $1; $$->add_expr($2); }
+       | index { $$ = buf.add_node<node_expression_list_t>(); $$->add_expr($1); }
+;
+
+index: LBRACKET_SQUARE expression RBRACKET_SQUARE { $$ = $2; }
+;
+
+variable: ID { $$ = $1; }
 ;
 
 bin_oper_lgc: OR   { $$ = binary_operators_e::OR; }
