@@ -1,0 +1,7 @@
+x = 100;
+y = 100;
+
+if (undef + x + y == 300)
+    print 1;
+
+print 0;

@@ -27,17 +27,53 @@ namespace node {
     inline node_t::~node_t() {};
 
     /* ----------------------------------------------------- */
+
+    class buffer_t final {
+        std::vector<std::unique_ptr<node::node_t>> nodes_;
+
+    public:
+        template <typename NodeT, typename ...ArgsT>
+        NodeT* add_node(ArgsT&&... args) {
+            return static_cast<NodeT*>(
+                (nodes_.emplace_back(std::make_unique<NodeT>(std::forward<ArgsT>(args)...))).get()
+            );
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class result_t;
     
     class node_expression_t : public node_t {
     public:
-        virtual int execute() = 0;
+        virtual result_t execute(buffer_t& buf) = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_type_t : public node_expression_t {
+    public:
+        virtual void print() const = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    enum class node_type_e {
+        NUMBER,
+        ARRAY,
+        UNDEF
+    };
+
+    struct result_t final {
+        node_type_e type;
+        const node_type_t* value;
     };
 
     /* ----------------------------------------------------- */
     
     class node_statement_t : public node_t {
     public:
-        virtual void execute() = 0;
+        virtual void execute(buffer_t& buf) = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -48,9 +84,9 @@ namespace node {
     public:
         node_instruction_t(node_expression_t* expr) : expr_(expr) {}
 
-        void execute() override {
+        void execute(buffer_t& buf) override {
             assert(expr_);
-            expr_->execute();
+            expr_->execute(buf);
         };
     };
 
@@ -67,29 +103,32 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_variable_t final : public node_id_t, public node_expression_t {
-        int value_;
+        result_t value_;
 
     public:
         node_variable_t(std::string_view id) : node_id_t(id) {}
-        int set_value(int value) { return value_ = value; }
-        int execute  () override { return value_; }
+        result_t set_value(result_t value) { return value_ = value; }
+        result_t execute  (buffer_t& buf) override { return value_; }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_number_t final : public node_expression_t {
+    class node_number_t final : public node_type_t {
         int number_;
 
     public:
         node_number_t(int number) : number_(number) {}
-        int execute() override { return number_; }
+        result_t execute(buffer_t& buf) override { return {node_type_e::NUMBER, this}; }
+        void print() const { std::cout << number_ << "\n"; }
+        int get_value() const noexcept { return number_; }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_undef_t final : public node_expression_t {
+    class node_undef_t final : public node_type_t {
     public:
-        int execute() override { return 0; }
+        result_t execute(buffer_t& buf) override { return {node_type_e::UNDEF, this}; }
+        void print() const { std::cout << "undef\n"; }
     };
 
     /* ----------------------------------------------------- */
@@ -101,7 +140,7 @@ namespace node {
     public:
         node_assign_t(node_variable_t* lvalue, node_expression_t* rvalue)
         : lvalue_(lvalue), rvalue_(rvalue) {}
-        int execute() override { return lvalue_->set_value(rvalue_->execute()); }
+        result_t execute(buffer_t& buf) override { return lvalue_->set_value(rvalue_->execute(buf)); }
     };
 
     /* ----------------------------------------------------- */
@@ -132,27 +171,45 @@ namespace node {
         node_bin_op_t(binary_operators_e type, node_expression_t* left, node_expression_t* right)
         : type_(type), left_(left), right_(right) {}
 
-        int execute() override {
-            int LHS = left_->execute();
-            int RHS = right_->execute();
+        result_t execute(buffer_t& buf) override {
+            result_t l_result = left_->execute(buf);
+            result_t r_result = right_->execute(buf);
+
+            if (l_result.type == node_type_e::UNDEF ||
+                r_result.type == node_type_e::UNDEF)
+                return {node_type_e::UNDEF, buf.add_node<node_undef_t>()};
+            
+            int LHS = static_cast<const node_number_t*>(l_result.value)->get_value();
+            int RHS = static_cast<const node_number_t*>(r_result.value)->get_value();
+            int result;
             switch (type_) {
-                case binary_operators_e::EQ: return LHS == RHS;
-                case binary_operators_e::NE: return LHS != RHS;
-                case binary_operators_e::LE: return LHS <= RHS;
-                case binary_operators_e::GE: return LHS >= RHS;
-                case binary_operators_e::LT: return LHS <  RHS;
-                case binary_operators_e::GT: return LHS >  RHS;
+                case binary_operators_e::EQ: result = LHS == RHS; break;
+                case binary_operators_e::NE: result = LHS != RHS; break;
+                case binary_operators_e::LE: result = LHS <= RHS; break;
+                case binary_operators_e::GE: result = LHS >= RHS; break;
+                case binary_operators_e::LT: result = LHS <  RHS; break;
+                case binary_operators_e::GT: result = LHS >  RHS; break;
 
-                case binary_operators_e::OR:  return LHS || RHS;
-                case binary_operators_e::AND: return LHS && RHS;
+                case binary_operators_e::OR:  result = LHS || RHS; break;
+                case binary_operators_e::AND: result = LHS && RHS; break;
 
-                case binary_operators_e::ADD: return LHS + RHS;
-                case binary_operators_e::SUB: return LHS - RHS;
-                case binary_operators_e::MUL: return LHS * RHS;
-                case binary_operators_e::DIV: return LHS / RHS;
-                case binary_operators_e::MOD: return LHS % RHS;
+                case binary_operators_e::ADD: result = LHS + RHS; break;
+                case binary_operators_e::SUB: result = LHS - RHS; break;
+                case binary_operators_e::MUL: result = LHS * RHS; break;
+                case binary_operators_e::DIV: result = LHS / RHS; break;
+                case binary_operators_e::MOD: result = LHS % RHS; break;
+                default: throw error_t{"attempt to execute unknown binary operator"};
             }
-            throw error_t{"attempt to execute unknown binary operator"};
+            return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
+        }
+
+        void stat_analize(const result_t& lhs, const result_t& rhs) {
+            node_type_e l_type = lhs.type;
+            node_type_e r_type = rhs.type;
+
+            if (!(l_type == node_type_e::UNDEF  || r_type == node_type_e::UNDEF) &&
+                !(l_type == node_type_e::NUMBER && r_type == node_type_e::NUMBER))
+                throw error_t{"different types of arguments in binary operator"};
         }
     };
 
@@ -171,14 +228,26 @@ namespace node {
         node_un_op_t(unary_operators_e type, node_expression_t* node)
         : type_(type), node_(node) {}
 
-        int execute() override {
-            int res_exec = node_->execute();
+        result_t execute(buffer_t& buf) override {
+            result_t res_exec = node_->execute(buf);
+            if (res_exec.type == node_type_e::UNDEF)
+                return {node_type_e::UNDEF, buf.add_node<node_undef_t>()};
+
+            int value = static_cast<const node_number_t*>(res_exec.value)->get_value();
+            int result;
             switch (type_) {
-                case unary_operators_e::ADD: return  res_exec;
-                case unary_operators_e::SUB: return -res_exec;
-                case unary_operators_e::NOT: return !res_exec;
+                case unary_operators_e::ADD: result =  value; break;
+                case unary_operators_e::SUB: result = -value; break;
+                case unary_operators_e::NOT: result = !value; break;
+                default: throw error_t{"attempt to execute unknown unary operator"};
             }
-            throw error_t{"attempt to execute unknown unary operator"};
+            return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
+        }
+
+        void stat_analize(const result_t& argument) {
+            if (argument.type != node_type_e::NUMBER ||
+                argument.type != node_type_e::UNDEF)
+                throw error_t{"wrong type in unary operator"};
         }
     };
 
@@ -221,9 +290,9 @@ namespace node {
             return nullptr;
         }
 
-        void execute() override {
+        void execute(buffer_t& buf) override {
             for (auto node : statements_)
-                node->execute();
+                node->execute(buf);
         }
     };
 
@@ -235,10 +304,10 @@ namespace node {
     public:
         node_print_t(node_expression_t* argument) : argument_(argument) {}
 
-        int execute() override {
-            int value = argument_->execute();
-            std::cout << value << "\n";
-            return value;
+        result_t execute(buffer_t& buf) override {
+            result_t result = argument_->execute(buf);
+            result.value->print();
+            return result;
         }
     };
 
@@ -246,12 +315,12 @@ namespace node {
 
     class node_input_t final : public node_expression_t {
     public:
-        int execute() override {
+        result_t execute(buffer_t& buf) override {
             int value;
             std::cin >> value;
             if (!std::cin.good())
                 throw error_t{"invalid input: need integer"};
-            return value;
+            return {node_type_e::NUMBER, buf.add_node<node_number_t>(value)};
         }
     };
 
@@ -261,13 +330,29 @@ namespace node {
         node_expression_t* condition_;
         node_scope_t* body_;
 
+    private:
+        inline void dynamic_analize(const result_t& result) {
+            if (result.type != node_type_e::NUMBER)
+                throw error_t{"wrong type of loop condition"};
+        }
+
+        inline int step(buffer_t& buf) {
+            result_t result = condition_->execute(buf);
+
+#ifdef DYNAMIC_ANALYZE
+            dynamic_analize(result);
+#endif
+
+            return static_cast<const node_number_t*>(result.value)->get_value();
+        }
+
     public:
         node_loop_t(node_expression_t* condition, node_scope_t* body)
         : condition_(condition), body_(body) {}
 
-        void execute() override {
-            while (condition_->execute())
-                body_->execute();
+        void execute(buffer_t& buf) override {
+            while (step(buf))
+                body_->execute(buf);
         }
     };
 
@@ -278,27 +363,28 @@ namespace node {
         node_scope_t* body1_;
         node_scope_t* body2_;
 
+    private:
+        inline void dynamic_analize(const result_t& result) {
+            if (result.type != node_type_e::NUMBER)
+                throw error_t{"wrong type of fork condition"};
+        }
+
     public:
         node_fork_t(node_expression_t* condition, node_scope_t* body1, node_scope_t* body2)
         : condition_(condition), body1_(body1), body2_(body2) {}
 
-        void execute() override {
-            if (condition_->execute())
-                body1_->execute();
+        void execute(buffer_t& buf) override {
+            result_t result = condition_->execute(buf);
+
+#ifdef DYNAMIC_ANALYZE
+            dynamic_analize(result);
+#endif
+
+            int value = static_cast<const node_number_t*>(result.value)->get_value();
+            if (value)
+                body1_->execute(buf);
             else
-                body2_->execute();
-        }
-    };
-
-    class buffer_t final {
-        std::vector<std::unique_ptr<node::node_t>> nodes_;
-
-    public:
-        template <typename NodeT, typename ...ArgsT>
-        NodeT* add_node(ArgsT&&... args) {
-            return static_cast<NodeT*>(
-                (nodes_.emplace_back(std::make_unique<NodeT>(std::forward<ArgsT>(args)...))).get()
-            );
+                body2_->execute(buf);
         }
     };
 }

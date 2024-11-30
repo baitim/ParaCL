@@ -1,0 +1,8 @@
+x = 1 + 8 * 7 - undef;
+print x;
+
+y = x % undef;
+print y;
+
+z = ? * undef - 100;
+print z;
