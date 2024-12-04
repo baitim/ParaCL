@@ -44,12 +44,12 @@ namespace cmd {
         virtual ~cmd_flag_t() {};
     };
 
-    class cmd_program_file final : public cmd_flag_t {
+    class cmd_program_file_t final : public cmd_flag_t {
         using cmd_flag_t::is_setted_;
         std::string value_;
 
     public:
-        cmd_program_file() : cmd_flag_t("program_file", true, false) {}
+        cmd_program_file_t() : cmd_flag_t("program_file", true, false) {}
         const std::string& value() const { return value_; }
         using cmd_flag_t::name;
 
@@ -60,12 +60,12 @@ namespace cmd {
         }
     };
 
-    class cmd_is_analyzing final : public cmd_flag_t {
+    class cmd_is_analyzing_t final : public cmd_flag_t {
         using cmd_flag_t::is_setted_;
         bool value_ = false;
 
     public:
-        cmd_is_analyzing() : cmd_flag_t("is_analyzing", false, true) {}
+        cmd_is_analyzing_t() : cmd_flag_t("is_analyzing", false, true) {}
         bool value() const noexcept { return value_; }
         using cmd_flag_t::name;
         
@@ -76,7 +76,7 @@ namespace cmd {
         }
     };
 
-    class cmd_flags {
+    class cmd_flags_t {
     protected:
         std::pair<int, int> cnt_flags_;
         std::unordered_map<std::string, std::unique_ptr<cmd_flag_t>> flags_;
@@ -118,11 +118,11 @@ namespace cmd {
         }
 
     public:
-        cmd_flags() {
-            std::unique_ptr<cmd_program_file> program_file = std::make_unique<cmd_program_file>();
+        cmd_flags_t() {
+            std::unique_ptr<cmd_program_file_t> program_file = std::make_unique<cmd_program_file_t>();
             flags_.emplace(program_file.get()->name(), std::move(program_file));
 
-            std::unique_ptr<cmd_is_analyzing> is_analyzing = std::make_unique<cmd_is_analyzing>();
+            std::unique_ptr<cmd_is_analyzing_t> is_analyzing = std::make_unique<cmd_is_analyzing_t>();
             flags_.emplace(is_analyzing.get()->name(), std::move(is_analyzing));
 
             cnt_flags_ = get_cnt_flags();
@@ -137,12 +137,12 @@ namespace cmd {
             }
         }
 
-        virtual ~cmd_flags() {};
+        virtual ~cmd_flags_t() {};
     };
 
-    class cmd_data_t final : public cmd_flags {
-        using cmd_flags::cnt_flags_;
-        using cmd_flags::flags_;
+    class cmd_data_t final : public cmd_flags_t {
+        using cmd_flags_t::cnt_flags_;
+        using cmd_flags_t::flags_;
 
     public:
         void parse(int argc, char* argv[]) {
@@ -150,19 +150,19 @@ namespace cmd {
                 throw common::error_t{"Invalid argument: argc = 2, argv[1] = name of file\n"};
 
             for (int i : view::iota(1, argc))
-                cmd_flags::parse_token(argv[i]);
+                cmd_flags_t::parse_token(argv[i]);
 
-            cmd_flags::check_valid();
+            cmd_flags_t::check_valid();
         }
 
         const std::string& program_file() const {
             cmd_flag_t* flag = flags_.find("program_file")->second.get();
-            return static_cast<cmd_program_file*>(flag)->value();
+            return static_cast<cmd_program_file_t*>(flag)->value();
         }
 
         bool is_analize() const noexcept {
             cmd_flag_t* flag = flags_.find("is_analyzing")->second.get();
-            return static_cast<cmd_is_analyzing*>(flag)->value();
+            return static_cast<cmd_is_analyzing_t*>(flag)->value();
         }
     };
 }
