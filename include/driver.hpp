@@ -159,8 +159,8 @@ namespace yy {
 
 namespace yy {
 
-    class Driver_t final {
-        Lexer_t lexer_;
+    class driver_t final {
+        lexer_t lexer_;
         std::string program_str_;
         std::string last_token_;
 

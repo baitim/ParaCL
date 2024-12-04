@@ -1,5 +1,5 @@
 %option c++ yylineno noyywrap
-%option yyclass="yy::Lexer_t"
+%option yyclass="yy::lexer_t"
 
 %{
     #include "parser.tab.hh"

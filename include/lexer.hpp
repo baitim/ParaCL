@@ -12,7 +12,7 @@
 
 namespace yy {
 
-    class Lexer_t final : public yyFlexLexer {
+    class lexer_t final : public yyFlexLexer {
         location loc_;
 
     public:

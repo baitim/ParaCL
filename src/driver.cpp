@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    yy::Driver_t driver;
+    yy::driver_t driver;
     ast::ast_t ast;
 
     try {

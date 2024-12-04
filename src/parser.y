@@ -14,14 +14,14 @@ Grammar:
     body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print expression
-    assignment   -> lvalue = expression
+    assignment   -> variable = expression
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' expression ')' | number | undef | ? | un_oper terminal | id
-    lvalue         -> id
+    terminal       -> '(' expression ')' | number | undef | ? | un_oper terminal | variable
+    variable       -> id
 */
 
 %language "c++"
@@ -36,10 +36,10 @@ Grammar:
     #include "node.hpp"
     using namespace node;
     #include <stack>
-    namespace yy {class Driver_t;}
+    namespace yy {class driver_t;}
 }
 
-%param       { yy::Driver_t* driver }
+%param       { yy::driver_t* driver }
 %parse-param { node::buffer_t& buf }
 %parse-param { node::node_scope_t*& root }
 
@@ -49,7 +49,7 @@ Grammar:
     namespace yy {
         parser::token_type yylex(parser::semantic_type* yylval,
                                  location* loc,
-                                 Driver_t* driver);
+                                 driver_t* driver);
     }
 }
 
@@ -111,8 +111,8 @@ Grammar:
 %nterm <node_expression_t*> print
 %nterm <node_expression_t*> assignment
 
-%nterm <std::string>        lvalue
 %nterm <node_expression_t*> terminal
+%nterm <std::string>        variable
 
 %nterm <node_expression_t*> expression_lgc
 %nterm <node_expression_t*> expression_cmp
@@ -139,6 +139,22 @@ Grammar:
     void lift_up_from_scope() {
         scopes_stack.pop();
         current_scope = scopes_stack.top();
+    }
+
+    node_variable_t* decl_var(std::string_view name, buffer_t& buf) {
+        node_variable_t* var = current_scope->get_node(name);
+        if (!var) {
+            var = buf.add_node<node_variable_t>(name);
+            current_scope->add_variable(var);
+        }
+        return var;
+    }
+
+    node_variable_t* get_var(std::string_view name, const yy::location& loc, const yy::driver_t* driver) {
+        node_variable_t* var = current_scope->get_node(name);
+        if (!var)
+            driver->report_undecl_error(loc, name);
+        return var;
     }
 }
 
@@ -194,14 +210,10 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = buf.add_node<node_print_t>($2); }
 ;
 
-assignment: lvalue ASSIGN expression {
-                                        node_variable_t* lvalue_node = current_scope->get_node($1);
-                                        if (!lvalue_node) {
-                                            lvalue_node = buf.add_node<node_variable_t>($1);
-                                            current_scope->add_variable(lvalue_node);
+assignment: variable ASSIGN expression  {
+                                            node_variable_t* var = decl_var($1, buf);
+                                            $$ = buf.add_node<node_assign_t>(var, $3);
                                         }
-                                        $$ = buf.add_node<node_assign_t>(lvalue_node, $3);
-                                     }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node<node_bin_op_t>($2, $1, $3); }
@@ -225,14 +237,10 @@ terminal: LBRACKET expression RBRACKET  { $$ = $2; }
         | UNDEF                         { $$ = buf.add_node<node_undef_t>(); }
         | INPUT                         { $$ = buf.add_node<node_input_t>(); }
         | un_oper terminal              { $$ = buf.add_node<node_un_op_t>($1, $2); }
-        | ID                            {
-                                            $$ = current_scope->get_node($1);
-                                            if (!$$)
-                                                driver->report_undecl_error(@1, $1);
-                                        }
+        | variable                      { $$ = get_var($1, @1, driver); }
 ;
 
-lvalue: ID { $$ = $1; }
+variable: ID { $$ = $1; }
 ;
 
 bin_oper_lgc: OR   { $$ = binary_operators_e::OR; }
@@ -266,7 +274,7 @@ un_oper: ADD  { $$ = unary_operators_e::ADD; }
 namespace yy {
 parser::token_type yylex(parser::semantic_type* yylval,
                          location* loc,
-                         Driver_t* driver) {
+                         driver_t* driver) {
     return driver->yylex(yylval, loc);
 }
 
