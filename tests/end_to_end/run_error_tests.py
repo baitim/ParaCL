@@ -12,7 +12,7 @@ is_OK = True
 
 def run(program, exe_file):
     global is_OK
-    command = [exe_file, program]
+    command = [exe_file, program, "--analyze"]
     result = subprocess.run(command, capture_output=True)
     if result.returncode == 0:
         print(bcolors.FAIL + "result is valid: " + program + bcolors.ENDC)

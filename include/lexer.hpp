@@ -11,7 +11,6 @@
 #include <sstream>
 
 namespace yy {
-
     class lexer_t final : public yyFlexLexer {
         location loc_;
 

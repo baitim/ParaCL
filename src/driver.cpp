@@ -1,27 +1,29 @@
 #include "ast.hpp"
 #include "driver.hpp"
+#include "cmd.hpp"
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cout << print_red("Invalid argument: argc = 2, argv[1] = name of file\n");
+    cmd::cmd_data_t cmd_data;
+    try {
+        cmd_data.parse(argc, argv);
+    } catch (const common::error_t& error) {
+        std::cout << error.what() << "\n";
         return 1;
     }
 
     yy::driver_t driver;
     ast::ast_t ast;
-
     try {
-        driver.parse(argv[1], ast.buffer_, ast.root_);
-    } catch (const yy::error_t& error) {
+        driver.parse(cmd_data.program_file(), ast.buffer_, ast.root_);
+    } catch (const common::error_t& error) {
         std::cout << error.what() << "\n";
         return 1;
     }
 
-    environments::environments_t env{std::cout, std::cin};
-
+    environments::environments_t env{std::cout, std::cin, cmd_data.is_analize()};
     try {
         ast.execute(env);
-    } catch (const node::error_t& error) {
+    } catch (const node::error_execute_t& error) {
         std::cout << print_red(error.what()) << "\n";
         return 1;
     }

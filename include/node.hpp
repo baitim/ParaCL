@@ -1,36 +1,32 @@
 #pragma once
 
+#include "common.hpp"
 #include "environments.hpp"
 #include <cassert>
 #include <memory>
 #include <exception>
 #include <vector>
 #include <unordered_map>
-#include <ranges>
-
-#ifndef DYNAMIC_ANALYZE
-#define DYNAMIC_ANALYZE 0
-#endif
-
-#define dynamic_analize_d(args)     \
-        if (!DYNAMIC_ANALYZE) {     \
-        } else                      \
-            dynamic_analize(args)
 
 namespace node {
     using namespace environments;
 
-    namespace rng  = std::ranges;
-    namespace view = rng::views;
+    class error_execute_t final : public common::error_t {
+        std::string description_;
 
-    class error_t final : std::exception {
-        std::string msg_;
-    
+    private:
+        std::string get_info() const {
+            std::stringstream description;
+            description << print_red("execution failed: " << description_);
+            return description.str();
+        }
+
     public:
-        error_t(const char*      msg) : msg_(msg) {}
-        error_t(std::string_view msg) : msg_(msg) {}
-        const char* what() const noexcept { return msg_.c_str(); }
+        error_execute_t(std::string_view description) : description_(description) {
+            common::error_t::msg_ = get_info();
+        }
     };
+
 
     /* ----------------------------------------------------- */
     
@@ -48,9 +44,9 @@ namespace node {
     public:
         template <typename NodeT, typename ...ArgsT>
         NodeT* add_node(ArgsT&&... args) {
-            return static_cast<NodeT*>(
-                (nodes_.emplace_back(std::make_unique<NodeT>(std::forward<ArgsT>(args)...))).get()
-            );
+            std::unique_ptr new_node = std::make_unique<NodeT>(std::forward<ArgsT>(args)...);
+            nodes_.emplace_back(std::move(new_node));
+            return static_cast<NodeT*>(nodes_.back().get());
         }
     };
 
@@ -221,7 +217,7 @@ namespace node {
                 case binary_operators_e::MUL: result = LHS * RHS; break;
                 case binary_operators_e::DIV: result = LHS / RHS; break;
                 case binary_operators_e::MOD: result = LHS % RHS; break;
-                default: throw error_t{"attempt to execute unknown binary operator"};
+                default: throw error_execute_t{"attempt to execute unknown binary operator"};
             }
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
         }
@@ -232,7 +228,7 @@ namespace node {
 
             if (!(l_type == node_type_e::UNDEF  || r_type == node_type_e::UNDEF) &&
                 !(l_type == node_type_e::NUMBER && r_type == node_type_e::NUMBER))
-                throw error_t{"different types of arguments in binary operator"};
+                throw error_execute_t{"different types of arguments in binary operator"};
         }
     };
 
@@ -262,7 +258,7 @@ namespace node {
                 case unary_operators_e::ADD: result =  value; break;
                 case unary_operators_e::SUB: result = -value; break;
                 case unary_operators_e::NOT: result = !value; break;
-                default: throw error_t{"attempt to execute unknown unary operator"};
+                default: throw error_execute_t{"attempt to execute unknown unary operator"};
             }
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
         }
@@ -270,7 +266,7 @@ namespace node {
         void stat_analize(const result_t& argument) {
             if (argument.type != node_type_e::NUMBER ||
                 argument.type != node_type_e::UNDEF)
-                throw error_t{"wrong type in unary operator"};
+                throw error_execute_t{"wrong type in unary operator"};
         }
     };
 
@@ -342,7 +338,7 @@ namespace node {
             int value;
             env.is >> value;
             if (!env.is.good())
-                throw error_t{"invalid input: need integer"};
+                throw error_execute_t{"invalid input: need integer"};
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(value)};
         }
     };
@@ -356,13 +352,14 @@ namespace node {
     private:
         inline void dynamic_analize(const result_t& result) {
             if (result.type != node_type_e::NUMBER)
-                throw error_t{"wrong type of loop condition"};
+                throw error_execute_t{"wrong type of loop condition"};
         }
 
         inline int step(buffer_t& buf, environments_t& env) {
             result_t result = condition_->execute(buf, env);
 
-            dynamic_analize_d(result);
+            if (env.is_analize)
+                dynamic_analize(result);
 
             return static_cast<const node_number_t*>(result.value)->get_value();
         }
@@ -387,7 +384,7 @@ namespace node {
     private:
         inline void dynamic_analize(const result_t& result) {
             if (result.type != node_type_e::NUMBER)
-                throw error_t{"wrong type of fork condition"};
+                throw error_execute_t{"wrong type of fork condition"};
         }
 
     public:
@@ -397,7 +394,8 @@ namespace node {
         void execute(buffer_t& buf, environments_t& env) override {
             result_t result = condition_->execute(buf, env);
 
-            dynamic_analize_d(result);
+            if (env.is_analize)
+                dynamic_analize(result);
 
             int value = static_cast<const node_number_t*>(result.value)->get_value();
             if (value)

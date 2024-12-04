@@ -12,7 +12,7 @@ namespace ast {
             if (root_)
                 root_->execute(execution_buffer_, env);
             else
-                throw node::error_t{"execute by nullptr"};
+                throw node::error_execute_t{"execute by nullptr"};
         }
     };
 }

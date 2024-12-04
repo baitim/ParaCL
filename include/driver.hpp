@@ -3,47 +3,10 @@
 #include "parser.tab.hh"
 #include "ast.hpp"
 #include "lexer.hpp"
-#include <cstring>
-#include <ranges>
+#include <string>
 
 namespace yy {
-
-    namespace rng  = std::ranges;
-    namespace view = rng::views;
-
-    template <typename MsgT>
-    concept error_str =
-    std::is_constructible_v<std::string, MsgT> &&
-    requires(std::ostream& os, MsgT msg) {
-        { os << msg } -> std::same_as<std::ostream&>;
-    };
-
-    class error_t {
-    protected:
-        std::string msg_;
-
-    private:
-        template <error_str MsgT>
-        std::string convert2colored(MsgT msg, bool is_colored) const {
-            std::stringstream error;
-            if (is_colored) error << print_red(msg);
-            else            error << msg;
-            return error.str();
-        }
-
-    public:
-        error_t() {}
-        template <error_str MsgT>
-        error_t(MsgT msg, bool is_colored = false) : msg_(convert2colored(msg, is_colored)) {}
-
-        virtual const char* what() const { return msg_.c_str(); }
-
-        virtual ~error_t() {};
-    };
-
-    /*----------------------------------------------------------------------*/
-
-    class parse_error_t : public error_t {
+    class error_parse_t : public common::error_t {
         location loc_;
         std::string program_str_;
         int length_;
@@ -105,7 +68,7 @@ namespace yy {
         }
 
     public:
-        parse_error_t(const location& loc, const std::string& program_str, int length)
+        error_parse_t(const location& loc, const std::string& program_str, int length)
         : loc_(loc), program_str_(program_str), length_(length) {}
 
         const location& get_loc() const { return loc_; }
@@ -113,45 +76,45 @@ namespace yy {
 
     /*----------------------------------------------------------------------*/
 
-    class undecl_error_t final : public parse_error_t {
+    class error_undecl_t final : public error_parse_t {
         std::string variable_;
 
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_error_line();
-            description << print_red("declaration error at " << parse_error_t::get_loc()
+            description << error_parse_t::get_error_line();
+            description << print_red("declaration error at " << error_parse_t::get_loc()
                         << ": \"" << variable_ << "\" - undeclared variable");
 
             return description.str();
         }
 
     public:
-        undecl_error_t(const location& loc, const std::string& program_str, std::string_view variable)
-        : parse_error_t(loc, program_str, variable.length()), variable_(variable) {
-            error_t::msg_ = get_info();
+        error_undecl_t(const location& loc, const std::string& program_str, std::string_view variable)
+        : error_parse_t(loc, program_str, variable.length()), variable_(variable) {
+            common::error_t::msg_ = get_info();
         }
     };
 
     /*----------------------------------------------------------------------*/
 
-    class syntax_error_t final : public parse_error_t {
+    class error_syntax_t final : public error_parse_t {
         std::string token_;
 
     private:
         std::string get_info() const {
             std::stringstream description;
-            description << parse_error_t::get_error_line();
-            description << print_red("syntax error at " << parse_error_t::get_loc()
+            description << error_parse_t::get_error_line();
+            description << print_red("syntax error at " << error_parse_t::get_loc()
                         << ": \"" << token_ << "\" - token that breaks");
 
             return description.str();
         }
 
     public:
-        syntax_error_t(const location& loc, const std::string& program_str, std::string_view token)
-        : parse_error_t(loc, program_str, token.length()), token_(token) {
-            error_t::msg_ = get_info();
+        error_syntax_t(const location& loc, const std::string& program_str, std::string_view token)
+        : error_parse_t(loc, program_str, token.length()), token_(token) {
+            common::error_t::msg_ = get_info();
         }
     };
 
@@ -173,16 +136,16 @@ namespace yy {
                 program_str_ = sstr.str();
                 input_file.close();
             } else {
-                throw error_t{"can't open program file", true};
+                throw common::error_t{"can't open program file", true};
             }
         }
 
         void report_undecl_error(const location& loc, std::string_view variable) const {
-            throw undecl_error_t{loc, program_str_, variable};
+            throw error_undecl_t{loc, program_str_, variable};
         }
 
         void report_syntax_error(const location& loc) const {
-            throw syntax_error_t{loc, program_str_, last_token_};
+            throw error_syntax_t{loc, program_str_, last_token_};
         }
 
         parser::token_type yylex(parser::semantic_type* yylval, location* loc) {

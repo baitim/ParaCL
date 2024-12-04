@@ -23,7 +23,7 @@
     <code>cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake; cmake --build build</code>
 
 6. Run <br>
-    <code>./build/src/paracl</code>
+    <code>./build/src/paracl [--analyze]? \<program\></code>
 
 ## How to test
 
@@ -34,7 +34,7 @@
 ## Features
 
 * Ability to check whether values are defined <br>
-    include this compilation flag <code>-DDYNAMIC_ANALYZE</code>
+    include flag <code>--analyze</code>
 
 ## Compile errors
 
