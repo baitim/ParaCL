@@ -1,11 +1,12 @@
 #pragma once
 
+#include "environments.hpp"
 #include <cassert>
-#include <iostream>
 #include <memory>
 #include <exception>
 #include <vector>
 #include <unordered_map>
+#include <ranges>
 
 #ifndef DYNAMIC_ANALYZE
 #define DYNAMIC_ANALYZE 0
@@ -14,14 +15,13 @@
 #define dynamic_analize_d(args)     \
         if (!DYNAMIC_ANALYZE) {     \
         } else                      \
-            dynamic_analize(args)   \
+            dynamic_analize(args)
 
 namespace node {
+    using namespace environments;
 
-    struct environments_t {
-        std::ostream& os;
-        std::istream& is;
-    };
+    namespace rng  = std::ranges;
+    namespace view = rng::views;
 
     class error_t final : std::exception {
         std::string msg_;
@@ -132,7 +132,11 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        result_t execute(buffer_t& buf, environments_t& env) override { return {node_type_e::NUMBER, this}; }
+
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            return {node_type_e::NUMBER, this};
+        }
+
         void print(std::ostream& os) const { os << number_ << "\n"; }
         int get_value() const noexcept { return number_; }
     };
@@ -141,7 +145,10 @@ namespace node {
 
     class node_undef_t final : public node_type_t {
     public:
-        result_t execute(buffer_t& buf, environments_t& env) override { return {node_type_e::UNDEF, this}; }
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            return {node_type_e::UNDEF, this};
+        }
+
         void print(std::ostream& os) const { os << "undef\n"; }
     };
 

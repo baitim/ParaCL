@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    ast::environments_t env{std::cout, std::cin};
+    environments::environments_t env{std::cout, std::cin};
 
     try {
         ast.execute(env);
