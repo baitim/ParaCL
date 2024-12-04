@@ -7,7 +7,21 @@
 #include <vector>
 #include <unordered_map>
 
+#ifndef DYNAMIC_ANALYZE
+#define DYNAMIC_ANALYZE 0
+#endif
+
+#define dynamic_analize_d(args)     \
+        if (!DYNAMIC_ANALYZE) {     \
+        } else                      \
+            dynamic_analize(args)   \
+
 namespace node {
+
+    struct environments_t {
+        std::ostream& os;
+        std::istream& is;
+    };
 
     class error_t final : std::exception {
         std::string msg_;
@@ -46,14 +60,14 @@ namespace node {
     
     class node_expression_t : public node_t {
     public:
-        virtual result_t execute(buffer_t& buf) = 0;
+        virtual result_t execute(buffer_t& buf, environments_t& env) = 0;
     };
 
     /* ----------------------------------------------------- */
 
     class node_type_t : public node_expression_t {
     public:
-        virtual void print() const = 0;
+        virtual void print(std::ostream& os) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -73,7 +87,7 @@ namespace node {
     
     class node_statement_t : public node_t {
     public:
-        virtual void execute(buffer_t& buf) = 0;
+        virtual void execute(buffer_t& buf, environments_t& env) = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -84,9 +98,9 @@ namespace node {
     public:
         node_instruction_t(node_expression_t* expr) : expr_(expr) {}
 
-        void execute(buffer_t& buf) override {
+        void execute(buffer_t& buf, environments_t& env) override {
             assert(expr_);
-            expr_->execute(buf);
+            expr_->execute(buf, env);
         };
     };
 
@@ -108,7 +122,7 @@ namespace node {
     public:
         node_variable_t(std::string_view id) : node_id_t(id) {}
         result_t set_value(result_t value) { return value_ = value; }
-        result_t execute  (buffer_t& buf) override { return value_; }
+        result_t execute  (buffer_t& buf, environments_t& env) override { return value_; }
     };
 
     /* ----------------------------------------------------- */
@@ -118,8 +132,8 @@ namespace node {
 
     public:
         node_number_t(int number) : number_(number) {}
-        result_t execute(buffer_t& buf) override { return {node_type_e::NUMBER, this}; }
-        void print() const { std::cout << number_ << "\n"; }
+        result_t execute(buffer_t& buf, environments_t& env) override { return {node_type_e::NUMBER, this}; }
+        void print(std::ostream& os) const { os << number_ << "\n"; }
         int get_value() const noexcept { return number_; }
     };
 
@@ -127,8 +141,8 @@ namespace node {
 
     class node_undef_t final : public node_type_t {
     public:
-        result_t execute(buffer_t& buf) override { return {node_type_e::UNDEF, this}; }
-        void print() const { std::cout << "undef\n"; }
+        result_t execute(buffer_t& buf, environments_t& env) override { return {node_type_e::UNDEF, this}; }
+        void print(std::ostream& os) const { os << "undef\n"; }
     };
 
     /* ----------------------------------------------------- */
@@ -140,7 +154,9 @@ namespace node {
     public:
         node_assign_t(node_variable_t* lvalue, node_expression_t* rvalue)
         : lvalue_(lvalue), rvalue_(rvalue) {}
-        result_t execute(buffer_t& buf) override { return lvalue_->set_value(rvalue_->execute(buf)); }
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            return lvalue_->set_value(rvalue_->execute(buf, env));
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -171,9 +187,9 @@ namespace node {
         node_bin_op_t(binary_operators_e type, node_expression_t* left, node_expression_t* right)
         : type_(type), left_(left), right_(right) {}
 
-        result_t execute(buffer_t& buf) override {
-            result_t l_result = left_->execute(buf);
-            result_t r_result = right_->execute(buf);
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            result_t l_result = left_ ->execute(buf, env);
+            result_t r_result = right_->execute(buf, env);
 
             if (l_result.type == node_type_e::UNDEF ||
                 r_result.type == node_type_e::UNDEF)
@@ -228,8 +244,8 @@ namespace node {
         node_un_op_t(unary_operators_e type, node_expression_t* node)
         : type_(type), node_(node) {}
 
-        result_t execute(buffer_t& buf) override {
-            result_t res_exec = node_->execute(buf);
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            result_t res_exec = node_->execute(buf, env);
             if (res_exec.type == node_type_e::UNDEF)
                 return {node_type_e::UNDEF, buf.add_node<node_undef_t>()};
 
@@ -290,9 +306,9 @@ namespace node {
             return nullptr;
         }
 
-        void execute(buffer_t& buf) override {
+        void execute(buffer_t& buf, environments_t& env) override {
             for (auto node : statements_)
-                node->execute(buf);
+                node->execute(buf, env);
         }
     };
 
@@ -304,9 +320,9 @@ namespace node {
     public:
         node_print_t(node_expression_t* argument) : argument_(argument) {}
 
-        result_t execute(buffer_t& buf) override {
-            result_t result = argument_->execute(buf);
-            result.value->print();
+        result_t execute(buffer_t& buf, environments_t& env) override {
+            result_t result = argument_->execute(buf, env);
+            result.value->print(env.os);
             return result;
         }
     };
@@ -315,10 +331,10 @@ namespace node {
 
     class node_input_t final : public node_expression_t {
     public:
-        result_t execute(buffer_t& buf) override {
+        result_t execute(buffer_t& buf, environments_t& env) override {
             int value;
-            std::cin >> value;
-            if (!std::cin.good())
+            env.is >> value;
+            if (!env.is.good())
                 throw error_t{"invalid input: need integer"};
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(value)};
         }
@@ -336,12 +352,10 @@ namespace node {
                 throw error_t{"wrong type of loop condition"};
         }
 
-        inline int step(buffer_t& buf) {
-            result_t result = condition_->execute(buf);
+        inline int step(buffer_t& buf, environments_t& env) {
+            result_t result = condition_->execute(buf, env);
 
-#ifdef DYNAMIC_ANALYZE
-            dynamic_analize(result);
-#endif
+            dynamic_analize_d(result);
 
             return static_cast<const node_number_t*>(result.value)->get_value();
         }
@@ -350,9 +364,9 @@ namespace node {
         node_loop_t(node_expression_t* condition, node_scope_t* body)
         : condition_(condition), body_(body) {}
 
-        void execute(buffer_t& buf) override {
-            while (step(buf))
-                body_->execute(buf);
+        void execute(buffer_t& buf, environments_t& env) override {
+            while (step(buf, env))
+                body_->execute(buf, env);
         }
     };
 
@@ -373,18 +387,16 @@ namespace node {
         node_fork_t(node_expression_t* condition, node_scope_t* body1, node_scope_t* body2)
         : condition_(condition), body1_(body1), body2_(body2) {}
 
-        void execute(buffer_t& buf) override {
-            result_t result = condition_->execute(buf);
+        void execute(buffer_t& buf, environments_t& env) override {
+            result_t result = condition_->execute(buf, env);
 
-#ifdef DYNAMIC_ANALYZE
-            dynamic_analize(result);
-#endif
+            dynamic_analize_d(result);
 
             int value = static_cast<const node_number_t*>(result.value)->get_value();
             if (value)
-                body1_->execute(buf);
+                body1_->execute(buf, env);
             else
-                body2_->execute(buf);
+                body2_->execute(buf, env);
         }
     };
 }

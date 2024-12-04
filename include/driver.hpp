@@ -88,12 +88,13 @@ namespace yy {
             std::pair<std::string, int> line_info = get_current_line(loc_, program_str_);
             std::string line = line_info.first;
             int loc = line_info.second - length_ + 1;
+            const int line_length = line.length();
 
             error_line << line.substr(0, loc)
                         << print_red(line.substr(loc, length_))
-                        << line.substr(loc + length_, line.length()) << "\n";
+                        << line.substr(loc + length_, line_length) << "\n";
 
-            for (int i : view::iota(0, static_cast<int>(line.length()))) {
+            for (int i : view::iota(0, line_length)) {
                 if (i >= loc && i < loc + length_)
                     error_line << print_red("^");
                 else

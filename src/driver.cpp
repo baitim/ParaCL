@@ -17,8 +17,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    ast::environments_t env{std::cout, std::cin};
+
     try {
-        ast.execute();
+        ast.execute(env);
     } catch (const node::error_t& error) {
         std::cout << print_red(error.what()) << "\n";
         return 1;
