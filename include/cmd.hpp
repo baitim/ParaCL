@@ -160,7 +160,7 @@ namespace cmd {
             return static_cast<cmd_program_file_t*>(flag)->value();
         }
 
-        bool is_analize() const noexcept {
+        bool is_analyzing() const noexcept {
             cmd_flag_t* flag = flags_.find("is_analyzing")->second.get();
             return static_cast<cmd_is_analyzing_t*>(flag)->value();
         }

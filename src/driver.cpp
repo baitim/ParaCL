@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    environments::environments_t env{std::cout, std::cin, cmd_data.is_analize()};
+    environments::environments_t env{std::cout, std::cin, cmd_data.is_analyzing()};
     try {
         ast.execute(env);
     } catch (const node::error_execute_t& error) {
