@@ -4,14 +4,13 @@
 #include "environments.hpp"
 #include <cassert>
 #include <memory>
-#include <exception>
 #include <vector>
 #include <unordered_map>
 
 namespace node {
     using namespace environments;
 
-    class error_execute_t final : public common::error_t {
+    class error_execute_t : public common::error_t {
         std::string description_;
 
     private:
@@ -27,14 +26,12 @@ namespace node {
         }
     };
 
-
     /* ----------------------------------------------------- */
     
     class node_t {
     public:
-        virtual ~node_t() = 0;
+        virtual ~node_t() = default;
     };
-    inline node_t::~node_t() {};
 
     /* ----------------------------------------------------- */
 
@@ -287,7 +284,7 @@ namespace node {
             return nullptr;
         }
 
-        virtual ~name_table_t() {};
+        virtual ~name_table_t() = default;
     };
 
     /* ----------------------------------------------------- */

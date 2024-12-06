@@ -36,7 +36,7 @@ namespace common {
 
         virtual const char* what() const { return msg_.c_str(); }
 
-        virtual ~error_t() {};
+        virtual ~error_t() = default;
     };
 
 }

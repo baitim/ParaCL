@@ -61,10 +61,10 @@ Grammar:
     LOOP
     UNDEF
 
-    LBRACKET
-    RBRACKET
-    LSCOPE
-    RSCOPE
+    LBRACKET_ROUND
+    RBRACKET_ROUND
+    LBRACKET_CURLY
+    RBRACKET_CURLY
 
     EQUAL
     NEQUAL
@@ -171,7 +171,7 @@ statements: %empty                 { $$ = buf.add_node<node_scope_t>(current_sco
           | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
 ;
 
-scope: LSCOPE statements RSCOPE { $$ = $2; }
+scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
 
 statement: fork         { $$ = $1; }
          | loop         { $$ = $1; }
@@ -196,7 +196,7 @@ fork: IF condition body %prec THEN  {
 loop: LOOP condition body { $$ = buf.add_node<node_loop_t>($2, $3); }
 ;
 
-condition: LBRACKET expression RBRACKET { $$ = $2; }
+condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 ;
 
 body: scope                                 { $$ = $1; lift_up_from_scope(); }
@@ -232,12 +232,12 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node<n
               | terminal                                   { $$ = $1; }
 ;
 
-terminal: LBRACKET expression RBRACKET  { $$ = $2; }
-        | NUMBER                        { $$ = buf.add_node<node_number_t>($1); }
-        | UNDEF                         { $$ = buf.add_node<node_undef_t>(); }
-        | INPUT                         { $$ = buf.add_node<node_input_t>(); }
-        | un_oper terminal              { $$ = buf.add_node<node_un_op_t>($1, $2); }
-        | variable                      { $$ = get_var($1, @1, driver); }
+terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
+        | NUMBER            { $$ = buf.add_node<node_number_t>($1); }
+        | UNDEF             { $$ = buf.add_node<node_undef_t>(); }
+        | INPUT             { $$ = buf.add_node<node_input_t>(); }
+        | un_oper terminal  { $$ = buf.add_node<node_un_op_t>($1, $2); }
+        | variable          { $$ = get_var($1, @1, driver); }
 ;
 
 variable: ID { $$ = $1; }

@@ -30,10 +30,10 @@ COMMENTS "//".*
 {NUMBER}        { return yy::parser::token_type::NUMBER; }
 {ID}            { return yy::parser::token_type::ID;     }
 
-"("             { return yy::parser::token_type::LBRACKET; }
-")"             { return yy::parser::token_type::RBRACKET; }
-"{"             { return yy::parser::token_type::LSCOPE;   }
-"}"             { return yy::parser::token_type::RSCOPE;   }
+"("             { return yy::parser::token_type::LBRACKET_ROUND;  }
+")"             { return yy::parser::token_type::RBRACKET_ROUND;  }
+"{"             { return yy::parser::token_type::LBRACKET_CURLY;  }
+"}"             { return yy::parser::token_type::RBRACKET_CURLY;  }
 
 "=="            { return yy::parser::token_type::EQUAL;    }
 "!="            { return yy::parser::token_type::NEQUAL;   }

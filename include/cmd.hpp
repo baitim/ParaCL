@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 namespace cmd {
-    class error_undecl_flag_t final : public common::error_t {
+    class error_undecl_flag_t : public common::error_t {
         std::string flag_name_;
 
     private:
@@ -41,7 +41,7 @@ namespace cmd {
 
         virtual bool parse(std::string_view flag) = 0;
 
-        virtual ~cmd_flag_t() {};
+        virtual ~cmd_flag_t() = default;
     };
 
     class cmd_program_file_t final : public cmd_flag_t {
@@ -137,7 +137,7 @@ namespace cmd {
             }
         }
 
-        virtual ~cmd_flags_t() {};
+        virtual ~cmd_flags_t() = default;
     };
 
     class cmd_data_t final : public cmd_flags_t {

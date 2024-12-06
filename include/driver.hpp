@@ -76,7 +76,7 @@ namespace yy {
 
     /*----------------------------------------------------------------------*/
 
-    class error_undecl_t final : public error_parse_t {
+    class error_undecl_t : public error_parse_t {
         std::string variable_;
 
     private:
@@ -98,7 +98,7 @@ namespace yy {
 
     /*----------------------------------------------------------------------*/
 
-    class error_syntax_t final : public error_parse_t {
+    class error_syntax_t : public error_parse_t {
         std::string token_;
 
     private:
