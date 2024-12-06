@@ -109,13 +109,19 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_variable_t final : public node_id_t, public node_expression_t {
+    class node_value_t : public node_expression_t {
         result_t value_;
 
     public:
-        node_variable_t(std::string_view id) : node_id_t(id) {}
         result_t set_value(result_t value) { return value_ = value; }
         result_t execute  (buffer_t& buf, environments_t& env) override { return value_; }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_variable_t final : public node_id_t, public node_value_t {
+    public:
+        node_variable_t(std::string_view id) : node_id_t(id) {}
     };
 
     /* ----------------------------------------------------- */
