@@ -15,6 +15,7 @@ Grammar:
 
     print        -> print expression
     assignment   -> lvalue_decl = lvalue_ctor
+    assignment   -> variable indexes = expression
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -31,7 +32,13 @@ Grammar:
 
     indexes        -> indexes index | index
     index          -> '[' expression ']'
+    terminal       -> '(' expression ')' | number | undef | array | ? | un_oper terminal | variable indexes
     variable       -> id
+
+    array          -> array '(' array_values ')'
+    array_values   -> array_values, expression | expression
+    indexes        -> indexes index | empty
+    index          -> '[' expression ']'
 */
 
 %language "c++"
@@ -70,12 +77,17 @@ Grammar:
     ELSE
     LOOP
 
+
     UNDEF
+    COMMA
+    ARRAY
     COMMA
     ARRAY
 
     LBRACKET_ROUND
     RBRACKET_ROUND
+    LBRACKET_SQUARE
+    RBRACKET_SQUARE
     LBRACKET_SQUARE
     RBRACKET_SQUARE
     LBRACKET_CURLY
@@ -125,6 +137,14 @@ Grammar:
 
 %nterm <node_expression_t*> print
 %nterm <node_expression_t*> assignment
+
+%nterm <node_expression_t*> terminal
+%nterm <std::string>        variable
+
+%nterm <node_array_t*>         array
+%nterm <node_array_values_t*>  array_values
+%nterm <node_array_indexes_t*> indexes
+%nterm <node_expression_t*>    index
 
 %nterm <node_expression_t*> expression_lgc
 %nterm <node_expression_t*> expression_cmp
@@ -235,6 +255,10 @@ print: PRINT expression { $$ = buf.add_node<node_print_t>($2); }
 ;
 
 assignment: lvalue_decl ASSIGN lvalue_ctor { $$ = buf.add_node<node_assign_t>($1, $3); }
+assignment: variable indexes ASSIGN expression  {
+                                                    node_variable_t* var = decl_var($1, buf);
+                                                    $$ = buf.add_node<node_assign_t>(var, $4);
+                                                }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node<node_bin_op_t>($2, $1, $3); }
@@ -257,6 +281,7 @@ terminal: LBRACKET_ROUND expression RBRACKET_ROUND  { $$ = $2; }
         | NUMBER            { $$ = buf.add_node<node_number_t>($1); }
         | UNDEF             { $$ = buf.add_node<node_undef_t>(); }
         | INPUT             { $$ = buf.add_node<node_input_t>(); }
+        | array             { $$ = $1; }
         | un_oper terminal  { $$ = buf.add_node<node_un_op_t>($1, $2); }
         | lvalue            { $$ = $1; }
 ;
@@ -293,9 +318,24 @@ indexes: indexes index { $$ = $1; $$->add_expr($2); }
 ;
 
 index: LBRACKET_SQUARE expression RBRACKET_SQUARE { $$ = $2; }
+        | variable indexes  { $$ = get_var($1, @1, driver); }
 ;
 
 variable: ID { $$ = $1; }
+;
+
+array: ARRAY LBRACKET_ROUND array_values RBRACKET_ROUND { $$ = buf.add_node<node_array_t>($3); }
+;
+
+array_values: array_values COMMA expression { $$ = $1; $$->add_value($3); }
+            | expression { $$ = buf.add_node<node_array_values_t>(); $$->add_value($1); }
+;
+
+indexes: %empty        { $$ = buf.add_node<node_array_indexes_t>(); }
+       | indexes index { $$ = $1; $$->add_index($2); }
+;
+
+index: LBRACKET_SQUARE expression RBRACKET_SQUARE { $$ = $2; }
 ;
 
 bin_oper_lgc: OR   { $$ = binary_operators_e::OR; }
