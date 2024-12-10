@@ -180,24 +180,29 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_array_values_t : public node_t {
-    public:
-        using container_t = std::vector<node_expression_t*>;
-    
-    private:
-        container_t values_;
+        std::vector<node_expression_t*> values_;
 
     public:
+        std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
+            std::vector<node_value_t> values;
+            const int size = values_.size();
+            for (int i : view::iota(0, size)) {
+                node_value_t result = values_[i]->execute(buf, env);
+                values.push_back(result);
+            }
+            return values;
+        }
+        
         void add_value(node_expression_t* value) { values_.push_back(value); }
-        container_t get_values() const { return values_; }
     };
 
     /* ----------------------------------------------------- */
 
     class node_array_t final : public node_type_t {
         bool is_inited = false;
-        node_array_values_t::container_t init_values_;
-        std::vector<node_value_t> values_;
+        node_array_values_t* init_values_;
         node_indexes_t* indexes_;
+        std::vector<node_value_t> values_;
         std::vector<int> real_indexes_;
 
     private:
@@ -225,17 +230,14 @@ namespace node {
         }
 
         void init(buffer_t& buf, environments_t& env) {
-            const int size = init_values_.size();
-            for (int i : view::iota(0, size))
-                values_[i] = init_values_[i]->execute(buf, env);
-
+            values_       = init_values_->execute(buf, env);
             real_indexes_ = indexes_->execute(buf, env);
-            is_inited = true;
+            is_inited     = true;
         }
 
     public:
         node_array_t(node_array_values_t* array_values, node_indexes_t* indexes)
-        : init_values_(array_values->get_values()), values_(init_values_.size()), indexes_(indexes) {}
+        : init_values_(array_values), indexes_(indexes) {}
 
         node_array_t(const std::vector<node_value_t>& values, const std::vector<int>& real_indexes)
         : is_inited(true), values_(values), real_indexes_(real_indexes) {}
