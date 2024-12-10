@@ -42,7 +42,7 @@ TEST(Paracl_shuffle, end_to_end) {
             ans_src.push_back(ans_string);
         answer_src_file.close();
 
-        EXPECT_EQ(ans_get.size(), ans_src.size());
+        EXPECT_EQ(ans_get.size(), ans_src.size()) << "test: " << i + 1;
         for (int j = 0, end = ans_get.size(); j < end; ++j)
             EXPECT_EQ(ans_get[j], ans_src[j]) << "test: " << i + 1 << " string: " << j + 1;
     }

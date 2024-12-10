@@ -1,0 +1,28 @@
+arr3_0 = array(array(array(0, 1), array(2,  3)),
+               array(array(4, 5), array(6,  7)),
+               array(array(8, 9), array(10, 11)))[2];
+
+print arr3_0;
+arr1_from_arr3_0 = arr3_0[1][0];
+print arr1_from_arr3_0;
+
+arr3_0_1 = array(array(array(0, 1), array(2,  3)),
+                 array(array(4, 5), array(6,  7)),
+                 array(array(8, 9), array(10, 11)))[2][1];
+
+print arr3_0_1;
+elem_from_arr3_0_1 = arr3_0_1[0];
+print elem_from_arr3_0_1;
+
+arr3_2_0_1 = array(array(array(10, 11), array(12, 13)),
+                   array(array(14, 15), array(16, 17)),
+                   array(array(18, 19), array(20, 21)))[print 2][print 0][print 1];
+print arr3_2_0_1;
+
+arr2_print = array(array(print 0, print 1), array(print 2, print 3));
+print arr2_print;
+
+arr2_0_1_print = array(array(print 5, 6), array(7, 8))[print 0][print 1];
+print arr2_0_1_print;
+print arr2_0_1_print;
+print arr2_0_1_print;

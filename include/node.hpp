@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "environments.hpp"
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <vector>
@@ -74,7 +75,7 @@ namespace node {
 
     class node_type_t : public node_expression_t {
     public:
-        virtual void print(buffer_t& buf, environments_t& env) const = 0;
+        virtual void print(buffer_t& buf, environments_t& env) = 0;
         virtual node_type_t* copy(buffer_t& buf, environments_t& env) = 0;
     };
 
@@ -124,7 +125,7 @@ namespace node {
             return {node_type_e::NUMBER, this};
         }
 
-        void print(buffer_t& buf, environments_t& env) const { env.os << number_ << "\n"; }
+        void print(buffer_t& buf, environments_t& env) override { env.os << number_ << "\n"; }
 
         node_type_t* copy(buffer_t& buf, environments_t& env) override {
             return buf.add_node<node_number_t>(number_);
@@ -141,7 +142,7 @@ namespace node {
             return {node_type_e::UNDEF, this};
         }
 
-        void print(buffer_t& buf, environments_t& env) const { env.os << "undef\n"; }
+        void print(buffer_t& buf, environments_t& env) override { env.os << "undef\n"; }
 
         node_type_t* copy(buffer_t& buf, environments_t& env) override {
             return buf.add_node<node_undef_t>();
@@ -163,12 +164,13 @@ namespace node {
         std::vector<int> execute(buffer_t& buf, environments_t& env) const {
             std::vector<int> indexes;
             const int size = indexes_.size();
-            for (int i : view::iota(0, size) | view::reverse) {
+            for (int i : view::iota(0, size)) {
                 node_value_t result = indexes_[i]->execute(buf, env);
                 static_analize_index_type(result.type);
                 int index = static_cast<node_number_t*>(result.value)->get_value();
                 indexes.push_back(index);
             }
+            reverse(indexes.begin(), indexes.end());
             return indexes;
         }
 
@@ -192,9 +194,11 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_array_t final : public node_type_t {
-        node_array_values_t::container_t init_values_;
         bool is_inited = false;
+        node_array_values_t::container_t init_values_;
         std::vector<node_value_t> values_;
+        node_indexes_t* indexes_;
+        std::vector<int> real_indexes_;
 
     private:
         std::string transform_print_str(const std::string& str) const {
@@ -224,12 +228,17 @@ namespace node {
             const int size = init_values_.size();
             for (int i : view::iota(0, size))
                 values_[i] = init_values_[i]->execute(buf, env);
+
+            real_indexes_ = indexes_->execute(buf, env);
             is_inited = true;
         }
 
     public:
-        node_array_t(node_array_values_t* array_values)
-        : init_values_(array_values->get_values()), values_(init_values_.size()) {}
+        node_array_t(node_array_values_t* array_values, node_indexes_t* indexes)
+        : init_values_(array_values->get_values()), values_(init_values_.size()), indexes_(indexes) {}
+
+        node_array_t(const std::vector<node_value_t>& values, const std::vector<int>& real_indexes)
+        : is_inited(true), values_(values), real_indexes_(real_indexes) {}
 
         node_value_t execute(buffer_t& buf, environments_t& env) override {
             if (!is_inited)
@@ -238,11 +247,19 @@ namespace node {
             return {node_type_e::ARRAY, this};
         }
 
-        node_value_t& shift(std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
-            return shift_(indexes, buf, env);
+        node_value_t& shift(const std::vector<int>& ext_indexes, buffer_t& buf, environments_t& env) {
+            std::vector<int> final_indexes = ext_indexes;
+            final_indexes.insert(final_indexes.end(), real_indexes_.begin(), real_indexes_.end());
+            return shift_(final_indexes, buf, env);
         }
 
-        void print(buffer_t& buf, environments_t& env) const {
+        void print(buffer_t& buf, environments_t& env) override {
+            if (!real_indexes_.empty()) {
+                std::vector<int> tmp_indexes = real_indexes_;
+                shift_(tmp_indexes, buf, env).value->print(buf, env);
+                return;
+            }
+            
             std::stringstream print_stream;
             environments_t print_env{print_stream, env.is, env.is_analize};
             const int size = values_.size();
@@ -254,12 +271,7 @@ namespace node {
         }
 
         node_type_t* copy(buffer_t& buf, environments_t& env) override {
-            node_array_values_t* copy_array_values = buf.add_node<node_array_values_t>();
-            const int size = values_.size();
-            for (int i : view::iota(0, size))
-                copy_array_values->add_value(values_[i].value);
-
-            return buf.add_node<node_array_t>(copy_array_values);
+            return buf.add_node<node_array_t>(values_, real_indexes_);
         };
     };
 
@@ -286,7 +298,7 @@ namespace node {
                 throw error_static_analyze_t{"attempt to indexing by non init variable"};
         }
 
-        node_value_t& shift(std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
+        node_value_t& shift(const std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
             static_analize_shift(indexes.size());
             if (indexes.size() == 0)
                 return value_;
@@ -296,14 +308,14 @@ namespace node {
         };
 
     public:
-        node_value_t execute(node_indexes_t* indexes, buffer_t& buf, environments_t& env) {
+        node_value_t execute(const node_indexes_t* indexes, buffer_t& buf, environments_t& env) {
             assert(indexes);
             std::vector<int> real_indexes = indexes->execute(buf, env);
             node_type_t*& real_value = shift(real_indexes, buf, env).value;
             return real_value->execute(buf, env);
         }
 
-        node_value_t set_value(node_indexes_t* indexes, node_value_t new_value,
+        node_value_t set_value(const node_indexes_t* indexes, node_value_t new_value,
                                buffer_t& buf, environments_t& env) {
             assert(indexes);
             std::vector<int> real_indexes = indexes->execute(buf, env);

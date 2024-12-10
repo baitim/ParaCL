@@ -23,7 +23,7 @@ Grammar:
     terminal       -> '(' expression ')' | number | undef | array | ? | un_oper terminal | variable indexes
     variable       -> id
 
-    array          -> array '(' array_values ')'  // +indexes
+    array          -> array '(' array_values ')' indexes
     array_values   -> array_values, expression | expression
     indexes        -> indexes index | empty
     index          -> '[' expression ']'
@@ -265,7 +265,7 @@ terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 variable: ID { $$ = $1; }
 ;
 
-array: ARRAY LBRACKET_ROUND array_values RBRACKET_ROUND { $$ = buf.add_node<node_array_t>($3); }
+array: ARRAY LBRACKET_ROUND array_values RBRACKET_ROUND indexes { $$ = buf.add_node<node_array_t>($3, $5); }
 ;
 
 array_values: array_values COMMA expression { $$ = $1; $$->add_value($3); }
