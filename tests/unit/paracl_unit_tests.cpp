@@ -28,21 +28,22 @@ TEST(Paracl_shuffle, end_to_end) {
     std::vector<std::string> answers_src_str = get_sorted_files(answers_src_path);
     const int count_tests = std::min(answers_get_str.size(), answers_src_str.size());
 
-    for (int i = 0, count; i < count_tests; ++i) {
+    std::string ans_string;
+    for (int i = 0; i < count_tests; ++i) {
         std::ifstream answer_get_file(answers_get_str[i]);
-        std::vector<int> ans_get;
-        while (answer_get_file >> count)
-            ans_get.push_back(count);
+        std::vector<std::string> ans_get;
+        while (std::getline(answer_get_file, ans_string))
+            ans_get.push_back(ans_string);
         answer_get_file.close();
 
         std::ifstream answer_src_file(answers_src_str[i]);
-        std::vector<int> ans_src;
-        while (answer_src_file >> count)
-            ans_src.push_back(count);
+        std::vector<std::string> ans_src;
+        while (std::getline(answer_src_file, ans_string))
+            ans_src.push_back(ans_string);
         answer_src_file.close();
 
         EXPECT_EQ(ans_get.size(), ans_src.size());
         for (int j = 0, end = ans_get.size(); j < end; ++j)
-            EXPECT_EQ(ans_get[j], ans_src[j]) << "\nindexes: " << j + 1;
+            EXPECT_EQ(ans_get[j], ans_src[j]) << "test: " << i + 1 << " string: " << j + 1;
     }
 }

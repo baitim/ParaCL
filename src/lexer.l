@@ -26,12 +26,16 @@ COMMENTS "//".*
 "else"          { return yy::parser::token_type::ELSE;  }
 "while"         { return yy::parser::token_type::LOOP;  }
 "undef"         { return yy::parser::token_type::UNDEF; }
+","             { return yy::parser::token_type::COMMA; }
+"array"         { return yy::parser::token_type::ARRAY; }
 
 {NUMBER}        { return yy::parser::token_type::NUMBER; }
 {ID}            { return yy::parser::token_type::ID;     }
 
 "("             { return yy::parser::token_type::LBRACKET_ROUND;  }
 ")"             { return yy::parser::token_type::RBRACKET_ROUND;  }
+"["             { return yy::parser::token_type::LBRACKET_SQUARE; }
+"]"             { return yy::parser::token_type::RBRACKET_SQUARE; }
 "{"             { return yy::parser::token_type::LBRACKET_CURLY;  }
 "}"             { return yy::parser::token_type::RBRACKET_CURLY;  }
 

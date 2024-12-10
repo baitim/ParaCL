@@ -8,9 +8,4 @@ namespace environments {
         std::istream& is;
         bool is_analize;
     };
-
-    class null_buffer_t : public std::streambuf {
-    public:
-        int overflow(int c) { return c; }
-    };
 }

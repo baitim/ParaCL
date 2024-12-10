@@ -1,0 +1,26 @@
+arr = array(1, 2, 3);
+print arr;
+y = arr[1];
+print y;
+print arr[0];
+
+arr2 = array(array(0, 1, 2), array(3, 4, 5), array(6, 7, 8));
+print arr2;
+
+arr3 = array(array(array(0, 1), array(2,  3)),
+             array(array(4, 5), array(6,  7)),
+             array(array(8, 9), array(10, 11)));
+print arr3;
+
+arr2_from_arr3 = arr3[1];
+print arr2_from_arr3;
+
+arr1_from_arr3 = arr3[2][1];
+print arr1_from_arr3;
+
+elem_from_arr3 = arr3[2][1][0];
+print elem_from_arr3;
+print arr3[1][0][1];
+
+array_undef = array(undef, 3, undef);
+print array_undef;

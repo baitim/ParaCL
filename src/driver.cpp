@@ -13,8 +13,10 @@ int main(int argc, char* argv[]) {
 
     yy::driver_t driver;
     ast::ast_t ast;
+    common::null_stream_t null_stream;
+    environments::environments_t parse_env{null_stream, std::cin, false};
     try {
-        driver.parse(cmd_data.program_file(), ast.buffer_, ast.root_);
+        driver.parse(cmd_data.program_file(), ast.buffer_, ast.root_, parse_env);
     } catch (const common::error_t& error) {
         std::cout << error.what() << "\n";
         return 1;
