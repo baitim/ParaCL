@@ -1,0 +1,5 @@
+arr = array(1, 2, 3, undef, 5);
+x = 0;
+while (arr[x]) {
+    x = x + 1;
+}

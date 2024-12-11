@@ -28,8 +28,13 @@
 ## How to test
 
 * Testing
-    - End to end <br>
+    - valid & error end to end <br>
         <code>ctest --test-dir build --output-on-failure</code>
+
+* Print
+    - error end to end <br>
+        <code>python3 tests/end_to_end/print_error_tests.py</code>
+
 
 ## Features
 
