@@ -76,7 +76,6 @@ namespace node {
     class node_type_t : public node_expression_t {
     public:
         virtual void print(buffer_t& buf, environments_t& env) = 0;
-        virtual node_type_t* copy(buffer_t& buf, environments_t& env) = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -127,10 +126,6 @@ namespace node {
 
         void print(buffer_t& buf, environments_t& env) override { env.os << number_ << "\n"; }
 
-        node_type_t* copy(buffer_t& buf, environments_t& env) override {
-            return buf.add_node<node_number_t>(number_);
-        };
-
         int get_value() const noexcept { return number_; }
     };
 
@@ -143,10 +138,6 @@ namespace node {
         }
 
         void print(buffer_t& buf, environments_t& env) override { env.os << "undef\n"; }
-
-        node_type_t* copy(buffer_t& buf, environments_t& env) override {
-            return buf.add_node<node_undef_t>();
-        };
     };
 
     /* ----------------------------------------------------- */
@@ -253,7 +244,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_array_t final : public node_type_t {
-        bool is_inited = false;
+        bool is_inited_ = false;
         node_array_values_t* init_values_;
         node_indexes_t* indexes_;
         std::vector<value_t> values_;
@@ -286,7 +277,7 @@ namespace node {
         void init(buffer_t& buf, environments_t& env) {
             values_       = init_values_->execute(buf, env);
             real_indexes_ = indexes_->execute(buf, env);
-            is_inited     = true;
+            is_inited_    = true;
         }
 
     public:
@@ -294,10 +285,10 @@ namespace node {
         : init_values_(array_values), indexes_(indexes) {}
 
         node_array_t(const std::vector<value_t>& values, const std::vector<int>& real_indexes)
-        : is_inited(true), values_(values), real_indexes_(real_indexes) {}
+        : is_inited_(true), values_(values), real_indexes_(real_indexes) {}
 
         value_t execute(buffer_t& buf, environments_t& env) override {
-            if (!is_inited)
+            if (!is_inited_)
                 init(buf, env);
             
             return {node_type_e::ARRAY, this};
@@ -326,11 +317,8 @@ namespace node {
             env.os << "[" << transform_print_str(print_stream.str()) << "]\n";
         }
 
-        node_type_t* copy(buffer_t& buf, environments_t& env) override {
-            return buf.add_node<node_array_t>(values_, real_indexes_);
-        };
-
         void clear() {
+            is_inited_ = false;
             values_.clear();
             real_indexes_.clear();
         }
@@ -377,11 +365,11 @@ namespace node {
         }
 
         value_t set_value(const node_indexes_t* indexes, value_t new_value,
-                               buffer_t& buf, environments_t& env) {
+                          buffer_t& buf, environments_t& env) {
             assert(indexes);
             std::vector<int> real_indexes = indexes->execute(buf, env);
             node_type_t*& real_value = shift(real_indexes, buf, env).value; // +check if types are different
-            real_value = new_value.value->copy(buf, env);
+            real_value = new_value.value;
             is_setted = true;
             return value_;
         }
@@ -566,7 +554,7 @@ namespace node {
         std::vector<node_array_t*> arrays_;
 
     protected:
-        void clear_memory(buffer_t& buf) {
+        void clear_memory() {
             for (auto iter : arrays_)
                 iter->clear();
         }
@@ -600,7 +588,7 @@ namespace node {
         void execute(buffer_t& buf, environments_t& env) override {
             for (auto node : statements_)
                 node->execute(buf, env);
-            memory_table_t::clear_memory(buf);
+            memory_table_t::clear_memory();
         }
     };
 
