@@ -135,7 +135,7 @@ Grammar:
 %nterm <node_array_t*>         array_repeat
 %nterm <node_repeat_values_t*> repeat_values
 %nterm <node_list_values_t*>   list_values
-%nterm <node_array_value_t*>    list_value
+%nterm <node_array_value_t*>   list_value
 %nterm <node_indexes_t*>       indexes
 %nterm <node_expression_t*>    index
 

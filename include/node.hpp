@@ -51,7 +51,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class buffer_t final {
-        std::vector<std::unique_ptr<node::node_t>> nodes_;
+        std::vector<std::unique_ptr<node_t>> nodes_;
 
     public:
         template <typename NodeT, typename ...ArgsT>
@@ -60,15 +60,23 @@ namespace node {
             nodes_.emplace_back(std::move(new_node));
             return static_cast<NodeT*>(nodes_.back().get());
         }
+
+        void remove_node(node_t* node) {
+            auto node_iter = std::remove_if(nodes_.begin(), nodes_.end(),
+                [node](const std::unique_ptr<node_t>& ptr) { return ptr.get() == node; });
+
+            if (node_iter != nodes_.end())
+                nodes_.erase(node_iter, nodes_.end());
+        }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_value_t;
+    class value_t;
     
     class node_expression_t : public node_t {
     public:
-        virtual node_value_t execute(buffer_t& buf, environments_t& env) = 0;
+        virtual value_t execute(buffer_t& buf, environments_t& env) = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -87,7 +95,7 @@ namespace node {
         ARRAY
     };
 
-    struct node_value_t final {
+    struct value_t final {
         node_type_e type;
         node_type_t* value;
     };
@@ -121,7 +129,7 @@ namespace node {
     public:
         node_number_t(int number) : number_(number) {}
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             return {node_type_e::NUMBER, this};
         }
 
@@ -138,7 +146,7 @@ namespace node {
 
     class node_undef_t final : public node_type_t {
     public:
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             return {node_type_e::UNDEF, this};
         }
 
@@ -165,7 +173,7 @@ namespace node {
             std::vector<int> indexes;
             const int size = indexes_.size();
             for (int i : view::iota(0, size)) {
-                node_value_t result = indexes_[i]->execute(buf, env);
+                value_t result = indexes_[i]->execute(buf, env);
                 static_analize_index_type(result.type);
                 int index = static_cast<node_number_t*>(result.value)->get_value();
                 indexes.push_back(index);
@@ -181,14 +189,14 @@ namespace node {
 
     class node_array_values_t : public node_t {
     public:
-        virtual std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const = 0;
+        virtual std::vector<value_t> execute(buffer_t& buf, environments_t& env) const = 0;
     };
 
     /* ----------------------------------------------------- */
 
     class node_array_value_t {
     public:
-        virtual void add_value(std::vector<node_value_t>& values,
+        virtual void add_value(std::vector<value_t>& values,
                                buffer_t& buf, environments_t& env) const = 0;
     };
 
@@ -201,8 +209,8 @@ namespace node {
     public:
         node_expression_value_t(node_expression_t* value) : value_(value) {}
 
-        void add_value(std::vector<node_value_t>& values, buffer_t& buf, environments_t& env) const {
-            node_value_t result = value_->execute(buf, env);
+        void add_value(std::vector<value_t>& values, buffer_t& buf, environments_t& env) const {
+            value_t result = value_->execute(buf, env);
             values.push_back(result);
         }
     };
@@ -218,16 +226,16 @@ namespace node {
         node_repeat_values_t(node_expression_t* value, node_expression_t* count)
         : value_(value), count_(count) {}
 
-        void add_value(std::vector<node_value_t>& values, buffer_t& buf, environments_t& env) const {
-            std::vector<node_value_t> result = execute(buf, env);
+        void add_value(std::vector<value_t>& values, buffer_t& buf, environments_t& env) const {
+            std::vector<value_t> result = execute(buf, env);
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
-            node_value_t value = value_->execute(buf, env);
-            node_value_t count = count_->execute(buf, env);
+        std::vector<value_t> execute(buffer_t& buf, environments_t& env) const {
+            value_t value = value_->execute(buf, env);
+            value_t count = count_->execute(buf, env);
             size_t real_count = static_cast<node_number_t*>(count.value)->get_value(); // static check type
-            std::vector<node_value_t> values{real_count, value};
+            std::vector<value_t> values{real_count, value};
             return values;
         }
     };
@@ -238,8 +246,8 @@ namespace node {
         std::vector<node_array_value_t*> values_;
 
     public:
-        std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
-            std::vector<node_value_t> values;
+        std::vector<value_t> execute(buffer_t& buf, environments_t& env) const {
+            std::vector<value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size)) {
                 values_[i]->add_value(values, buf, env);
@@ -256,7 +264,7 @@ namespace node {
         bool is_inited = false;
         node_array_values_t* init_values_;
         node_indexes_t* indexes_;
-        std::vector<node_value_t> values_;
+        std::vector<value_t> values_;
         std::vector<int> real_indexes_;
 
     private:
@@ -270,12 +278,12 @@ namespace node {
             return result;
         }
 
-        node_value_t& shift_(std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
+        value_t& shift_(std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
             assert(!indexes.empty());
 
             int index = indexes.back();
             indexes.pop_back();
-            node_value_t& result = values_[index];
+            value_t& result = values_[index];
 
             if (!indexes.empty() && result.type == node_type_e::ARRAY) // + check level error
                 return static_cast<node_array_t*>(result.value)->shift_(indexes, buf, env);
@@ -293,17 +301,17 @@ namespace node {
         node_array_t(node_array_values_t* array_values, node_indexes_t* indexes)
         : init_values_(array_values), indexes_(indexes) {}
 
-        node_array_t(const std::vector<node_value_t>& values, const std::vector<int>& real_indexes)
+        node_array_t(const std::vector<value_t>& values, const std::vector<int>& real_indexes)
         : is_inited(true), values_(values), real_indexes_(real_indexes) {}
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             if (!is_inited)
                 init(buf, env);
             
             return {node_type_e::ARRAY, this};
         }
 
-        node_value_t& shift(const std::vector<int>& ext_indexes, buffer_t& buf, environments_t& env) {
+        value_t& shift(const std::vector<int>& ext_indexes, buffer_t& buf, environments_t& env) {
             std::vector<int> final_indexes = ext_indexes;
             final_indexes.insert(final_indexes.end(), real_indexes_.begin(), real_indexes_.end());
             return shift_(final_indexes, buf, env);
@@ -333,20 +341,20 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_id_t {
+    class id_t {
         std::string id_;
 
     public:
-        node_id_t(std::string_view id) : id_(id) {}
+        id_t(std::string_view id) : id_(id) {}
         std::string_view get_name() const { return id_; }
-        virtual ~node_id_t() = default;
+        virtual ~id_t() = default;
     };
 
     /* ----------------------------------------------------- */
 
-    class node_settable_value_t {
+    class settable_value_t {
         bool is_setted = false;
-        node_value_t value_;
+        value_t value_;
 
     private:
         void static_analize_shift(int size) const {
@@ -354,7 +362,7 @@ namespace node {
                 throw error_static_analyze_t{"attempt to indexing by non init variable"};
         }
 
-        node_value_t& shift(const std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
+        value_t& shift(const std::vector<int>& indexes, buffer_t& buf, environments_t& env) {
             static_analize_shift(indexes.size());
             if (indexes.size() == 0)
                 return value_;
@@ -364,14 +372,14 @@ namespace node {
         };
 
     public:
-        node_value_t execute(const node_indexes_t* indexes, buffer_t& buf, environments_t& env) {
+        value_t execute(const node_indexes_t* indexes, buffer_t& buf, environments_t& env) {
             assert(indexes);
             std::vector<int> real_indexes = indexes->execute(buf, env);
             node_type_t*& real_value = shift(real_indexes, buf, env).value;
             return real_value->execute(buf, env);
         }
 
-        node_value_t set_value(const node_indexes_t* indexes, node_value_t new_value,
+        value_t set_value(const node_indexes_t* indexes, value_t new_value,
                                buffer_t& buf, environments_t& env) {
             assert(indexes);
             std::vector<int> real_indexes = indexes->execute(buf, env);
@@ -381,16 +389,16 @@ namespace node {
             return value_;
         }
 
-        virtual ~node_settable_value_t() = default;
+        virtual ~settable_value_t() = default;
     };
 
     /* ----------------------------------------------------- */
 
     class node_variable_t final : public node_t,
-                                  public node_id_t,
-                                  public node_settable_value_t {
+                                  public id_t,
+                                  public settable_value_t {
     public:
-        node_variable_t(std::string_view id) : node_id_t(id) {}
+        node_variable_t(std::string_view id) : id_t(id) {}
     };
 
     /* ----------------------------------------------------- */
@@ -406,11 +414,11 @@ namespace node {
             assert(indexes_);
         }
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             return variable_->execute(indexes_, buf, env);
         }
 
-        node_value_t set_value(node_value_t new_value, buffer_t& buf, environments_t& env) {
+        value_t set_value(value_t new_value, buffer_t& buf, environments_t& env) {
             return variable_->set_value(indexes_, new_value, buf, env);
         }
     };
@@ -424,7 +432,7 @@ namespace node {
     public:
         node_assign_t(node_lvalue_t* lvalue, node_expression_t* rvalue)
         : lvalue_(lvalue), rvalue_(rvalue) {}
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             return lvalue_->set_value(rvalue_->execute(buf, env), buf, env);
         }
     };
@@ -457,9 +465,9 @@ namespace node {
         node_bin_op_t(binary_operators_e type, node_expression_t* left, node_expression_t* right)
         : type_(type), left_(left), right_(right) {}
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
-            node_value_t l_result = left_ ->execute(buf, env);
-            node_value_t r_result = right_->execute(buf, env);
+        value_t execute(buffer_t& buf, environments_t& env) override {
+            value_t l_result = left_ ->execute(buf, env);
+            value_t r_result = right_->execute(buf, env);
 
             if (l_result.type == node_type_e::UNDEF ||
                 r_result.type == node_type_e::UNDEF)
@@ -489,7 +497,7 @@ namespace node {
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
         }
 
-        void static_analize(const node_value_t& lhs, const node_value_t& rhs) {
+        void static_analize(const value_t& lhs, const value_t& rhs) {
             node_type_e l_type = lhs.type;
             node_type_e r_type = rhs.type;
 
@@ -514,8 +522,8 @@ namespace node {
         node_un_op_t(unary_operators_e type, node_expression_t* node)
         : type_(type), node_(node) {}
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
-            node_value_t res_exec = node_->execute(buf, env);
+        value_t execute(buffer_t& buf, environments_t& env) override {
+            value_t res_exec = node_->execute(buf, env);
             if (res_exec.type == node_type_e::UNDEF)
                 return {node_type_e::UNDEF, buf.add_node<node_undef_t>()};
 
@@ -530,7 +538,7 @@ namespace node {
             return {node_type_e::NUMBER, buf.add_node<node_number_t>(result)};
         }
 
-        void static_analize(const node_value_t& argument) {
+        void static_analize(const value_t& argument) {
             if (argument.type != node_type_e::NUMBER ||
                 argument.type != node_type_e::UNDEF)
                 throw error_execute_t{"wrong type in unary operator"};
@@ -541,13 +549,13 @@ namespace node {
     
     class name_table_t {
     protected:
-        using vars_container = std::unordered_map<std::string_view, node_id_t*>;
+        using vars_container = std::unordered_map<std::string_view, id_t*>;
         vars_container variables_;
 
     public:
-        void add_variable(node_id_t* node) { variables_.emplace(node->get_name(), node); }
+        void add_variable(id_t* node) { variables_.emplace(node->get_name(), node); }
 
-        node_id_t* get_var_node(std::string_view name) const {
+        id_t* get_var_node(std::string_view name) const {
             auto var_iter = variables_.find(name);
             if (var_iter != variables_.end())
                 return var_iter->second;
@@ -569,7 +577,7 @@ namespace node {
 
         node_variable_t* get_node(std::string_view name) const {
             for (auto scope = this; scope; scope = scope->parent_) {
-                node_id_t* var_node = scope->get_var_node(name);
+                id_t* var_node = scope->get_var_node(name);
                 if (var_node)
                     return static_cast<node_variable_t*>(var_node);
             }
@@ -579,6 +587,7 @@ namespace node {
         void execute(buffer_t& buf, environments_t& env) override {
             for (auto node : statements_)
                 node->execute(buf, env);
+            
         }
     };
 
@@ -590,8 +599,8 @@ namespace node {
     public:
         node_print_t(node_expression_t* argument) : argument_(argument) {}
 
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
-            node_value_t result = argument_->execute(buf, env);
+        value_t execute(buffer_t& buf, environments_t& env) override {
+            value_t result = argument_->execute(buf, env);
             result.value->print(buf, env);
             return result;
         }
@@ -601,7 +610,7 @@ namespace node {
 
     class node_input_t final : public node_expression_t {
     public:
-        node_value_t execute(buffer_t& buf, environments_t& env) override {
+        value_t execute(buffer_t& buf, environments_t& env) override {
             int value;
             env.is >> value;
             if (!env.is.good())
@@ -617,13 +626,13 @@ namespace node {
         node_scope_t* body_;
 
     private:
-        inline void dynamic_analize(const node_value_t& result) {
+        inline void dynamic_analize(const value_t& result) {
             if (result.type != node_type_e::NUMBER)
                 throw error_execute_t{"wrong type of loop condition"};
         }
 
         inline int step(buffer_t& buf, environments_t& env) {
-            node_value_t result = condition_->execute(buf, env);
+            value_t result = condition_->execute(buf, env);
 
             if (env.is_analize)
                 dynamic_analize(result);
@@ -649,7 +658,7 @@ namespace node {
         node_scope_t* body2_;
 
     private:
-        inline void dynamic_analize(const node_value_t& result) {
+        inline void dynamic_analize(const value_t& result) {
             if (result.type != node_type_e::NUMBER)
                 throw error_execute_t{"wrong type of fork condition"};
         }
@@ -659,7 +668,7 @@ namespace node {
         : condition_(condition), body1_(body1), body2_(body2) {}
 
         void execute(buffer_t& buf, environments_t& env) override {
-            node_value_t result = condition_->execute(buf, env);
+            value_t result = condition_->execute(buf, env);
 
             if (env.is_analize)
                 dynamic_analize(result);
