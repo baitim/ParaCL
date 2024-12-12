@@ -292,8 +292,8 @@ list_values: list_values COMMA list_value { $$ = $1; $$->add_value($3); }
            | list_value { $$ = buf.add_node<node_list_values_t>(); $$->add_value($1); }
 ;
 
-list_value: expression    { $$ = buf.add_node<node_list_value_t>(node_list_value_type_e::EXPRESSION, $1); }
-          | repeat_values { $$ = buf.add_node<node_list_value_t>(node_list_value_type_e::REPEAT,     $1); }
+list_value: expression    { $$ = buf.add_node<node_expression_value_t>($1); }
+          | repeat_values { $$ = $1; }
 ;
 
 indexes: %empty        { $$ = buf.add_node<node_indexes_t>(); }

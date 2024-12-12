@@ -186,13 +186,42 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_repeat_values_t : public node_array_values_t {
+    class node_list_value_t {
+    public:
+        virtual void add_value(std::vector<node_value_t>& values,
+                               buffer_t& buf, environments_t& env) const = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_expression_value_t : public node_t,
+                                    public node_list_value_t {
+        node_expression_t* value_;
+
+    public:
+        node_expression_value_t(node_expression_t* value) : value_(value) {}
+
+        void add_value(std::vector<node_value_t>& values, buffer_t& buf, environments_t& env) const {
+            node_value_t result = value_->execute(buf, env);
+            values.push_back(result);
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_repeat_values_t : public node_list_value_t,
+                                 public node_array_values_t {
         node_expression_t* value_;
         node_expression_t* count_;
 
     public:
         node_repeat_values_t(node_expression_t* value, node_expression_t* count)
         : value_(value), count_(count) {}
+
+        void add_value(std::vector<node_value_t>& values, buffer_t& buf, environments_t& env) const {
+            std::vector<node_value_t> result = execute(buf, env);
+            values.insert(values.end(), result.begin(), result.end());
+        }
 
         std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
             node_value_t value = value_->execute(buf, env);
@@ -205,56 +234,15 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    enum class node_list_value_type_e {
-        EXPRESSION,
-        REPEAT
-    };
-
-    struct node_list_value_t : public node_t {
-        node_list_value_type_e type_;
-        node_t* value_;
-
-    public:
-        node_list_value_t(node_list_value_type_e type, node_t* value) : type_(type), value_(value) {}
-    };
-
-    /* ----------------------------------------------------- */
-
     class node_list_values_t : public node_array_values_t {
         std::vector<node_list_value_t*> values_;
-
-    private:
-        void process_expression(std::vector<node_value_t>& values, node_t* value,
-                                buffer_t& buf, environments_t& env) const {
-            node_expression_t* node_expression = static_cast<node_expression_t*>(value);
-            node_value_t result = node_expression->execute(buf, env);
-            values.push_back(result);
-        }
-
-        void process_repeat(std::vector<node_value_t>& values, node_t* value,
-                            buffer_t& buf, environments_t& env) const {
-            node_repeat_values_t* node_repeat = static_cast<node_repeat_values_t*>(value);
-            std::vector<node_value_t> result = node_repeat->execute(buf, env);
-            values.insert(values.end(), result.begin(), result.end());
-        }
 
     public:
         std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
             std::vector<node_value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size)) {
-                switch (values_[i]->type_) {
-                    case node_list_value_type_e::EXPRESSION:
-                        process_expression(values, values_[i]->value_, buf, env);
-                        break;
-
-                    case node_list_value_type_e::REPEAT:
-                        process_repeat(values, values_[i]->value_, buf, env);
-                        break;
-                    
-                    default:
-                        throw error_execute_t{"attempt to execute unknown list value type in node_list_value"};
-                }
+                values_[i]->add_value(values, buf, env);
             }
             return values;
         }
