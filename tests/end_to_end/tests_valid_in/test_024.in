@@ -1,4 +1,4 @@
-size  = 50;
+size  = ?;
 steps = 20;
 step  = 0;
 while (step < steps) {

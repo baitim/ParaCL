@@ -1,0 +1,16 @@
+x = repeat(10, 5)[1];
+print x;
+
+arr_repeat = repeat(5, 10);
+print arr_repeat;
+i = 0;
+while (i < 10) {
+    arr_repeat[i] = i;
+    i = i + 1;
+}
+print arr_repeat;
+
+arr = array(1, 2, 3, repeat(4, 1), 5);
+print arr;
+arr[3] = 44;
+print arr;
