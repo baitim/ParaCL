@@ -5,6 +5,7 @@ Grammar:
     scope        -> '{' statements '}'
     statement    -> fork  | loop | instruction
     instruction  -> expression;
+    rvalue       -> expression | array_repeat
     expression   -> print | assignment | expression_lgc
 
     fork         -> if condition body | if condition body else body
@@ -14,7 +15,7 @@ Grammar:
     body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print expression
-    assignment   -> variable indexes = expression
+    assignment   -> variable indexes = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -24,7 +25,10 @@ Grammar:
     variable       -> id
 
     array          -> array '(' array_values ')' indexes
-    array_values   -> array_values, expression | expression
+    array_repeat   -> repeat indexes
+    repeat_values  -> repeat '(' expression, expression ')'
+    list_values    -> array_values, list_value | list_value
+    list_value     -> expression | repeat_values
     indexes        -> indexes index | empty
     index          -> '[' expression ']'
 */
@@ -69,6 +73,7 @@ Grammar:
     UNDEF
     COMMA
     ARRAY
+    REPEAT
 
     LBRACKET_ROUND
     RBRACKET_ROUND
@@ -113,6 +118,7 @@ Grammar:
 
 %nterm <node_statement_t*>  statement
 %nterm <node_statement_t*>  instruction
+%nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> expression
 
 %nterm <node_statement_t*>  fork
@@ -126,7 +132,10 @@ Grammar:
 %nterm <std::string>        variable
 
 %nterm <node_array_t*>         array
-%nterm <node_array_values_t*>  array_values
+%nterm <node_array_t*>         array_repeat
+%nterm <node_repeat_values_t*> repeat_values
+%nterm <node_list_values_t*>   list_values
+%nterm <node_list_value_t*>    list_value
 %nterm <node_indexes_t*>       indexes
 %nterm <node_expression_t*>    index
 
@@ -197,6 +206,10 @@ statement: fork         { $$ = $1; }
 instruction: expression SCOLON { $$ = buf.add_node<node_instruction_t>($1); }
 ;
 
+rvalue: expression   { $$ = $1; }
+      | array_repeat { $$ = $1; }
+;
+
 expression: print          { $$ = $1; }
           | assignment     { $$ = $1; }
           | expression_lgc { $$ = $1; }
@@ -226,7 +239,7 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = buf.add_node<node_print_t>($2); }
 ;
 
-assignment: variable indexes ASSIGN expression
+assignment: variable indexes ASSIGN rvalue
         {
             node_variable_t* var    = decl_var($1, buf);
             node_lvalue_t*   lvalue = buf.add_node<node_lvalue_t>(var, $2);
@@ -265,11 +278,22 @@ terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 variable: ID { $$ = $1; }
 ;
 
-array: ARRAY LBRACKET_ROUND array_values RBRACKET_ROUND indexes { $$ = buf.add_node<node_array_t>($3, $5); }
+array: ARRAY LBRACKET_ROUND list_values RBRACKET_ROUND indexes { $$ = buf.add_node<node_array_t>($3, $5); }
 ;
 
-array_values: array_values COMMA expression { $$ = $1; $$->add_value($3); }
-            | expression { $$ = buf.add_node<node_array_values_t>(); $$->add_value($1); }
+array_repeat: repeat_values indexes { $$ = buf.add_node<node_array_t>($1, $2); }
+;
+
+repeat_values: REPEAT LBRACKET_ROUND expression COMMA expression RBRACKET_ROUND
+               { $$ = buf.add_node<node_repeat_values_t>($3, $5); }
+;
+
+list_values: list_values COMMA list_value { $$ = $1; $$->add_value($3); }
+           | list_value { $$ = buf.add_node<node_list_values_t>(); $$->add_value($1); }
+;
+
+list_value: expression    { $$ = buf.add_node<node_list_value_t>(node_list_value_type_e::EXPRESSION, $1); }
+          | repeat_values { $$ = buf.add_node<node_list_value_t>(node_list_value_type_e::REPEAT,     $1); }
 ;
 
 indexes: %empty        { $$ = buf.add_node<node_indexes_t>(); }

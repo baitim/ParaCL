@@ -1,0 +1,23 @@
+arr_input1 = repeat(3, ?);
+print arr_input1;
+
+arr_input2 = repeat(?, 4);
+print arr_input2;
+
+arr_repeat = array(repeat(1, 3), repeat(10, 4), repeat(100, 5));
+print arr_repeat;
+sum = i = 0;
+while (i < 12) {
+    sum = sum + arr_repeat[i];
+    i = i + 1;
+}
+print sum;
+
+arr_mix = array(1, 10, 100, repeat(1000, 5), repeat(10000, 3), 100000, repeat(1000000, 8));
+print arr_mix;
+sum = i = 0;
+while (i < 20) {
+    sum = sum + arr_mix[i];
+    i = i + 1;
+}
+print sum;

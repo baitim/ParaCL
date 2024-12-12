@@ -20,14 +20,15 @@ COMMENTS "//".*
 {COMMENTS}      // nothing
 {NS}            { update_new_line(); }
 
-"print"         { return yy::parser::token_type::PRINT; }
-"?"             { return yy::parser::token_type::INPUT; }
-"if"            { return yy::parser::token_type::IF;    }
-"else"          { return yy::parser::token_type::ELSE;  }
-"while"         { return yy::parser::token_type::LOOP;  }
-"undef"         { return yy::parser::token_type::UNDEF; }
-","             { return yy::parser::token_type::COMMA; }
-"array"         { return yy::parser::token_type::ARRAY; }
+"print"         { return yy::parser::token_type::PRINT;  }
+"?"             { return yy::parser::token_type::INPUT;  }
+"if"            { return yy::parser::token_type::IF;     }
+"else"          { return yy::parser::token_type::ELSE;   }
+"while"         { return yy::parser::token_type::LOOP;   }
+"undef"         { return yy::parser::token_type::UNDEF;  }
+","             { return yy::parser::token_type::COMMA;  }
+"array"         { return yy::parser::token_type::ARRAY;  }
+"repeat"        { return yy::parser::token_type::REPEAT; }
 
 {NUMBER}        { return yy::parser::token_type::NUMBER; }
 {ID}            { return yy::parser::token_type::ID;     }
