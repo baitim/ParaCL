@@ -278,14 +278,22 @@ terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 variable: ID { $$ = $1; }
 ;
 
-array: ARRAY LBRACKET_ROUND list_values RBRACKET_ROUND indexes { $$ = buf.add_node<node_array_t>($3, $5); }
+array: ARRAY LBRACKET_ROUND list_values RBRACKET_ROUND indexes
+        {
+            $$ = buf.add_node<node_array_t>($3, $5);
+            current_scope->add_array($$);
+        }
 ;
 
-array_repeat: repeat_values indexes { $$ = buf.add_node<node_array_t>($1, $2); }
+array_repeat: repeat_values indexes
+        {
+            $$ = buf.add_node<node_array_t>($1, $2);
+            current_scope->add_array($$);
+        }
 ;
 
 repeat_values: REPEAT LBRACKET_ROUND expression COMMA expression RBRACKET_ROUND
-               { $$ = buf.add_node<node_repeat_values_t>($3, $5); }
+        { $$ = buf.add_node<node_repeat_values_t>($3, $5); }
 ;
 
 list_values: list_values COMMA list_value { $$ = $1; $$->add_value($3); }

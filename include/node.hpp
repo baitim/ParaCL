@@ -60,14 +60,6 @@ namespace node {
             nodes_.emplace_back(std::move(new_node));
             return static_cast<NodeT*>(nodes_.back().get());
         }
-
-        void remove_node(node_t* node) {
-            auto node_iter = std::remove_if(nodes_.begin(), nodes_.end(),
-                [node](const std::unique_ptr<node_t>& ptr) { return ptr.get() == node; });
-
-            if (node_iter != nodes_.end())
-                nodes_.erase(node_iter, nodes_.end());
-        }
     };
 
     /* ----------------------------------------------------- */
@@ -337,6 +329,11 @@ namespace node {
         node_type_t* copy(buffer_t& buf, environments_t& env) override {
             return buf.add_node<node_array_t>(values_, real_indexes_);
         };
+
+        void clear() {
+            values_.clear();
+            real_indexes_.clear();
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -548,9 +545,7 @@ namespace node {
     /* ----------------------------------------------------- */
     
     class name_table_t {
-    protected:
-        using vars_container = std::unordered_map<std::string_view, id_t*>;
-        vars_container variables_;
+        std::unordered_map<std::string_view, id_t*> variables_;
 
     public:
         void add_variable(id_t* node) { variables_.emplace(node->get_name(), node); }
@@ -567,7 +562,25 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_t final : public node_statement_t, public name_table_t {
+    class memory_table_t {
+        std::vector<node_array_t*> arrays_;
+
+    protected:
+        void clear_memory(buffer_t& buf) {
+            for (auto iter : arrays_)
+                iter->clear();
+        }
+
+    public:
+        void add_array(node_array_t* node) { arrays_.push_back(node); }
+        virtual ~memory_table_t() = default;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_scope_t final : public node_statement_t,
+                               public name_table_t,
+                               public memory_table_t {
         node_scope_t* parent_;
         std::vector<node_statement_t*> statements_;
 
@@ -587,7 +600,7 @@ namespace node {
         void execute(buffer_t& buf, environments_t& env) override {
             for (auto node : statements_)
                 node->execute(buf, env);
-            
+            memory_table_t::clear_memory(buf);
         }
     };
 
