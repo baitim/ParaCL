@@ -20,7 +20,7 @@ paracl_exe = "./build/src/paracl"
 program_files = list(map(str, glob.glob("tests/end_to_end/tests_error_in/test_*.in")))
 program_files.sort()
 
-test_num = 0
+test_num = 1
 for program in program_files :
     print(bcolors.INFO + "test " + str(test_num) + ":" + bcolors.ENDC)
     run(program, paracl_exe)

@@ -87,7 +87,7 @@ namespace node {
     };
 
     struct value_t final {
-        node_type_e type;
+        node_type_e  type;
         node_type_t* value;
     };
 
@@ -283,9 +283,6 @@ namespace node {
     public:
         node_array_t(node_array_values_t* array_values, node_indexes_t* indexes)
         : init_values_(array_values), indexes_(indexes) {}
-
-        node_array_t(const std::vector<value_t>& values, const std::vector<int>& real_indexes)
-        : is_inited_(true), values_(values), real_indexes_(real_indexes) {}
 
         value_t execute(buffer_t& buf, environments_t& env) override {
             if (!is_inited_)

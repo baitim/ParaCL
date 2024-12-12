@@ -25,7 +25,7 @@ Grammar:
     variable       -> id
 
     array          -> array '(' array_values ')' indexes
-    array_repeat   -> repeat indexes
+    array_repeat   -> repeat_values indexes
     repeat_values  -> repeat '(' expression, expression ')'
     list_values    -> array_values, list_value | list_value
     list_value     -> expression | repeat_values
