@@ -186,7 +186,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_list_value_t {
+    class node_array_value_t {
     public:
         virtual void add_value(std::vector<node_value_t>& values,
                                buffer_t& buf, environments_t& env) const = 0;
@@ -195,7 +195,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_expression_value_t : public node_t,
-                                    public node_list_value_t {
+                                    public node_array_value_t {
         node_expression_t* value_;
 
     public:
@@ -209,7 +209,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_repeat_values_t : public node_list_value_t,
+    class node_repeat_values_t : public node_array_value_t,
                                  public node_array_values_t {
         node_expression_t* value_;
         node_expression_t* count_;
@@ -235,7 +235,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_list_values_t : public node_array_values_t {
-        std::vector<node_list_value_t*> values_;
+        std::vector<node_array_value_t*> values_;
 
     public:
         std::vector<node_value_t> execute(buffer_t& buf, environments_t& env) const {
@@ -247,7 +247,7 @@ namespace node {
             return values;
         }
         
-        void add_value(node_list_value_t* value) { values_.push_back(value); }
+        void add_value(node_array_value_t* value) { values_.push_back(value); }
     };
 
     /* ----------------------------------------------------- */
