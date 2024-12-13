@@ -5,18 +5,6 @@
 #include "lexer.hpp"
 
 namespace yy {
-    inline location_t make_loc(const location& loc, int len) {
-        std::stringstream ss;
-        ss << loc;
-        std::string loc_str = ss.str();
-
-        size_t dot_location = loc_str.find('.');
-        int row = stoi(loc_str.substr(0, dot_location));
-        int col = stoi(loc_str.substr(dot_location + 1));
-        return {row - 1, col, len};
-    };
-
-    /* ----------------------------------------------------- */
 
     class error_syntax_t : public error_location_t {
     public:
@@ -29,7 +17,20 @@ namespace yy {
     class driver_t final {
         lexer_t lexer_;
         std::string_view program_str_;
+        buffer_t* buf_;
         std::string last_token_;
+
+    private:
+        static location_t make_loc(const location& loc, int len) {
+            std::stringstream ss;
+            ss << loc;
+            std::string loc_str = ss.str();
+
+            size_t dot_location = loc_str.find('.');
+            int row = stoi(loc_str.substr(0, dot_location));
+            int col = stoi(loc_str.substr(dot_location + 1));
+            return {row - 1, col, len};
+        };
 
     public:
         void report_syntax_error(const location& loc) const {
@@ -62,13 +63,20 @@ namespace yy {
             return tt;
         }
 
+        template <typename NodeT, typename ...ArgsT>
+        NodeT* add_node(const location& loc, int len, ArgsT&&... args) {
+            return buf_->add_node<NodeT>(make_loc(loc, len), std::forward<ArgsT>(args)...);
+        }
+
         bool parse(const std::string& file_name, node::buffer_t& buf,
                    node::node_scope_t*& root, std::string_view program_str) {
             program_str_ = program_str;
+            buf_ = &buf;
+
             std::ifstream input_file(file_name);
             lexer_.switch_streams(input_file, std::cout);
 
-            parser parser(this, buf, root);
+            parser parser(this, root);
             bool res = parser.parse();
             return !res;
         }

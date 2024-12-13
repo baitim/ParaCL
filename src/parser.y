@@ -49,7 +49,6 @@ Grammar:
 }
 
 %param       { yy::driver_t* driver }
-%parse-param { node::buffer_t& buf }
 %parse-param { node::node_scope_t*& root }
 
 %code
@@ -59,8 +58,6 @@ Grammar:
         parser::token_type yylex(parser::semantic_type* yylval,
                                  location* loc,
                                  driver_t* driver);
-
-        inline location_t make_loc(const location& loc, int len);
     }
 }
 
@@ -167,10 +164,10 @@ Grammar:
         current_scope = scopes_stack.top();
     }
 
-    node_variable_t* decl_var(std::string_view name, const yy::location& loc, buffer_t& buf) {
+    node_variable_t* decl_var(std::string_view name, const yy::location& loc, yy::driver_t* driver) {
         node_variable_t* var = current_scope->get_node(name);
         if (!var) {
-            var = buf.add_node<node_variable_t>(yy::make_loc(loc, name.length()), name);
+            var = driver->add_node<node_variable_t>(loc, name.length(), name);
             current_scope->add_variable(var);
         }
         return var;
@@ -184,7 +181,10 @@ Grammar:
 program: statements { root = $1; }
 ;
 
-statements: %empty                 { $$ = buf.add_node<node_scope_t>(yy::make_loc(@$, 1), current_scope); drill_down_to_scope($$); }
+statements: %empty                 {
+                                        $$ = driver->add_node<node_scope_t>(@$, 1, current_scope);
+                                        drill_down_to_scope($$);
+                                   }
           | statements statement   { $$ = $1; $$->add_statement($2); }
           | statements SCOLON      { $$ = $1; }
           | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
@@ -197,7 +197,7 @@ statement: fork         { $$ = $1; }
          | instruction  { $$ = $1; }
 ;
 
-instruction: expression SCOLON { $$ = buf.add_node<node_instruction_t>(yy::make_loc(@$, 1), $1); }
+instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@$, 1, $1); }
 ;
 
 rvalue: expression   { $$ = $1; }
@@ -210,13 +210,13 @@ expression: print          { $$ = $1; }
 ;
 
 fork: IF condition body %prec THEN  { 
-                                        $$ = buf.add_node<node_fork_t>(yy::make_loc(@$, 1), 
-                                                $2, $3, buf.add_node<node_scope_t>(yy::make_loc(@$, 1), current_scope));
+                                        $$ = driver->add_node<node_fork_t>(@1, 2,
+                                                $2, $3, driver->add_node<node_scope_t>(@3, 1, current_scope));
                                     }
-    | IF condition body ELSE body   { $$ = buf.add_node<node_fork_t>(yy::make_loc(@$, 1), $2, $3, $5); }
+    | IF condition body ELSE body   { $$ = driver->add_node<node_fork_t>(@1, 2, $2, $3, $5); }
 ;
 
-loop: LOOP condition body { $$ = buf.add_node<node_loop_t>(yy::make_loc(@$, 1), $2, $3); }
+loop: LOOP condition body { $$ = driver->add_node<node_loop_t>(@1, 5, $2, $3); }
 ;
 
 condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
@@ -224,46 +224,47 @@ condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 
 body: scope                                 { $$ = $1; lift_up_from_scope(); }
     | lghost_scope statement rghost_scope   { $1->add_statement($2); $$ = $1; }
-    | SCOLON                                { $$ = buf.add_node<node_scope_t>(yy::make_loc(@$, 1), current_scope); }
+    | SCOLON                                { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); }
 ;
 
-lghost_scope: %empty { $$ = buf.add_node<node_scope_t>(yy::make_loc(@$, 1), current_scope); drill_down_to_scope($$); }
+lghost_scope: %empty { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
 rghost_scope: %empty { lift_up_from_scope(); }
 
-print: PRINT expression { $$ = buf.add_node<node_print_t>(yy::make_loc(@$, 1), $2); }
+print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
 assignment: variable indexes ASSIGN rvalue
         {
-            node_variable_t* var    = decl_var($1, @1, buf);
-            node_lvalue_t*   lvalue = buf.add_node<node_lvalue_t>(yy::make_loc(@$, $1.length()), var, $2);
-            $$ = buf.add_node<node_assign_t>(yy::make_loc(@$, 1), lvalue, $4);
+            node_variable_t* var    = decl_var($1, @1, driver);
+            node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+            $$ = driver->add_node<node_assign_t>(@3, 1, lvalue, $4);
         }
 ;
 
-expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = buf.add_node<node_bin_op_t>(yy::make_loc(@$, 1), $2, $1, $3); }
+expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }
               | expression_cmp                             { $$ = $1; }
 ;
 
-expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = buf.add_node<node_bin_op_t>(yy::make_loc(@$, 1), $2, $1, $3); }
+expression_cmp: expression_cmp bin_oper_cmp expression_pls { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }
               | expression_pls                             { $$ = $1; }
 ;
 
-expression_pls: expression_pls bin_oper_pls expression_mul { $$ = buf.add_node<node_bin_op_t>(yy::make_loc(@$, 1), $2, $1, $3); }
+expression_pls: expression_pls bin_oper_pls expression_mul { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }
               | expression_mul                             { $$ = $1; }
 ;
 
-expression_mul: expression_mul bin_oper_mul terminal       { $$ = buf.add_node<node_bin_op_t>(yy::make_loc(@$, 1), $2, $1, $3); }
+expression_mul: expression_mul bin_oper_mul terminal       { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }
               | terminal                                   { $$ = $1; }
 ;
 
 terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
-        | NUMBER            { $$ = buf.add_node<node_number_t>(yy::make_loc(@$, 1), $1); }
-        | UNDEF             { $$ = buf.add_node<node_undef_t>(yy::make_loc(@$, 1)); }
-        | INPUT             { $$ = buf.add_node<node_input_t>(yy::make_loc(@$, 1)); }
+        | NUMBER            { $$ = driver->add_node<node_number_t>(@1, std::to_string($1).length(), $1); }
+        | UNDEF             { $$ = driver->add_node<node_undef_t>(@1, 5); }
+        | INPUT             { $$ = driver->add_node<node_input_t>(@1, 5); }
         | array             { $$ = $1; }
-        | un_oper terminal  { $$ = buf.add_node<node_un_op_t>(yy::make_loc(@$, 1), $1, $2); }
-        | variable indexes  { $$ = buf.add_node<node_lvalue_t>(yy::make_loc(@$, $1.length()), current_scope->get_node($1), $2); }
+        | un_oper terminal  { $$ = driver->add_node<node_un_op_t>(@1, 1, $1, $2); }
+        | variable indexes  { $$ = driver->add_node<node_lvalue_t>(@1, $1.length(),
+                                                                   current_scope->get_node($1), $2); }
 ;
 
 variable: ID { $$ = $1; }
@@ -271,31 +272,31 @@ variable: ID { $$ = $1; }
 
 array: ARRAY LBRACKET_ROUND list_values RBRACKET_ROUND indexes
         {
-            $$ = buf.add_node<node_array_t>(yy::make_loc(@$, 1), $3, $5);
+            $$ = driver->add_node<node_array_t>(@1, 5, $3, $5);
             current_scope->add_array($$);
         }
 ;
 
 array_repeat: repeat_values indexes
         {
-            $$ = buf.add_node<node_array_t>(yy::make_loc(@$, 1), $1, $2);
+            $$ = driver->add_node<node_array_t>(@1, 6, $1, $2);
             current_scope->add_array($$);
         }
 ;
 
 repeat_values: REPEAT LBRACKET_ROUND expression COMMA expression RBRACKET_ROUND
-        { $$ = buf.add_node<node_repeat_values_t>(yy::make_loc(@$, 1), $3, $5); }
+        { $$ = driver->add_node<node_repeat_values_t>(@1, 6, $3, $5); }
 ;
 
 list_values: list_values COMMA array_value { $$ = $1; $$->add_value($3); }
-           | array_value { $$ = buf.add_node<node_list_values_t>(yy::make_loc(@$, 1)); $$->add_value($1); }
+           | array_value { $$ = driver->add_node<node_list_values_t>(@$, 1); $$->add_value($1); }
 ;
 
-array_value: expression    { $$ = buf.add_node<node_expression_value_t>(yy::make_loc(@$, 1), $1); }
+array_value: expression    { $$ = driver->add_node<node_expression_value_t>(@$, 1, $1); }
            | repeat_values { $$ = $1; }
 ;
 
-indexes: %empty        { $$ = buf.add_node<node_indexes_t>(yy::make_loc(@$, 1)); }
+indexes: %empty        { $$ = driver->add_node<node_indexes_t>(@$, 1); }
        | indexes index { $$ = $1; $$->add_index($2); }
 ;
 
