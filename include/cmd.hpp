@@ -7,19 +7,9 @@
 
 namespace cmd {
     class error_undecl_flag_t : public common::error_t {
-        std::string flag_name_;
-
-    private:
-        std::string get_info() const {
-            std::stringstream description;
-            description << print_red("undecalred necessary flag: " << flag_name_);
-            return description.str();
-        }
-
     public:
-        error_undecl_flag_t(std::string_view flag_name) : flag_name_(flag_name) {
-            common::error_t::msg_ = get_info();
-        }
+        error_undecl_flag_t(std::string_view flag_name)
+        : common::error_t(str_red(std::string("undecalred necessary flag: ") + std::string(flag_name))) {}
     };
 
     class cmd_flag_t {

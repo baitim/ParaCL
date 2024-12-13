@@ -8,11 +8,19 @@ namespace ast {
         node::buffer_t buffer_;
 
         void execute(environments::environments_t& env) {
-            node::buffer_t execution_buffer_;
+            if (root_) {
+                node::buffer_t execution_buffer;
+                root_->execute(execution_buffer, env);
+            } else {
+                throw common::error_t{str_red("execute by nullptr")};
+            }
+        }
+
+        void analyze(environments::environments_t& env) {
             if (root_)
-                root_->execute(execution_buffer_, env);
+                root_->analyze(env);
             else
-                throw node::error_execute_t{"execute by nullptr"};
+                throw common::error_t{str_red("analyze by nullptr")};
         }
     };
 }

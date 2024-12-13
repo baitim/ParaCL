@@ -10,24 +10,27 @@ int main(int argc, char* argv[]) {
         std::cout << error.what() << "\n";
         return 1;
     }
+    std::string program_str = common::file2str(cmd_data.program_file());
 
     yy::driver_t driver;
     ast::ast_t ast;
-    common::null_stream_t null_stream;
-    environments::environments_t parse_env{null_stream, std::cin, false};
     try {
-        driver.parse(cmd_data.program_file(), ast.buffer_, ast.root_, parse_env);
+        driver.parse(cmd_data.program_file(), ast.buffer_, ast.root_, program_str);
     } catch (const common::error_t& error) {
-        std::cout << error.what() << "\n";
-        return 1;
+        return (std::cout << error.what() << "\n", 1);
     }
 
-    environments::environments_t env{std::cout, std::cin, cmd_data.is_analyzing()};
+    environments::environments_t env{std::cout, std::cin, cmd_data.is_analyzing(), program_str};
+    try {
+        ast.analyze(env);
+    } catch (const common::error_t& error) {
+        return (std::cout << error.what() << "\n", 1);
+    }
+
     try {
         ast.execute(env);
-    } catch (const node::error_execute_t& error) {
-        std::cout << print_red(error.what()) << "\n";
-        return 1;
+    } catch (const common::error_t& error) {
+        return (std::cout << error.what() << "\n", 1);
     }
 
     return 0;
