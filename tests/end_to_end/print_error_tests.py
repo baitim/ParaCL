@@ -32,7 +32,7 @@ print(result_str)
 
 #------------------------------------------------------------------------------------#
 # ChatGPT4 is used below, sorry I don't wont to make this hardcode now,
-# I only wnat to make pretty picture
+# I only want to make pretty picture
 #------------------------------------------------------------------------------------#
 # UPD:
 # It took me 3 hours, ChatGPT is not capable of anything more than doing homework in English

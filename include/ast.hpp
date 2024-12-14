@@ -10,7 +10,9 @@ namespace ast {
         void execute(environments::environments_t& env) {
             if (root_) {
                 node::buffer_t execution_buffer;
-                root_->execute(execution_buffer, env);
+                node::execute_params_t params{execution_buffer, env.os, env.is,
+                                              env.is_analyzing, env.program_str};
+                root_->execute(params);
             } else {
                 throw common::error_t{str_red("execute by nullptr")};
             }
@@ -23,7 +25,9 @@ namespace ast {
                         static_cast<node::node_scope_t*>(root_->copy(copy_buffer, nullptr));
 
                 node::buffer_t execution_buffer;
-                copy_root->analyze(execution_buffer, env);
+                node::execute_params_t params{execution_buffer, env.os, env.is,
+                                              env.is_analyzing, env.program_str};
+                copy_root->analyze(params);
             } else {
                 throw common::error_t{str_red("analyze by nullptr")};
             }
