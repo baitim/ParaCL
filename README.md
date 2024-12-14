@@ -42,10 +42,10 @@
     include flag <code>--analyze</code>
 
 ## Compile errors
+#### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 * Unknown token
 * Undeclared variable
 * Wrong types <br>
-* [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 
 ## Runtime errors
 

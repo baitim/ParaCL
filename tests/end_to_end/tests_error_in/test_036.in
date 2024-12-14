@@ -1,0 +1,2 @@
+x = array(1);
+arr = repeat(2, x);

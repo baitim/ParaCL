@@ -343,6 +343,31 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
+    class node_input_t final : public node_type_t {
+    public:
+        node_input_t(const location_t& loc) : node_loc_t(loc) {}
+
+        value_t execute(buffer_t& buf, environments_t& env) override {
+            int value;
+            env.is >> value;
+            if (env.is_analyzing && !env.is.good())
+                throw error_execute_t{node_loc_t::loc(), env.program_str, "invalid input: need integer"};
+            return {node_type_e::NUMBER, buf.add_node<node_number_t>(node_loc_t::loc(), value)};
+        }
+
+        value_t analyze(buffer_t& buf, environments_t& env) override {
+            return {node_type_e::INPUT, buf.add_node<node_input_t>(node_loc_t::loc())};
+        }
+
+        void print(buffer_t& buf, environments_t& env) override { env.os << "?\n"; }
+
+        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
+            return buf.add_node<node_input_t>(node_loc_t::loc());
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_indexes_t final : public node_t,
                                  virtual public node_loc_t {
         std::vector<node_expression_t*> indexes_;
@@ -392,8 +417,8 @@ namespace node {
 
     class node_array_values_t {
     public:
-        virtual std::vector<value_t> execute  (buffer_t& buf, environments_t& env) const = 0;
-        virtual std::vector<value_t> analyze  (buffer_t& buf, environments_t& env) const = 0;
+        virtual std::vector<value_t> execute(buffer_t& buf, environments_t& env) const = 0;
+        virtual std::pair<std::vector<value_t>, value_t> analyze(buffer_t& buf, environments_t& env) const = 0;
         virtual node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const = 0;
     };
 
@@ -436,6 +461,8 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
+    class node_input_t;
+
     class node_repeat_values_t : public node_array_value_t,
                                  public node_array_values_t {
         node_expression_t* value_;
@@ -452,7 +479,7 @@ namespace node {
 
         void add_value_analyze(std::vector<value_t>& values, buffer_t& buf,
                                environments_t& env) const override {
-            std::vector<value_t> result = analyze(buf, env);
+            std::vector<value_t> result = analyze(buf, env).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
@@ -464,12 +491,19 @@ namespace node {
             return values;
         }
 
-        std::vector<value_t> analyze(buffer_t& buf, environments_t& env) const override {
-            value_t value = value_->analyze(buf, env);
+        std::pair<std::vector<value_t>, value_t> analyze(buffer_t& buf, environments_t& env) const override {
             value_t count = count_->analyze(buf, env);
+            value_t value = value_->analyze(buf, env);
+
+            if (count.type == node_type_e::INPUT)
+                return {{}, {node_type_e::INPUT, buf.add_node<node_input_t>(count_->loc())}};
+
+            expect_types_ne(count.type, node_type_e::UNDEF, count_->loc(), env);
+            expect_types_ne(count.type, node_type_e::ARRAY, count_->loc(), env);
+
             size_t real_count = static_cast<node_number_t*>(count.value)->get_value(); // static check type
             std::vector<value_t> values{real_count, value};
-            return values;
+            return {values, {node_type_e::NUMBER, buf.add_node<node_number_t>(count_->loc(), real_count)}};
         }
 
         node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
@@ -503,12 +537,12 @@ namespace node {
 
         void add_value(node_array_value_t* value) { values_.push_back(value); }
 
-        std::vector<value_t> analyze(buffer_t& buf, environments_t& env) const override {
+        std::pair<std::vector<value_t>, value_t> analyze(buffer_t& buf, environments_t& env) const override {
             std::vector<value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size))
                 values_[i]->add_value_analyze(values, buf, env);
-            return values;
+            return {values, {node_type_e::NUMBER, buf.add_node<node_number_t>(node_loc_t::loc(), size)}};
         }
 
         node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
@@ -573,7 +607,7 @@ namespace node {
         }
 
         void init_analyze(buffer_t& buf, environments_t& env) {
-            values_       = init_values_->analyze(buf, env);
+            values_       = init_values_->analyze(buf, env).first;
             real_indexes_ = indexes_->analyze(buf, env);
             is_inited_    = true;
         }
@@ -960,31 +994,6 @@ namespace node {
 
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
-    class node_input_t final : public node_type_t {
-    public:
-        node_input_t(const location_t& loc) : node_loc_t(loc) {}
-
-        value_t execute(buffer_t& buf, environments_t& env) override {
-            int value;
-            env.is >> value;
-            if (env.is_analyzing && !env.is.good())
-                throw error_execute_t{node_loc_t::loc(), env.program_str, "invalid input: need integer"};
-            return {node_type_e::NUMBER, buf.add_node<node_number_t>(node_loc_t::loc(), value)};
-        }
-
-        value_t analyze(buffer_t& buf, environments_t& env) override {
-            return {node_type_e::INPUT, buf.add_node<node_input_t>(node_loc_t::loc())};
-        }
-
-        void print(buffer_t& buf, environments_t& env) override { env.os << "?\n"; }
-
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_input_t>(node_loc_t::loc());
         }
     };
 
