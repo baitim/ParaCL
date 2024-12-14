@@ -152,6 +152,11 @@ namespace node {
         virtual int  level() const = 0;
     };
 
+    class node_simple_type_t : public node_type_t {
+    public:
+        int level() const override { return 0; };
+    };
+
     /* ----------------------------------------------------- */
 
     enum class node_type_e {
@@ -312,7 +317,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class node_number_t final : public node_type_t {
+    class node_number_t final : public node_simple_type_t {
         int number_;
 
     public:
@@ -333,13 +338,11 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_number_t>(node_loc_t::loc(), number_);
         }
-
-        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_undef_t final : public node_type_t {
+    class node_undef_t final : public node_simple_type_t {
     public:
         node_undef_t(const location_t& loc) : node_loc_t(loc) {}
 
@@ -356,13 +359,11 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_undef_t>(node_loc_t::loc());
         }
-
-        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
 
-    class node_input_t final : public node_type_t {
+    class node_input_t final : public node_simple_type_t {
     public:
         node_input_t(const location_t& loc) : node_loc_t(loc) {}
 
@@ -383,8 +384,6 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_input_t>(node_loc_t::loc());
         }
-
-        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
@@ -768,6 +767,31 @@ namespace node {
         value_t value_;
 
     private:
+        static void expect_types_assignable(const value_t& lvalue, const value_t& rvalue,
+                                            const location_t& assign_loc, analyze_params_t& params) {
+            node_type_e l_type = lvalue.type;
+            node_type_e r_type = rvalue.type;
+
+            if (l_type != node_type_e::ARRAY &&
+                r_type != node_type_e::ARRAY)
+                return;
+            
+            if (l_type == node_type_e::ARRAY &&
+                r_type == node_type_e::ARRAY) {
+                int l_level = lvalue.value->level();
+                int r_level = rvalue.value->level();
+                if (l_level != r_level) {
+                    std::string error_msg =   "wrong levels of arrays: " + std::to_string(l_level)
+                                            + " and " + std::to_string(r_level);
+                    throw error_analyze_t{assign_loc, params.program_str, error_msg};
+                }
+                return;
+            }
+                
+            std::string error_msg = "wrong types: " + type2str(l_type) + " not equal " + type2str(r_type);
+            throw error_analyze_t{assign_loc, params.program_str, error_msg};
+        }
+
         value_t& shift(const std::vector<int>& indexes, execute_params_t& params) {
             if (indexes.size() == 0)
                 return value_;
@@ -815,8 +839,7 @@ namespace node {
         }
 
         value_t set_value_analyze(node_indexes_t* ext_indexes, value_t new_value,
-                                  analyze_params_t& params) {
-            is_setted = true;
+                                  analyze_params_t& params, const location_t& assign_loc) {
             std::vector<value_t> indexes = ext_indexes->analyze(params);
             if (indexes.size() > 0 && !is_setted)
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
@@ -826,8 +849,12 @@ namespace node {
             if (!shift_result.first)
                 return new_value;
 
+            if (is_setted)
+                expect_types_assignable(shift_result.second, new_value, assign_loc, params);
+
             value_t& real_value = shift_result.second;
-            return real_value = new_value; // +check if types are different
+            is_setted = true;
+            return real_value = new_value;
         }
 
         virtual ~settable_value_t() = default;
@@ -863,8 +890,8 @@ namespace node {
             return variable_->set_value(indexes_, new_value, params);
         }
 
-        value_t set_value_analyze(value_t new_value, analyze_params_t& params) {
-            return variable_->set_value_analyze(indexes_, new_value, params);
+        value_t set_value_analyze(value_t new_value, analyze_params_t& params, const location_t& assign_loc) {
+            return variable_->set_value_analyze(indexes_, new_value, params, assign_loc);
         }
 
         value_t analyze(analyze_params_t& params) override {
@@ -904,7 +931,7 @@ namespace node {
         }
 
         value_t analyze(analyze_params_t& params) override {
-            return lvalue_->set_value_analyze(rvalue_->analyze(params), params);
+            return lvalue_->set_value_analyze(rvalue_->analyze(params), params, node_loc_t::loc());
         }
 
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
