@@ -781,14 +781,17 @@ namespace node {
                 int l_level = lvalue.value->level();
                 int r_level = rvalue.value->level();
                 if (l_level != r_level) {
-                    std::string error_msg =   "wrong levels of arrays: " + std::to_string(l_level)
-                                            + " and " + std::to_string(r_level);
+                    std::string error_msg = "wrong levels of arrays in assign: "
+                                            + std::to_string(r_level) + " levels of array nesting "
+                                            + "cannot be assigned to "
+                                            + std::to_string(l_level) + " levels of array nesting";
                     throw error_analyze_t{assign_loc, params.program_str, error_msg};
                 }
                 return;
             }
                 
-            std::string error_msg = "wrong types: " + type2str(l_type) + " not equal " + type2str(r_type);
+            std::string error_msg =   "wrong types in assign: " + type2str(r_type)
+                                    + " cannot be assigned to " + type2str(l_type);
             throw error_analyze_t{assign_loc, params.program_str, error_msg};
         }
 
