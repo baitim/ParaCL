@@ -165,7 +165,7 @@ Grammar:
     }
 
     node_variable_t* decl_var(std::string_view name, const yy::location& loc, yy::driver_t* driver) {
-        node_variable_t* var = current_scope->get_node(name);
+        node_variable_t* var = static_cast<node_variable_t*>(current_scope->get_node(name));
         if (!var) {
             var = driver->add_node<node_variable_t>(loc, name.length(), name);
             current_scope->add_variable(var);
@@ -260,11 +260,11 @@ expression_mul: expression_mul bin_oper_mul terminal       { $$ = driver->add_no
 terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
         | NUMBER            { $$ = driver->add_node<node_number_t>(@1, std::to_string($1).length(), $1); }
         | UNDEF             { $$ = driver->add_node<node_undef_t>(@1, 5); }
-        | INPUT             { $$ = driver->add_node<node_input_t>(@1, 5); }
+        | INPUT             { $$ = driver->add_node<node_input_t>(@1, 1); }
         | array             { $$ = $1; }
         | un_oper terminal  { $$ = driver->add_node<node_un_op_t>(@1, 1, $1, $2); }
         | variable indexes  { $$ = driver->add_node<node_lvalue_t>(@1, $1.length(),
-                                                                   current_scope->get_node($1), $2); }
+                                        static_cast<node_variable_t*>(current_scope->get_node($1)), $2); }
 ;
 
 variable: ID { $$ = $1; }

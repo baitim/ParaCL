@@ -7,8 +7,7 @@ int main(int argc, char* argv[]) {
     try {
         cmd_data.parse(argc, argv);
     } catch (const common::error_t& error) {
-        std::cout << error.what() << "\n";
-        return 1;
+        return (std::cout << error.what() << "\n", 1);
     }
     std::string program_str = common::file2str(cmd_data.program_file());
 
