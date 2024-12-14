@@ -44,8 +44,8 @@
 ## Compile errors
 * Unknown token
 * Undeclared variable
-* Wrong types
-[examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
+* Wrong types <br>
+* [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 
 ## Runtime errors
 
