@@ -149,6 +149,7 @@ namespace node {
     class node_type_t : public node_expression_t {
     public:
         virtual void print(execute_params_t& params) = 0;
+        virtual int  level() const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -332,6 +333,8 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_number_t>(node_loc_t::loc(), number_);
         }
+
+        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
@@ -353,6 +356,8 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_undef_t>(node_loc_t::loc());
         }
+
+        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
@@ -378,6 +383,8 @@ namespace node {
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
             return buf.add_node<node_input_t>(node_loc_t::loc());
         }
+
+        int level() const override { return 1; }
     };
 
     /* ----------------------------------------------------- */
@@ -439,10 +446,18 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_array_values_t {
+    protected:
+        struct analyze_array_values_data_t final {
+            std::vector<value_t> values;
+            value_t size;
+        };
+
     public:
         virtual std::vector<value_t> execute(execute_params_t& params) const = 0;
-        virtual std::pair<std::vector<value_t>, value_t> analyze(analyze_params_t& params) const = 0;
+        virtual analyze_array_values_data_t analyze(analyze_params_t& params) = 0;
+        virtual int get_level() const = 0;
         virtual node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const = 0;
+        virtual ~node_array_values_t() = default;
     };
 
     /* ----------------------------------------------------- */
@@ -452,7 +467,7 @@ namespace node {
     public:
         virtual void add_value(std::vector<value_t>& values,
                                execute_params_t& params) const = 0;
-        virtual void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) const = 0;
+        virtual void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) = 0;
         virtual node_array_value_t* copy_val(buffer_t& buf, node_scope_t* parent) const = 0;
     };
 
@@ -465,12 +480,12 @@ namespace node {
         node_expression_value_t(const location_t& loc, node_expression_t* value)
         : node_loc_t(loc), value_(value) {}
 
-        void add_value(std::vector<value_t>& values, execute_params_t& params) const {
+        void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
             value_t result = value_->execute(params);
             values.push_back(result);
         }
 
-        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) const override {
+        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) override {
             value_t result = value_->analyze(params);
             values.push_back(result);
         }
@@ -488,22 +503,23 @@ namespace node {
                                  public node_array_values_t {
         node_expression_t* value_;
         node_expression_t* count_;
+        int level_ = 0;
 
     public:
         node_repeat_values_t(const location_t& loc, node_expression_t* value, node_expression_t* count)
         : node_loc_t(loc), value_(value), count_(count) {}
 
-        void add_value(std::vector<value_t>& values, execute_params_t& params) const {
+        void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
             std::vector<value_t> result = execute(params);
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) const override {
-            std::vector<value_t> result = analyze(params).first;
+        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) override {
+            std::vector<value_t> result = analyze(params).values;
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        std::vector<value_t> execute(execute_params_t& params) const {
+        std::vector<value_t> execute(execute_params_t& params) const override {
             value_t value = value_->execute(params);
             value_t count = count_->execute(params);
             size_t real_count = static_cast<node_number_t*>(count.value)->get_value();
@@ -511,9 +527,11 @@ namespace node {
             return values;
         }
 
-        std::pair<std::vector<value_t>, value_t> analyze(analyze_params_t& params) const override {
+        analyze_array_values_data_t analyze(analyze_params_t& params) override {
             value_t count = count_->analyze(params);
             value_t value = value_->analyze(params);
+
+            level_ = value.value->level();
 
             if (count.type == node_type_e::INPUT)
                 return {{}, {node_type_e::INPUT, params.buf.add_node<node_input_t>(count_->loc())}};
@@ -535,6 +553,8 @@ namespace node {
             return buf.add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
                                                       count_->copy(buf, parent));
         }
+
+        int get_level() const override { return level_; }
     };
 
     /* ----------------------------------------------------- */
@@ -543,11 +563,30 @@ namespace node {
                                virtual public node_loc_t,
                                public node_array_values_t {
         std::vector<node_array_value_t*> values_;
+        int level_ = 0;
+
+        void level_analyze(const std::vector<value_t>& values, analyze_params_t& params) {
+            bool is_setted = false;
+            const int size = values.size();
+            for (int i : view::iota(0, size)) {
+                int elem_level = values[i].value->level();
+
+                if (!is_setted) {
+                    level_ = elem_level;
+                    is_setted = true;
+                    continue;
+                }
+
+                if (level_ != elem_level)
+                    throw error_analyze_t{values_[i]->loc(), params.program_str,
+                                          "different type in array"};
+            }
+        }
 
     public:
         node_list_values_t(const location_t& loc) : node_loc_t(loc) {}
 
-        std::vector<value_t> execute(execute_params_t& params) const {
+        std::vector<value_t> execute(execute_params_t& params) const override {
             std::vector<value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size))
@@ -557,13 +596,17 @@ namespace node {
 
         void add_value(node_array_value_t* value) { values_.push_back(value); }
 
-        std::pair<std::vector<value_t>, value_t> analyze(analyze_params_t& params) const override {
+        analyze_array_values_data_t analyze(analyze_params_t& params) override {
             std::vector<value_t> values;
+
             const int size = values_.size();
             for (int i : view::iota(0, size))
                 values_[i]->add_value_analyze(values, params);
-            return {values, {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(),
-                                                                                     size)}};
+
+            level_analyze(values, params);
+
+            return {values,
+                    {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), size)}};
         }
 
         node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
@@ -572,6 +615,8 @@ namespace node {
                 node_values->add_value(value->copy_val(buf, parent));
             return node_values;
         }
+
+        int get_level() const override { return level_; }
     };
 
     /* ----------------------------------------------------- */
@@ -605,8 +650,6 @@ namespace node {
         }
 
         value_t& shift_(std::vector<int>& indexes, execute_params_t& params) {
-            assert(!indexes.empty());
-
             int index = indexes.back();
             indexes.pop_back();
             value_t& result = values_[index];
@@ -617,17 +660,25 @@ namespace node {
                 return result;
         }
 
-        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
-            assert(!indexes.empty());
-
-            int index = static_cast<node_number_t*>(indexes.back().value)->get_value();
+        value_t& shift_analyze_nubmer(std::vector<value_t>& indexes, node_number_t* index_node,
+                                      analyze_params_t& params) {
+            int index = index_node->get_value();
             indexes.pop_back();
             value_t& result = values_[index];
 
-            if (!indexes.empty() && result.type == node_type_e::ARRAY) // + check level error
+            if (!indexes.empty() && result.type == node_type_e::ARRAY)
                 return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params);
             else
                 return result;
+        }
+
+        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
+            value_t index = indexes.back();
+
+            if (index.type == node_type_e::NUMBER)
+                return shift_analyze_nubmer(indexes, static_cast<node_number_t*>(index.value), params);
+        
+            
         }
 
         void init(execute_params_t& params) {
@@ -637,7 +688,7 @@ namespace node {
         }
 
         void init_analyze(analyze_params_t& params) {
-            values_    = init_values_->analyze(params).first;
+            values_    = init_values_->analyze(params).values;
             indexes_   = init_indexes_->analyze(params);
             is_inited_ = true;
         }
@@ -705,6 +756,8 @@ namespace node {
             parent->add_array(node_array);
             return node_array;
         }
+
+        int level() const override { return 1 + init_values_->get_level(); };
     };
 
     /* ----------------------------------------------------- */

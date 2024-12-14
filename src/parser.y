@@ -197,7 +197,7 @@ statement: fork         { $$ = $1; }
          | instruction  { $$ = $1; }
 ;
 
-instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@$, 1, $1); }
+instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
 rvalue: expression   { $$ = $1; }
@@ -289,10 +289,10 @@ repeat_values: REPEAT LBRACKET_ROUND expression COMMA expression RBRACKET_ROUND
 ;
 
 list_values: list_values COMMA array_value { $$ = $1; $$->add_value($3); }
-           | array_value { $$ = driver->add_node<node_list_values_t>(@$, 1); $$->add_value($1); }
+           | array_value { $$ = driver->add_node<node_list_values_t>(@$, $1->loc().len); $$->add_value($1); }
 ;
 
-array_value: expression    { $$ = driver->add_node<node_expression_value_t>(@$, 1, $1); }
+array_value: expression    { $$ = driver->add_node<node_expression_value_t>(@$, $1->loc().len, $1); }
            | repeat_values { $$ = $1; }
 ;
 
