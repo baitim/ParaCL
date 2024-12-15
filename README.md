@@ -49,7 +49,8 @@
 
 ## Runtime errors
 
-* Check that loop/fork condition is undef
+* Checking input type
+* Checking array indexes
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
