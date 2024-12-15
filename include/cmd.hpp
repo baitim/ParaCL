@@ -75,7 +75,7 @@ namespace cmd {
         std::pair<int, int> get_cnt_flags() {
             std::pair<int, int> cnt = {0, 0};
             for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *it->second.get();
+                cmd_flag_t& flag = *(it->second.get());
                 
                 cnt.second++;
                 if (flag.is_necessery())
@@ -87,7 +87,7 @@ namespace cmd {
     protected:
         void parse_token(std::string_view cmd_flag) {
             for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *it->second.get();
+                cmd_flag_t& flag = *(it->second.get());
                 if (!flag.is_titeled() ||
                      flag.is_setted())
                     continue;
@@ -97,7 +97,7 @@ namespace cmd {
             }
 
             for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *it->second.get();
+                cmd_flag_t& flag = *(it->second.get());
                 if (flag.is_titeled() ||
                     flag.is_setted())
                     continue;
@@ -136,10 +136,10 @@ namespace cmd {
 
     public:
         void parse(int argc, char* argv[]) {
-            if (argc < cnt_flags_.first && argc > cnt_flags_.second)
+            if (argc < cnt_flags_.first)
                 throw common::error_t{"Invalid argument: argc = 2, argv[1] = name of file\n"};
 
-            for (int i : view::iota(1, argc))
+            for (int i : view::iota(1, std::min(cnt_flags_.second + 1, argc)))
                 cmd_flags_t::parse_token(argv[i]);
 
             cmd_flags_t::check_valid();

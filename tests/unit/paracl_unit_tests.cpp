@@ -19,7 +19,7 @@ std::vector<std::string> get_sorted_files(std::filesystem::path path) {
 TEST(Paracl_shuffle, end_to_end) {
     std::string file{__FILE__};
     std::filesystem::path dir = file.substr(0, file.rfind("/"));
-    std::filesystem::path tests_dir = dir / "../end_to_end";
+    std::filesystem::path tests_dir = dir / "../end_to_end/valid";
 
     std::filesystem::path answers_get_path = tests_dir / "answers_get";
     std::filesystem::path answers_src_path = tests_dir / "answers_src";

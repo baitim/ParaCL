@@ -1,32 +1,38 @@
 import os
 import glob
 import subprocess
+from pathlib import Path
 from PIL import ImageFont, ImageDraw, Image
 
-curr_dir = os.path.dirname(os.path.abspath(__file__))
-os.system('cd ' + curr_dir)
+curr_dir = str(Path(__file__).parent)
+proj_dir = curr_dir + "/../../.."
 
 class bcolors:
     INFO = "\033[93m"
     FAIL = "\033[31m"
     ENDC = "\033[0m"
 
-def run(program, exe_file):
-    command = [exe_file, program, "--analyze"]
-    result = subprocess.run(command, capture_output=True)
+def run(program, input, exe_file):
+    command = exe_file + " " + program + " --analyze " + " < " + input
+    result = subprocess.run(command, shell=True, capture_output=True)
     return result.stdout.decode("utf-8")
 
-paracl_exe = "./build/src/paracl"
-program_files = list(map(str, glob.glob("tests/end_to_end/tests_error_in/test_*.in")))
+paracl_exe = proj_dir + "/build/src/paracl"
+program_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/error/tests_error_in/test_*.in")))
 program_files.sort()
 
+input_data_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/error/input4tests_in/input_*.in")))
+input_data_files.sort()
+
+if (len(input_data_files) != len(program_files)):
+    print("count of input files != count of program files")
+    exit()
+
 result_str = ""
-test_num = 1
-for program in program_files :
-    result_str += bcolors.INFO + "test " + str(test_num) + ":" + bcolors.ENDC + "\n"
-    result_str += run(program, paracl_exe)
+for test_num in range(0, len(input_data_files)) :
+    result_str += bcolors.INFO + "test " + str(test_num + 1) + ":" + bcolors.ENDC + "\n"
+    result_str += run(program_files[test_num], input_data_files[test_num], paracl_exe)
     result_str += bcolors.INFO + "\"--------------------------------------------------------\"\n" + bcolors.ENDC
-    test_num += 1
 
 print(result_str)
 
@@ -94,4 +100,3 @@ def create_image_from_colored_text(colored_text, file_name):
     img.save(file_name)
 
 create_image_from_colored_text(str(result_str), "images/errors.png")
-os.system('cd -')

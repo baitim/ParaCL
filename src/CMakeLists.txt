@@ -29,8 +29,8 @@ target_include_directories(paracl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 target_compile_features(paracl PRIVATE cxx_std_20)
 
-set(PYTHON_SCRIPT_RUN_VALID "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/run_valid_tests.py")
-set(PYTHON_SCRIPT_RUN_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/run_error_tests.py")
+set(PYTHON_SCRIPT_RUN_VALID "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/valid/run_valid_tests.py")
+set(PYTHON_SCRIPT_RUN_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/error/run_error_tests.py")
 
 add_test(
     NAME end_to_end_valid_paracl_target
