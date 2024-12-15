@@ -36,21 +36,20 @@
         <code>python3 tests/end_to_end/error/print_error_tests.py</code>
 
 
-## Features
+## Errors
+#### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 
-* Ability to check whether values are defined <br>
+* ## Compile errors
+    * Unknown token
+    * Undeclared variable
+    * Wrong types <br>
+
+* ## Runtime errors
+    
     include flag <code>--analyze</code>
 
-## Compile errors
-#### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
-* Unknown token
-* Undeclared variable
-* Wrong types <br>
-
-## Runtime errors
-
-* Checking input type
-* Checking array indexes
+    * Checking input type
+    * Checking array indexes
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
