@@ -255,7 +255,7 @@ namespace node {
 
     class node_memory_t {
     public:
-        virtual void clear() = 0;
+        virtual void clear(buffer_t& buf) = 0;
         virtual ~node_memory_t() = default;
     };
 
@@ -265,9 +265,9 @@ namespace node {
         std::vector<node_memory_t*> arrays_;
 
     protected:
-        void clear_memory() {
+        void clear_memory(buffer_t& buf) {
             for (auto iter : arrays_)
-                iter->clear();
+                iter->clear(buf);
         }
 
     public:
@@ -300,13 +300,13 @@ namespace node {
         void execute(execute_params_t& params) override {
             for (auto statement : statements_)
                 statement->execute(params);
-            memory_table_t::clear_memory();
+            memory_table_t::clear_memory(params.buf);
         }
 
         void analyze(analyze_params_t& params) override {
             for (auto statement : statements_)
                 statement->analyze(params);
-            memory_table_t::clear_memory();
+            memory_table_t::clear_memory(params.buf);
         }
 
         node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
@@ -718,6 +718,7 @@ namespace node {
 
         value_t& shift_analyze_size_type_input(std::vector<value_t>& indexes, analyze_params_t& params) {
             value_t& result = values_[0];
+            indexes.pop_back();
             return shift_analyze_step(result, indexes, params);
         }
 
@@ -806,10 +807,14 @@ namespace node {
             params.os << "[" << transform_print_str(print_stream.str()) << "]\n";
         }
 
-        void clear() {
+        void clear(buffer_t& buf) {
             is_inited_ = false;
-            values_.clear();
-            indexes_.clear();
+            if (analyze_size_.type == node_type_e::INPUT) {
+                values_.clear();
+                indexes_.clear();
+                analyze_size_ = {node_type_e::NUMBER,
+                                buf.add_node<node_number_t>(analyze_size_.value->loc(), 0)};
+            }
         }
 
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
@@ -888,9 +893,8 @@ namespace node {
         value_t set_value(node_indexes_t* indexes, value_t new_value,
                           execute_params_t& params) {
             value_t& real_value = shift(indexes->execute(params), params);
-            real_value = new_value;
             is_setted = true;
-            return value_;
+            return real_value = new_value;
         }
 
         value_t analyze(node_indexes_t* ext_indexes, analyze_params_t& params) {

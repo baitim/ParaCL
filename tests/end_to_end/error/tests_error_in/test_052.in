@@ -1,8 +1,8 @@
-size  = 50;
+size  = ?;
 steps = 20;
 step  = 0;
-arr = array(1);
 while (step < steps) {
+    arr = array(1);
     {
         arr = repeat(step, size);
     }
