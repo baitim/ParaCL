@@ -104,16 +104,16 @@ namespace node {
     /* ----------------------------------------------------- */
 
     struct analyze_params_t final {
-        buffer_t& buf;
+        buffer_t* buf;
         std::string_view program_str;
     };
 
     /* ----------------------------------------------------- */
 
     struct execute_params_t final {
-        buffer_t& buf;
-        std::ostream& os;
-        std::istream& is;
+        buffer_t* buf;
+        std::ostream* os;
+        std::istream* is;
         bool is_analyzing;
         std::string_view program_str;
     };
@@ -142,7 +142,7 @@ namespace node {
     public:
         virtual value_t execute(execute_params_t& params) = 0;
         virtual value_t analyze(analyze_params_t& params) = 0;
-        virtual node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const = 0;
+        virtual node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -202,7 +202,7 @@ namespace node {
     public:
         virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
-        virtual node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const = 0;
+        virtual node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -222,8 +222,8 @@ namespace node {
             expr_->analyze(params);
         }
 
-        node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(buf, parent));
+        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(buf, parent));
         }
     };
 
@@ -260,7 +260,7 @@ namespace node {
 
     class node_memory_t {
     public:
-        virtual void clear(buffer_t& buf) = 0;
+        virtual void clear(buffer_t* buf) = 0;
         virtual ~node_memory_t() = default;
     };
 
@@ -270,7 +270,7 @@ namespace node {
         std::vector<node_memory_t*> arrays_;
 
     protected:
-        void clear_memory(buffer_t& buf) {
+        void clear_memory(buffer_t* buf) {
             for (auto iter : arrays_)
                 iter->clear(buf);
         }
@@ -314,8 +314,8 @@ namespace node {
             memory_table_t::clear_memory(params.buf);
         }
 
-        node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            node_scope_t* scope = buf.add_node<node_scope_t>(node_loc_t::loc(), parent);
+        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            node_scope_t* scope = buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
             for (auto statement : statements_)
                 scope->add_statement(statement->copy(buf, scope));
             return scope;
@@ -334,7 +334,7 @@ namespace node {
             return {node_type_e::NUMBER, this};
         }
 
-        void print(execute_params_t& params) override { params.os << number_ << "\n"; }
+        void print(execute_params_t& params) override { *(params.os) << number_ << "\n"; }
 
         int get_value() const noexcept { return number_; }
 
@@ -342,8 +342,8 @@ namespace node {
             return {node_type_e::NUMBER, this};
         }
     
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_number_t>(node_loc_t::loc(), number_);
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_number_t>(node_loc_t::loc(), number_);
         }
     };
 
@@ -357,14 +357,14 @@ namespace node {
             return {node_type_e::UNDEF, this};
         }
 
-        void print(execute_params_t& params) override { params.os << "undef\n"; }
+        void print(execute_params_t& params) override { *(params.os) << "undef\n"; }
 
         value_t analyze(analyze_params_t& params) override {
             return {node_type_e::UNDEF, this};
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_undef_t>(node_loc_t::loc());
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_undef_t>(node_loc_t::loc());
         }
     };
 
@@ -376,21 +376,21 @@ namespace node {
 
         value_t execute(execute_params_t& params) override {
             int value;
-            params.is >> value;
-            if (params.is_analyzing && !params.is.good())
+            *(params.is) >> value;
+            if (params.is_analyzing && !params.is->good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
             
-            return {node_type_e::INPUT, params.buf.add_node<node_number_t>(node_loc_t::loc(), value)};
+            return {node_type_e::INPUT, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
         }
 
         value_t analyze(analyze_params_t& params) override {
-            return {node_type_e::INPUT, params.buf.add_node<node_input_t>(node_loc_t::loc())};
+            return {node_type_e::INPUT, params.buf->add_node<node_input_t>(node_loc_t::loc())};
         }
 
-        void print(execute_params_t& params) override { params.os << "?\n"; }
+        void print(execute_params_t& params) override { *(params.os) << "?\n"; }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_input_t>(node_loc_t::loc());
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_input_t>(node_loc_t::loc());
         }
     };
 
@@ -442,8 +442,8 @@ namespace node {
             return indexes;
         }
 
-        node_indexes_t* copy(buffer_t& buf, node_scope_t* parent) const {
-            node_indexes_t* node_indexes = buf.add_node<node_indexes_t>(node_loc_t::loc());
+        node_indexes_t* copy(buffer_t* buf, node_scope_t* parent) const {
+            node_indexes_t* node_indexes = buf->add_node<node_indexes_t>(node_loc_t::loc());
             for (auto index : indexes_)
                 node_indexes->add_index(index->copy(buf, parent));
             return node_indexes;
@@ -458,7 +458,7 @@ namespace node {
         virtual array_values_data_t execute(execute_params_t& params) const = 0;
         virtual array_values_data_t analyze(analyze_params_t& params) = 0;
         virtual int get_level() const = 0;
-        virtual node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const = 0;
+        virtual node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const = 0;
         virtual ~node_array_values_t() = default;
     };
 
@@ -470,7 +470,7 @@ namespace node {
         virtual void add_value(std::vector<value_t>& values,
                                execute_params_t& params) const = 0;
         virtual void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) = 0;
-        virtual node_array_value_t* copy_val(buffer_t& buf, node_scope_t* parent) const = 0;
+        virtual node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -492,8 +492,8 @@ namespace node {
             values.push_back(result);
         }
 
-        node_array_value_t* copy_val(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_expression_value_t>(node_loc_t::loc(), value_->copy(buf, parent));
+        node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_expression_value_t>(node_loc_t::loc(), value_->copy(buf, parent));
         }
     };
 
@@ -560,14 +560,14 @@ namespace node {
             return {values, false};
         }
 
-        node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
-                                                      count_->copy(buf, parent));
+        node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
+                                                       count_->copy(buf, parent));
         }
 
-        node_array_value_t* copy_val(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
-                                                      count_->copy(buf, parent));
+        node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
+                                                       count_->copy(buf, parent));
         }
 
         int get_level() const override { return level_; }
@@ -623,8 +623,8 @@ namespace node {
             return {values, false};
         }
 
-        node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
-            node_list_values_t* node_values = buf.add_node<node_list_values_t>(node_loc_t::loc());
+        node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
+            node_list_values_t* node_values = buf->add_node<node_list_values_t>(node_loc_t::loc());
             for (auto value : values_)
                 node_values->add_value(value->copy_val(buf, parent));
             return node_values;
@@ -821,7 +821,7 @@ namespace node {
             }
             
             std::stringstream print_stream;
-            execute_params_t print_params{params.buf, print_stream, params.is,
+            execute_params_t print_params{params.buf, &print_stream, params.is,
                                           params.is_analyzing, params.program_str};
 
             const int size = values_.size();
@@ -829,10 +829,10 @@ namespace node {
                 values_[i].value->print(print_params);
             values_[size - 1].value->print(print_params);
 
-            params.os << "[" << transform_print_str(print_stream.str()) << "]\n";
+            *(params.os) << "[" << transform_print_str(print_stream.str()) << "]\n";
         }
 
-        void clear(buffer_t& buf) {
+        void clear(buffer_t* buf) {
             is_inited_ = false;
             if (is_in_heap_) {
                 is_freed_ = true;
@@ -841,10 +841,10 @@ namespace node {
             }
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            node_array_t* node_array = buf.add_node<node_array_t>(node_loc_t::loc(),
-                                                                  init_values_->copy_vals(buf, parent),
-                                                                  init_indexes_->copy(buf, parent));
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            node_array_t* node_array = buf->add_node<node_array_t>(node_loc_t::loc(),
+                                                                   init_values_->copy_vals(buf, parent),
+                                                                   init_indexes_->copy(buf, parent));
             parent->add_array(node_array);
             return node_array;
         }
@@ -955,8 +955,8 @@ namespace node {
                                   public settable_value_t {
     public:
         node_variable_t(const location_t& loc, std::string_view id) : node_loc_t(loc), id_t(id) {}
-        node_variable_t* copy(buffer_t& buf) const {
-            return buf.add_node<node_variable_t>(node_loc_t::loc(), id_t::get_name());
+        node_variable_t* copy(buffer_t* buf) const {
+            return buf->add_node<node_variable_t>(node_loc_t::loc(), id_t::get_name());
         }
         void set_loc(const location_t& loc) { node_loc_t::set_loc(loc); }
     };
@@ -990,7 +990,7 @@ namespace node {
             return variable_->analyze(indexes_, params);
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             node_variable_t* var_node = nullptr;
             if (variable_) {
                 var_node = static_cast<node_variable_t*>(parent->get_node(variable_->get_name()));
@@ -1002,7 +1002,7 @@ namespace node {
                 parent->add_variable(var_node);
             }
 
-            return buf.add_node<node_lvalue_t>(node_loc_t::loc(), var_node, indexes_->copy(buf, parent));
+            return buf->add_node<node_lvalue_t>(node_loc_t::loc(), var_node, indexes_->copy(buf, parent));
         }
     };
 
@@ -1023,10 +1023,10 @@ namespace node {
             return lvalue_->set_value_analyze(rvalue_->analyze(params), params, node_loc_t::loc());
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_assign_t>(node_loc_t::loc(),
-                                               static_cast<node_lvalue_t*>(lvalue_->copy(buf, parent)),
-                                               rvalue_->copy(buf, parent));
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_assign_t>(node_loc_t::loc(),
+                                                static_cast<node_lvalue_t*>(lvalue_->copy(buf, parent)),
+                                                rvalue_->copy(buf, parent));
         }
     };
 
@@ -1088,12 +1088,12 @@ namespace node {
 
             if (l_result.type == node_type_e::UNDEF ||
                 r_result.type == node_type_e::UNDEF)
-                return {node_type_e::UNDEF, params.buf.add_node<node_undef_t>(node_loc_t::loc())};
+                return {node_type_e::UNDEF, params.buf->add_node<node_undef_t>(node_loc_t::loc())};
             
             node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
             node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
             int result = evaluate(l_result_number, r_result_number);
-            return {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), result)};
+            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
         value_t analyze(analyze_params_t& params) override {
@@ -1114,12 +1114,12 @@ namespace node {
             node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
             node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
             int result = evaluate(l_result_number, r_result_number);
-            return {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), result)};
+            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_bin_op_t>(node_loc_t::loc(), type_,
-                                               left_->copy(buf, parent), right_->copy(buf, parent));
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_bin_op_t>(node_loc_t::loc(), type_,
+                                                left_->copy(buf, parent), right_->copy(buf, parent));
         }
     };
 
@@ -1153,10 +1153,10 @@ namespace node {
             value_t res_exec = node_->execute(params);
 
             if (res_exec.type == node_type_e::UNDEF)
-                return {node_type_e::UNDEF, params.buf.add_node<node_undef_t>(node_loc_t::loc())};
+                return {node_type_e::UNDEF, params.buf->add_node<node_undef_t>(node_loc_t::loc())};
 
             int result = evaluate(static_cast<node_number_t*>(res_exec.value));
-            return {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), result)};
+            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
         value_t analyze(analyze_params_t& params) override {
@@ -1169,11 +1169,11 @@ namespace node {
             expect_types_ne(res_exec.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
             int result = evaluate(static_cast<node_number_t*>(res_exec.value));
-            return {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), result)};
+            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
         }
     };
 
@@ -1196,8 +1196,8 @@ namespace node {
             return argument_->analyze(params);
         }
 
-        node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
+        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
         }
     };
 
@@ -1239,8 +1239,8 @@ namespace node {
                 body_->analyze(params);
         }
 
-        node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_loop_t>(node_loc_t::loc(), condition_->copy(buf, parent),
+        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_loop_t>(node_loc_t::loc(), condition_->copy(buf, parent),
                                              static_cast<node_scope_t*>(body_->copy(buf, parent)));
         }
     };
@@ -1277,10 +1277,10 @@ namespace node {
             body2_->analyze(params);
         }
 
-        node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
-            return buf.add_node<node_fork_t>(node_loc_t::loc(), condition_->copy(buf, parent),
-                                             static_cast<node_scope_t*>(body1_->copy(buf, parent)),
-                                             static_cast<node_scope_t*>(body2_->copy(buf, parent)));
+        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+            return buf->add_node<node_fork_t>(node_loc_t::loc(), condition_->copy(buf, parent),
+                                              static_cast<node_scope_t*>(body1_->copy(buf, parent)),
+                                              static_cast<node_scope_t*>(body2_->copy(buf, parent)));
         }
     };
 }

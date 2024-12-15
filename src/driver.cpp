@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
         return (std::cout << error.what() << "\n", 1);
     }
 
-    environments::environments_t env{std::cout, std::cin, cmd_data.is_analyzing(), program_str};
+    environments::environments_t env{&(std::cout), &(std::cin), cmd_data.is_analyzing(), program_str};
     try {
         ast.analyze(env);
     } catch (const common::error_t& error) {
