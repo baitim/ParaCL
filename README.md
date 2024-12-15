@@ -39,12 +39,12 @@
 ## Errors
 #### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 
-* ## Compile errors
+* ### Compile errors
     * Unknown token
     * Undeclared variable
     * Wrong types <br>
 
-* ## Runtime errors
+* ### Runtime errors
     
     include flag <code>--analyze</code>
 
