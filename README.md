@@ -33,7 +33,7 @@
 
 * Print
     - error end to end <br>
-        <code>python3 tests/end_to_end/print_error_tests.py</code>
+        <code>python3 tests/end_to_end/error/print_error_tests.py</code>
 
 
 ## Features
