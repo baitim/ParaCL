@@ -1,4 +1,0 @@
-arr2 = array(repeat(array(repeat(array(1, 2, 1000), 10)), 5));
-arr = array(1, 2, 3);
-arr[arr2[3][?][2]] = 2;
-print arr[arr2[3][3][2]];

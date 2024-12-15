@@ -1,4 +1,12 @@
-arr2 = array(repeat(array(1000, 0, 0), 5));
-arr = array(1, 2, 3);
-arr2[?][0] = 0;
-print arr[arr2[2][0]];
+size  = ?;
+steps = 20;
+step  = 0;
+arr = array(1);
+while (step < steps) {
+    {
+        arr = repeat(step, size);
+    }
+    print arr[0];
+    step = step + 1;
+}
+print 1;
