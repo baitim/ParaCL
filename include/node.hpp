@@ -509,7 +509,7 @@ namespace node {
 
     private:
         void check_size_out(int size, execute_params_t& params) const {
-            if (size < 0)
+            if (size <= 0)
                 throw error_execute_t{count_->loc(), params.program_str,
                                         "wrong input size of repeat: \"" + std::to_string(size) + "\""
                                       + ", less then 0"};
@@ -644,8 +644,15 @@ namespace node {
         std::vector<value_t> indexes_;
 
         bool is_in_heap_ = false;
+        bool is_freed_ = false;
 
     private:
+        void analyze_check_freed(const location_t& loc, analyze_params_t& params) const {
+            if (is_freed_)
+                throw error_analyze_t{loc, params.program_str,
+                                      "attempt to use freed array"};
+        }
+
         void analyze_check_index_out(int index, const location_t& loc, analyze_params_t& params) const {
             if (index < 0)
                 throw error_analyze_t{loc, params.program_str,
@@ -776,6 +783,7 @@ namespace node {
         : node_loc_t(loc), init_values_(init_values), init_indexes_(indexes) {}
 
         value_t execute(execute_params_t& params) override {
+            std::cerr << "array execute\n";
             if (!is_inited_)
                 init(params);
             
@@ -789,6 +797,7 @@ namespace node {
         }
 
         value_t analyze(analyze_params_t& params) override {
+            analyze_check_freed(node_loc_t::loc(), params);
             if (!is_inited_)
                 init_analyze(params);
 
@@ -801,6 +810,7 @@ namespace node {
         value_t& shift_analyze(const std::vector<value_t>& ext_indexes, analyze_params_t& params) {
             std::vector<value_t> all_indexes = ext_indexes;
             all_indexes.insert(all_indexes.end(), indexes_.begin(), indexes_.end());
+            analyze_check_freed(all_indexes[0].value->loc(), params);
             return shift_analyze_(all_indexes, params);
         }
 
@@ -825,6 +835,7 @@ namespace node {
         void clear(buffer_t& buf) {
             is_inited_ = false;
             if (is_in_heap_) {
+                is_freed_ = true;
                 values_.clear();
                 indexes_.clear();
             }
