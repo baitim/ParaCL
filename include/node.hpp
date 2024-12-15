@@ -55,6 +55,7 @@ namespace node {
                     error_line << " ";
             }
             error_line << "\n";
+            error_line << print_red("at location: (" << loc_.row << ", " << loc_.col << ")\n");
             return error_line.str();
         }
 
@@ -665,7 +666,7 @@ namespace node {
                                       + ", less then 0"};
             
             int array_size = values_.size();
-            if (index >= array_size && analyze_size_.type != node_type_e::INPUT) {
+            if (index >= array_size) {
                 throw error_execute_t{index_pos->loc(), params.program_str,
                                         "wrong index in array: \"" + std::to_string(index)      + "\""
                                       + ", when array size: \""    + std::to_string(array_size) + "\""};
@@ -789,7 +790,7 @@ namespace node {
 
         void print(execute_params_t& params) override {
             if (!indexes_.empty()) {
-                shift(indexes_, params).value->print(params);
+                shift({}, params).value->print(params);
                 return;
             }
             
