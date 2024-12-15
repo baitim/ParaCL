@@ -180,6 +180,11 @@ namespace node {
     struct value_t final {
         node_type_e  type;
         node_type_t* value;
+
+        void print() const {
+            std::cout << "value type : " << type2str(type) << "\n";
+            std::cout << "value value: " << value << "\n";
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -374,7 +379,8 @@ namespace node {
             params.is >> value;
             if (params.is_analyzing && !params.is.good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
-            return {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), value)};
+            
+            return {node_type_e::INPUT, params.buf.add_node<node_number_t>(node_loc_t::loc(), value)};
         }
 
         value_t analyze(analyze_params_t& params) override {
@@ -446,13 +452,11 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
+    using array_values_data_t = std::pair<std::vector<value_t>, bool>; // vals, is_in_heap
     class node_array_values_t {
-    protected:
-        using array_values_data_t = std::pair<std::vector<value_t>, value_t>;
-
     public:
-        virtual std::vector<value_t> execute(execute_params_t& params) const = 0;
-        virtual array_values_data_t  analyze(analyze_params_t& params) = 0;
+        virtual array_values_data_t execute(execute_params_t& params) const = 0;
+        virtual array_values_data_t analyze(analyze_params_t& params) = 0;
         virtual int get_level() const = 0;
         virtual node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const = 0;
         virtual ~node_array_values_t() = default;
@@ -516,7 +520,7 @@ namespace node {
         : node_loc_t(loc), value_(value), count_(count) {}
 
         void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
-            std::vector<value_t> result = execute(params);
+            std::vector<value_t> result = execute(params).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
@@ -525,7 +529,7 @@ namespace node {
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        std::vector<value_t> execute(execute_params_t& params) const override {
+        array_values_data_t execute(execute_params_t& params) const override {
             value_t value = value_->execute(params);
             value_t count = count_->execute(params);
             int real_count = static_cast<node_number_t*>(count.value)->get_value();
@@ -534,7 +538,9 @@ namespace node {
                 check_size_out(real_count, params);
 
             std::vector<value_t> values{static_cast<size_t>(real_count), value};
-            return values;
+            if (count.type == node_type_e::INPUT)
+                return {values, true};
+            return {values, false};
         }
 
         array_values_data_t analyze(analyze_params_t& params) override {
@@ -544,14 +550,14 @@ namespace node {
             level_ = value.value->level();
 
             if (count.type == node_type_e::INPUT)
-                return {{value}, {node_type_e::INPUT, params.buf.add_node<node_input_t>(count_->loc())}};
+                return {{value}, true};
 
             expect_types_ne(count.type, node_type_e::UNDEF, count_->loc(), params);
             expect_types_ne(count.type, node_type_e::ARRAY, count_->loc(), params);
 
             size_t real_count = static_cast<node_number_t*>(count.value)->get_value(); // static check type
             std::vector<value_t> values{real_count, value};
-            return {values, {node_type_e::NUMBER, params.buf.add_node<node_number_t>(count_->loc(), real_count)}};
+            return {values, false};
         }
 
         node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
@@ -596,12 +602,12 @@ namespace node {
     public:
         node_list_values_t(const location_t& loc) : node_loc_t(loc) {}
 
-        std::vector<value_t> execute(execute_params_t& params) const override {
+        array_values_data_t execute(execute_params_t& params) const override {
             std::vector<value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size))
                 values_[i]->add_value(values, params);
-            return values;
+            return {values, false};
         }
 
         void add_value(node_array_value_t* value) { values_.push_back(value); }
@@ -614,9 +620,7 @@ namespace node {
                 values_[i]->add_value_analyze(values, params);
 
             level_analyze(values, params);
-
-            return {values,
-                    {node_type_e::NUMBER, params.buf.add_node<node_number_t>(node_loc_t::loc(), size)}};
+            return {values, false};
         }
 
         node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const override {
@@ -639,7 +643,7 @@ namespace node {
         std::vector<value_t> values_;
         std::vector<value_t> indexes_;
 
-        value_t analyze_size_;
+        bool is_in_heap_ = false;
 
     private:
         void analyze_check_index_out(int index, const location_t& loc, analyze_params_t& params) const {
@@ -649,7 +653,7 @@ namespace node {
                                       + ", less then 0"};
             
             int array_size = values_.size();
-            if (index >= array_size && analyze_size_.type != node_type_e::INPUT)
+            if (index >= array_size && !is_in_heap_)
                 throw error_analyze_t{loc, params.program_str,
                                         "wrong index in array: \"" + std::to_string(index)      + "\""
                                       + ", when array size: \""    + std::to_string(array_size) + "\""};
@@ -730,9 +734,15 @@ namespace node {
             return shift_analyze_step(result, indexes, params);
         }
 
-        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
+        value_t& shift_analyze_undef(std::vector<value_t>& indexes, analyze_params_t& params) {
+            value_t& result = values_[0];
+            indexes.pop_back();
+            // set_all_values_under2input(indexes, params);
+            return shift_analyze_step(result, indexes, params);
+        }
 
-            if (analyze_size_.type == node_type_e::INPUT)
+        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
+            if (is_in_heap_)
                 return shift_analyze_size_type_input(indexes, params);
 
             value_t index = indexes.back();
@@ -741,17 +751,22 @@ namespace node {
                 analyze_check_index_out(node_index->get_value(), index.value->loc(), params);
                 return shift_analyze_number(indexes, node_index, params);
             }
+
+            return shift_analyze_undef(indexes, params);
         }
 
         void init(execute_params_t& params) {
-            values_    = init_values_->execute(params);
-            indexes_   = init_indexes_->execute(params);
-            is_inited_ = true;
+            array_values_data_t values_analyze_res = init_values_->execute(params);
+            values_     = values_analyze_res.first;
+            is_in_heap_ = values_analyze_res.second;
+            indexes_    = init_indexes_->execute(params);
+            is_inited_  = true;
         }
 
         void init_analyze(analyze_params_t& params) {
-            values_       = init_values_->analyze(params).first;
-            analyze_size_ = init_values_->analyze(params).second;
+            array_values_data_t values_analyze_res = init_values_->analyze(params);
+            values_       = values_analyze_res.first;
+            is_in_heap_   = values_analyze_res.second;
             indexes_      = init_indexes_->analyze(params);
             is_inited_    = true;
         }
@@ -809,11 +824,9 @@ namespace node {
 
         void clear(buffer_t& buf) {
             is_inited_ = false;
-            if (analyze_size_.type == node_type_e::INPUT) {
+            if (is_in_heap_) {
                 values_.clear();
                 indexes_.clear();
-                analyze_size_ = {node_type_e::NUMBER,
-                                buf.add_node<node_number_t>(analyze_size_.value->loc(), 0)};
             }
         }
 
@@ -887,7 +900,7 @@ namespace node {
     public:
         value_t execute(node_indexes_t* indexes, execute_params_t& params) {
             value_t& real_value = shift(indexes->execute(params), params);
-            return real_value.value->execute(params);
+            return real_value;
         }
 
         value_t set_value(node_indexes_t* indexes, value_t new_value,
