@@ -665,10 +665,19 @@ namespace node {
             indexes.pop_back();
             value_t& result = values_[index];
 
-            if (!indexes.empty() && result.type == node_type_e::ARRAY)
-                return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params);
-            else
+            if (result.type == node_type_e::ARRAY) {
+                if (!indexes.empty())
+                    return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params);
+                else
+                    return result;
+            } else {
+                if (!indexes.empty()) {
+                    throw error_analyze_t{indexes[0].value->loc(), params.program_str,
+                                          "indexing in depth has gone beyond boundary of array"};
+                }
+
                 return result;
+            }
         }
 
         value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
@@ -710,6 +719,13 @@ namespace node {
             return shift_(all_indexes, params);
         }
 
+        value_t analyze(analyze_params_t& params) override {
+            if (!is_inited_)
+                init_analyze(params);
+
+            return {node_type_e::ARRAY, this};
+        }
+
         value_t& shift_analyze(const std::vector<value_t>& ext_indexes, analyze_params_t& params) {
             std::vector<value_t> all_indexes = ext_indexes;
             all_indexes.insert(all_indexes.end(), indexes_.begin(), indexes_.end());
@@ -739,13 +755,6 @@ namespace node {
             is_inited_ = false;
             values_.clear();
             indexes_.clear();
-        }
-
-        value_t analyze(analyze_params_t& params) override {
-            if (!is_inited_)
-                init_analyze(params);
-
-            return {node_type_e::ARRAY, this};
         }
 
         node_expression_t* copy(buffer_t& buf, node_scope_t* parent) const override {
