@@ -305,6 +305,7 @@ namespace node {
         void analyze(analyze_params_t& params) override {
             for (auto statement : statements_)
                 statement->analyze(params);
+            memory_table_t::clear_memory();
         }
 
         node_statement_t* copy(buffer_t& buf, node_scope_t* parent) const override {
@@ -446,14 +447,11 @@ namespace node {
 
     class node_array_values_t {
     protected:
-        struct analyze_array_values_data_t final {
-            std::vector<value_t> values;
-            value_t size;
-        };
+        using array_values_data_t = std::pair<std::vector<value_t>, value_t>;
 
     public:
         virtual std::vector<value_t> execute(execute_params_t& params) const = 0;
-        virtual analyze_array_values_data_t analyze(analyze_params_t& params) = 0;
+        virtual array_values_data_t  analyze(analyze_params_t& params) = 0;
         virtual int get_level() const = 0;
         virtual node_array_values_t* copy_vals(buffer_t& buf, node_scope_t* parent) const = 0;
         virtual ~node_array_values_t() = default;
@@ -504,6 +502,14 @@ namespace node {
         node_expression_t* count_;
         int level_ = 0;
 
+    private:
+        void check_size_out(int size, execute_params_t& params) const {
+            if (size < 0)
+                throw error_execute_t{count_->loc(), params.program_str,
+                                        "wrong input size of repeat: \"" + std::to_string(size) + "\""
+                                      + ", less then 0"};
+        }
+
     public:
         node_repeat_values_t(const location_t& loc, node_expression_t* value, node_expression_t* count)
         : node_loc_t(loc), value_(value), count_(count) {}
@@ -514,26 +520,30 @@ namespace node {
         }
 
         void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) override {
-            std::vector<value_t> result = analyze(params).values;
+            std::vector<value_t> result = analyze(params).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
         std::vector<value_t> execute(execute_params_t& params) const override {
             value_t value = value_->execute(params);
             value_t count = count_->execute(params);
-            size_t real_count = static_cast<node_number_t*>(count.value)->get_value();
-            std::vector<value_t> values{real_count, value};
+            int real_count = static_cast<node_number_t*>(count.value)->get_value();
+
+            if (params.is_analyzing)
+                check_size_out(real_count, params);
+
+            std::vector<value_t> values{static_cast<size_t>(real_count), value};
             return values;
         }
 
-        analyze_array_values_data_t analyze(analyze_params_t& params) override {
+        array_values_data_t analyze(analyze_params_t& params) override {
             value_t count = count_->analyze(params);
             value_t value = value_->analyze(params);
 
             level_ = value.value->level();
 
             if (count.type == node_type_e::INPUT)
-                return {{}, {node_type_e::INPUT, params.buf.add_node<node_input_t>(count_->loc())}};
+                return {{value}, {node_type_e::INPUT, params.buf.add_node<node_input_t>(count_->loc())}};
 
             expect_types_ne(count.type, node_type_e::UNDEF, count_->loc(), params);
             expect_types_ne(count.type, node_type_e::ARRAY, count_->loc(), params);
@@ -595,7 +605,7 @@ namespace node {
 
         void add_value(node_array_value_t* value) { values_.push_back(value); }
 
-        analyze_array_values_data_t analyze(analyze_params_t& params) override {
+        array_values_data_t analyze(analyze_params_t& params) override {
             std::vector<value_t> values;
 
             const int size = values_.size();
@@ -628,14 +638,38 @@ namespace node {
         std::vector<value_t> values_;
         std::vector<value_t> indexes_;
 
+        value_t analyze_size_;
+
     private:
-        std::vector<int> indexes2ints() {
-            std::vector<int> indexes;
-            for (auto index : indexes_) {
-                node_number_t* index_node = static_cast<node_number_t*>(index.value);
-                indexes.push_back(index_node->get_value());
+        void analyze_check_index_out(int index, const location_t& loc, analyze_params_t& params) const {
+            if (index < 0)
+                throw error_analyze_t{loc, params.program_str,
+                                        "wrong index in array: \"" + std::to_string(index) + "\""
+                                      + ", less then 0"};
+            
+            int array_size = values_.size();
+            if (index >= array_size && analyze_size_.type != node_type_e::INPUT)
+                throw error_analyze_t{loc, params.program_str,
+                                        "wrong index in array: \"" + std::to_string(index)      + "\""
+                                      + ", when array size: \""    + std::to_string(array_size) + "\""};
+        }
+
+        void execute_check_index_out(int index, int depth, const std::vector<value_t>& all_indexes,
+                                     execute_params_t& params) const {
+
+            node_type_t* index_pos = all_indexes[all_indexes.size() - depth - 1].value;
+
+            if (index < 0)
+                throw error_execute_t{index_pos->loc(), params.program_str,
+                                        "wrong index in array: \"" + std::to_string(index) + "\""
+                                      + ", less then 0"};
+            
+            int array_size = values_.size();
+            if (index >= array_size && analyze_size_.type != node_type_e::INPUT) {
+                throw error_execute_t{index_pos->loc(), params.program_str,
+                                        "wrong index in array: \"" + std::to_string(index)      + "\""
+                                      + ", when array size: \""    + std::to_string(array_size) + "\""};
             }
-            return indexes;
         }
 
         std::string transform_print_str(const std::string& str) const {
@@ -648,45 +682,63 @@ namespace node {
             return result;
         }
 
-        value_t& shift_(std::vector<int>& indexes, execute_params_t& params) {
-            int index = indexes.back();
+        value_t& shift_(std::vector<value_t>& indexes, execute_params_t& params,
+                        const std::vector<value_t>& all_indexes, int depth) {
+            value_t index_value = indexes.back().value->execute(params);
+            node_number_t* node_index = static_cast<node_number_t*>(index_value.value);
+            int index = node_index->get_value();
             indexes.pop_back();
+
+            if (params.is_analyzing)
+                execute_check_index_out(index, depth, all_indexes, params);
+
             value_t& result = values_[index];
 
             if (!indexes.empty() && result.type == node_type_e::ARRAY)
-                return static_cast<node_array_t*>(result.value)->shift_(indexes, params);
+                return static_cast<node_array_t*>(result.value)->shift_(indexes, params,
+                                                                        all_indexes, depth + 1);
             else
                 return result;
         }
 
-        value_t& shift_analyze_nubmer(std::vector<value_t>& indexes, node_number_t* index_node,
-                                      analyze_params_t& params) {
-            int index = index_node->get_value();
-            indexes.pop_back();
-            value_t& result = values_[index];
-
+        value_t& shift_analyze_step(value_t& result, std::vector<value_t>& indexes, analyze_params_t& params) {
             if (result.type == node_type_e::ARRAY) {
                 if (!indexes.empty())
                     return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params);
                 else
                     return result;
             } else {
-                if (!indexes.empty()) {
+                if (!indexes.empty())
                     throw error_analyze_t{indexes[0].value->loc(), params.program_str,
                                           "indexing in depth has gone beyond boundary of array"};
-                }
-
                 return result;
             }
         }
 
-        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
-            value_t index = indexes.back();
+        value_t& shift_analyze_size_type_input(std::vector<value_t>& indexes, analyze_params_t& params) {
+            value_t& result = values_[0];
+            return shift_analyze_step(result, indexes, params);
+        }
 
-            if (index.type == node_type_e::NUMBER)
-                return shift_analyze_nubmer(indexes, static_cast<node_number_t*>(index.value), params);
-        
-            
+        value_t& shift_analyze_number(std::vector<value_t>& indexes, node_number_t* index_node,
+                                      analyze_params_t& params) {
+            int index = index_node->get_value();
+            indexes.pop_back();
+            value_t& result = values_[index];
+            return shift_analyze_step(result, indexes, params);
+        }
+
+        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
+
+            if (analyze_size_.type == node_type_e::INPUT)
+                return shift_analyze_size_type_input(indexes, params);
+
+            value_t index = indexes.back();
+            if (index.type == node_type_e::NUMBER) {
+                node_number_t* node_index = static_cast<node_number_t*>(index.value);
+                analyze_check_index_out(node_index->get_value(), index.value->loc(), params);
+                return shift_analyze_number(indexes, node_index, params);
+            }
         }
 
         void init(execute_params_t& params) {
@@ -696,9 +748,10 @@ namespace node {
         }
 
         void init_analyze(analyze_params_t& params) {
-            values_    = init_values_->analyze(params).values;
-            indexes_   = init_indexes_->analyze(params);
-            is_inited_ = true;
+            values_       = init_values_->analyze(params).first;
+            analyze_size_ = init_values_->analyze(params).second;
+            indexes_      = init_indexes_->analyze(params);
+            is_inited_    = true;
         }
 
     public:
@@ -712,16 +765,18 @@ namespace node {
             return {node_type_e::ARRAY, this};
         }
 
-        value_t& shift(const std::vector<int>& ext_indexes, execute_params_t& params) {
-            std::vector<int> all_indexes = ext_indexes;
-            std::vector<int> indexes     = indexes2ints();
-            all_indexes.insert(all_indexes.end(), indexes.begin(), indexes.end());
-            return shift_(all_indexes, params);
+        value_t& shift(const std::vector<value_t>& ext_indexes, execute_params_t& params) {
+            std::vector<value_t> all_indexes = ext_indexes;
+            all_indexes.insert(all_indexes.end(), indexes_.begin(), indexes_.end());
+            return shift_(all_indexes, params, std::vector<value_t>{all_indexes}, 0);
         }
 
         value_t analyze(analyze_params_t& params) override {
             if (!is_inited_)
                 init_analyze(params);
+
+            if (indexes_.size() > 0)
+                shift_analyze({}, params);
 
             return {node_type_e::ARRAY, this};
         }
@@ -734,8 +789,7 @@ namespace node {
 
         void print(execute_params_t& params) override {
             if (!indexes_.empty()) {
-                std::vector<int> indexes = indexes2ints();
-                shift_(indexes, params).value->print(params);
+                shift(indexes_, params).value->print(params);
                 return;
             }
             
@@ -804,7 +858,7 @@ namespace node {
             throw error_analyze_t{assign_loc, params.program_str, error_msg};
         }
 
-        value_t& shift(const std::vector<int>& indexes, execute_params_t& params) {
+        value_t& shift(const std::vector<value_t>& indexes, execute_params_t& params) {
             if (indexes.size() == 0)
                 return value_;
 
@@ -812,30 +866,27 @@ namespace node {
             return array->shift(indexes, params);
         }
 
-        std::pair<bool, value_t&> shift_analyze(const std::vector<value_t>& indexes,
-                                                analyze_params_t& params) {
+        value_t& shift_analyze(const std::vector<value_t>& indexes, analyze_params_t& params) {
             if (indexes.size() == 0)
-                return {true, value_};
+                return value_;
             
             expect_types_ne(value_.type, node_type_e::UNDEF,  node_loc_t::loc(), params);
             expect_types_ne(value_.type, node_type_e::INPUT,  node_loc_t::loc(), params);
             expect_types_ne(value_.type, node_type_e::NUMBER, node_loc_t::loc(), params);
 
             node_array_t* array = static_cast<node_array_t*>(value_.value);
-            return {true, array->shift_analyze(indexes, params)};
+            return array->shift_analyze(indexes, params);
         }
 
     public:
         value_t execute(node_indexes_t* indexes, execute_params_t& params) {
-            std::vector<int> real_indexes = indexes->execute2ints(params);
-            value_t& real_value = shift(real_indexes, params);
+            value_t& real_value = shift(indexes->execute(params), params);
             return real_value.value->execute(params);
         }
 
         value_t set_value(node_indexes_t* indexes, value_t new_value,
                           execute_params_t& params) {
-            std::vector<int> real_indexes = indexes->execute2ints(params);
-            value_t& real_value = shift(real_indexes, params);
+            value_t& real_value = shift(indexes->execute(params), params);
             real_value = new_value;
             is_setted = true;
             return value_;
@@ -847,7 +898,7 @@ namespace node {
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "attempt to indexing by not init variable"};
 
-            return shift_analyze(indexes, params).second;
+            return shift_analyze(indexes, params);
         }
 
         value_t set_value_analyze(node_indexes_t* ext_indexes, value_t new_value,
@@ -857,16 +908,13 @@ namespace node {
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "attempt to indexing by not init variable"};
 
-            std::pair<bool, value_t&> shift_result = shift_analyze(indexes, params);
-            if (!shift_result.first)
-                return new_value;
+            value_t& shift_result = shift_analyze(indexes, params);
 
             if (is_setted)
-                expect_types_assignable(shift_result.second, new_value, assign_loc, params);
+                expect_types_assignable(shift_result, new_value, assign_loc, params);
 
-            value_t& real_value = shift_result.second;
             is_setted = true;
-            return real_value = new_value;
+            return shift_result = new_value;
         }
 
         virtual ~settable_value_t() = default;

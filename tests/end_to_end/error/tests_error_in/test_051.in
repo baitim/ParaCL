@@ -1,0 +1,2 @@
+arr = repeat(1, ?);
+x = arr[0][0];
