@@ -17,15 +17,11 @@ namespace common {
         { os << msg } -> std::same_as<std::ostream&>;
     };
 
-    class error_t {
-        std::string msg_;
+    class error_t : public std::runtime_error {
     public:
         template <error_str MsgT>
-        error_t(MsgT msg) : msg_(msg) {}
-
-        virtual const char* what() const { return msg_.c_str(); }
-
-        virtual ~error_t() = default;
+        error_t(MsgT msg) : std::runtime_error(msg) {}
+        using std::runtime_error::what;
     };
 
     inline std::string file2str(const std::string& file_name) {
