@@ -4,7 +4,7 @@
 #include <string>
 
 namespace environments {
-    struct environments_t {
+    struct environments_t final {
         std::ostream* os;
         std::istream* is;
         bool is_analyzing;

@@ -139,7 +139,7 @@ namespace cmd {
             if (argc < cnt_flags_.first)
                 throw common::error_t{"Invalid argument: argc = 2, argv[1] = name of file\n"};
 
-            for (int i : view::iota(1, std::min(cnt_flags_.second + 1, argc)))
+            for (int i : view::iota(1, argc))
                 cmd_flags_t::parse_token(argv[i]);
 
             cmd_flags_t::check_valid();
