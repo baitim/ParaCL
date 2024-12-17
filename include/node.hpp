@@ -682,11 +682,6 @@ namespace node {
         bool is_in_heap_ = false;
         bool is_freed_ = false;
 
-        enum class oper_type {
-            ANALYZE,
-            EXECUTE
-        };
-
     private:
         static analyze_t& shift_analyze_step(analyze_t& value, std::vector<analyze_t>& indexes,
                                              analyze_params_t& params,
@@ -736,7 +731,7 @@ namespace node {
         }
 
         void analyze_check_index_out(int index, size_t depth, const std::vector<analyze_t>& all_indexes,
-                                     analyze_params_t params, oper_type type) const {
+                                     analyze_params_t params) const {
             if (index < 0) {
                 location_t loc = analyze_get_index_location(depth, all_indexes);
                 throw error_analyze_t{loc, params.program_str,
@@ -754,7 +749,7 @@ namespace node {
         }
 
         void execute_check_index_out(int index, size_t depth, const std::vector<value_t>& all_indexes,
-                                     execute_params_t params, oper_type type) const {
+                                     execute_params_t params) const {
             if (index < 0) {
                 location_t loc = execute_get_index_location(depth, all_indexes);
                 throw error_execute_t{loc, params.program_str,
@@ -789,7 +784,7 @@ namespace node {
             indexes.pop_back();
 
             if (params.is_analyzing)
-                execute_check_index_out(index, depth, all_indexes, params, oper_type::EXECUTE);
+                execute_check_index_out(index, depth, all_indexes, params);
 
             value_t& result = e_values_[index];
 
@@ -842,8 +837,7 @@ namespace node {
                 node_number_t* node_index = static_cast<node_number_t*>(index.value);
 
                 if (a_index.is_constexpr)
-                    analyze_check_index_out(node_index->get_value(), depth, all_indexes,
-                                            params, oper_type::ANALYZE);
+                    analyze_check_index_out(node_index->get_value(), depth, all_indexes, params);
 
                 return shift_analyze_number(indexes, node_index, params, all_indexes, depth);
             }
