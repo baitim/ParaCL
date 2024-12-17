@@ -135,13 +135,15 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class value_t;
+    class analyze_t;
     class node_scope_t;
 
     class node_expression_t : public node_t,
                               virtual public node_loc_t {
     public:
-        virtual value_t execute(execute_params_t& params) = 0;
-        virtual value_t analyze(analyze_params_t& params) = 0;
+        virtual value_t   execute(execute_params_t& params) = 0;
+        virtual analyze_t analyze(analyze_params_t& params) = 0;
+        virtual void set_unpredict() = 0;
         virtual node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
@@ -151,6 +153,7 @@ namespace node {
     public:
         virtual void print(execute_params_t& params) = 0;
         virtual int  level() const = 0;
+        void set_unpredict() override {}
     };
 
     class node_simple_type_t : public node_type_t {
@@ -189,6 +192,18 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
+    struct analyze_t final {
+        value_t result;
+        bool    is_constexpr = true;
+
+        analyze_t() {}
+        analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
+        analyze_t(const value_t& value_) : result(value_) {}
+        analyze_t(node_type_e type_, node_type_t* value_) : result(type_, value_) {}
+    };
+
+    /* ----------------------------------------------------- */
+
     inline void expect_types_ne(node_type_e result,    node_type_e expected,
                                 const location_t& loc, analyze_params_t& params) {
         if (result == expected)
@@ -202,6 +217,7 @@ namespace node {
     public:
         virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
+        virtual void set_unpredict() = 0;
         virtual node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
@@ -225,6 +241,8 @@ namespace node {
         node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             return buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(buf, parent));
         }
+
+        void set_unpredict() override { expr_->set_unpredict(); };
     };
 
     /* ----------------------------------------------------- */
@@ -320,6 +338,11 @@ namespace node {
                 scope->add_statement(statement->copy(buf, scope));
             return scope;
         }
+
+        void set_unpredict() override {
+            for (auto statement : statements_)
+                statement->set_unpredict();
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -338,7 +361,7 @@ namespace node {
 
         int get_value() const noexcept { return number_; }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             return {node_type_e::NUMBER, this};
         }
     
@@ -359,7 +382,7 @@ namespace node {
 
         void print(execute_params_t& params) override { *(params.os) << "undef\n"; }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             return {node_type_e::UNDEF, this};
         }
 
@@ -380,10 +403,10 @@ namespace node {
             if (params.is_analyzing && !params.is->good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
             
-            return {node_type_e::INPUT, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
+            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
         }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             return {node_type_e::INPUT, params.buf->add_node<node_input_t>(node_loc_t::loc())};
         }
 
@@ -428,13 +451,13 @@ namespace node {
 
         void add_index(node_expression_t* index) { indexes_.push_back(index); }
 
-        std::vector<value_t> analyze(analyze_params_t& params) {
-            std::vector<value_t> indexes;
+        std::vector<analyze_t> analyze(analyze_params_t& params) {
+            std::vector<analyze_t> indexes;
             for (auto index : indexes_) {
-                value_t result = index->analyze(params);
+                analyze_t result = index->analyze(params);
 
-                expect_types_ne(result.type, node_type_e::ARRAY, index->loc(), params);
-                expect_types_ne(result.type, node_type_e::UNDEF, index->loc(), params);
+                expect_types_ne(result.result.type, node_type_e::ARRAY, index->loc(), params);
+                expect_types_ne(result.result.type, node_type_e::UNDEF, index->loc(), params);
 
                 indexes.push_back(result);
             }
@@ -448,15 +471,20 @@ namespace node {
                 node_indexes->add_index(index->copy(buf, parent));
             return node_indexes;
         }
+
+        location_t get_index_loc(int index) const {
+            return indexes_[index]->loc();
+        }
     };
 
     /* ----------------------------------------------------- */
 
-    using array_values_data_t = std::pair<std::vector<value_t>, bool>; // vals, is_in_heap
+    using array_execute_data_t = std::pair<std::vector<value_t>, bool>; // vals, is_in_heap
+    using array_analyze_data_t = std::pair<std::vector<analyze_t>, bool>; // vals, is_in_heap
     class node_array_values_t {
     public:
-        virtual array_values_data_t execute(execute_params_t& params) const = 0;
-        virtual array_values_data_t analyze(analyze_params_t& params) = 0;
+        virtual array_execute_data_t execute(execute_params_t& params) const = 0;
+        virtual array_analyze_data_t analyze(analyze_params_t& params) = 0;
         virtual int get_level() const = 0;
         virtual node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const = 0;
         virtual ~node_array_values_t() = default;
@@ -469,7 +497,7 @@ namespace node {
     public:
         virtual void add_value(std::vector<value_t>& values,
                                execute_params_t& params) const = 0;
-        virtual void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) = 0;
+        virtual void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) = 0;
         virtual node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const = 0;
     };
 
@@ -487,8 +515,8 @@ namespace node {
             values.push_back(result);
         }
 
-        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) override {
-            value_t result = value_->analyze(params);
+        void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
+            analyze_t result = value_->analyze(params);
             values.push_back(result);
         }
 
@@ -498,8 +526,6 @@ namespace node {
     };
 
     /* ----------------------------------------------------- */
-
-    class node_input_t;
 
     class node_repeat_values_t : public node_array_value_t,
                                  public node_array_values_t {
@@ -524,12 +550,12 @@ namespace node {
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        void add_value_analyze(std::vector<value_t>& values, analyze_params_t& params) override {
-            std::vector<value_t> result = analyze(params).first;
+        void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
+            std::vector<analyze_t> result = analyze(params).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
-        array_values_data_t execute(execute_params_t& params) const override {
+        array_execute_data_t execute(execute_params_t& params) const override {
             value_t value = value_->execute(params);
             value_t count = count_->execute(params);
             int real_count = static_cast<node_number_t*>(count.value)->get_value();
@@ -537,26 +563,33 @@ namespace node {
             if (params.is_analyzing)
                 check_size_out(real_count, params);
 
-            std::vector<value_t> values{static_cast<size_t>(real_count), value};
+            std::vector<value_t> values(real_count);
+            for (int i : view::iota(0, real_count)) {
+                node_type_t* copy_val = static_cast<node_type_t*>(value.value->copy(params.buf, nullptr));
+                values[i] = {value.type, copy_val};
+            }
+            
             if (count.type == node_type_e::INPUT)
                 return {values, true};
             return {values, false};
         }
 
-        array_values_data_t analyze(analyze_params_t& params) override {
-            value_t count = count_->analyze(params);
-            value_t value = value_->analyze(params);
+        array_analyze_data_t analyze(analyze_params_t& params) override {
+            analyze_t count      = count_->analyze(params);
+            analyze_t init_value = value_->analyze(params);
 
-            level_ = value.value->level();
+            level_ = init_value.result.value->level();
 
-            if (count.type == node_type_e::INPUT)
-                return {{value}, true};
+            value_t count_result = count.result;
+            if (count_result.type == node_type_e::INPUT)
+                return {{init_value.result}, true};
 
-            expect_types_ne(count.type, node_type_e::UNDEF, count_->loc(), params);
-            expect_types_ne(count.type, node_type_e::ARRAY, count_->loc(), params);
+            expect_types_ne(count_result.type, node_type_e::UNDEF, count_->loc(), params);
+            expect_types_ne(count_result.type, node_type_e::ARRAY, count_->loc(), params);
 
-            size_t real_count = static_cast<node_number_t*>(count.value)->get_value(); // static check type
-            std::vector<value_t> values{real_count, value};
+            size_t real_count = static_cast<node_number_t*>(count_result.value)->get_value();
+            std::vector<analyze_t> values;
+            values.assign(real_count, init_value.result);
             return {values, false};
         }
 
@@ -581,11 +614,11 @@ namespace node {
         std::vector<node_array_value_t*> values_;
         int level_ = 0;
 
-        void level_analyze(const std::vector<value_t>& values, analyze_params_t& params) {
+        void level_analyze(const std::vector<analyze_t>& values, analyze_params_t& params) {
             bool is_setted = false;
             const int size = values.size();
             for (int i : view::iota(0, size)) {
-                int elem_level = values[i].value->level();
+                int elem_level = values[i].result.value->level();
 
                 if (!is_setted) {
                     level_ = elem_level;
@@ -602,7 +635,7 @@ namespace node {
     public:
         node_list_values_t(const location_t& loc) : node_loc_t(loc) {}
 
-        array_values_data_t execute(execute_params_t& params) const override {
+        array_execute_data_t execute(execute_params_t& params) const override {
             std::vector<value_t> values;
             const int size = values_.size();
             for (int i : view::iota(0, size))
@@ -612,8 +645,8 @@ namespace node {
 
         void add_value(node_array_value_t* value) { values_.push_back(value); }
 
-        array_values_data_t analyze(analyze_params_t& params) override {
-            std::vector<value_t> values;
+        array_analyze_data_t analyze(analyze_params_t& params) override {
+            std::vector<analyze_t> values;
 
             const int size = values_.size();
             for (int i : view::iota(0, size))
@@ -640,11 +673,46 @@ namespace node {
         bool is_inited_ = false;
         node_array_values_t* init_values_;
         node_indexes_t*      init_indexes_;
-        std::vector<value_t> values_;
-        std::vector<value_t> indexes_;
+        std::vector<value_t>   e_values_;
+                                            // need to split this stuff, SRP:(
+        std::vector<analyze_t> a_values_;
+        std::vector<value_t>   e_indexes_;
+        std::vector<analyze_t> a_indexes_;
 
         bool is_in_heap_ = false;
         bool is_freed_ = false;
+
+        enum class oper_type {
+            ANALYZE,
+            EXECUTE
+        };
+
+    private:
+        static analyze_t& shift_analyze_step(analyze_t& value, std::vector<analyze_t>& indexes,
+                                             analyze_params_t& params,
+                                             const std::vector<analyze_t>& all_indexes, int depth) {
+            value_t result = value.result;
+            if (result.type == node_type_e::ARRAY) {
+                if (!indexes.empty())
+                    return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params,
+                                                                                    all_indexes, depth);
+                else
+                    return value;
+            } else {
+                if (!indexes.empty())
+                    throw error_analyze_t{indexes[0].result.value->loc(), params.program_str,
+                                          "indexing in depth has gone beyond boundary of array"};
+                return value;
+            }
+        }
+
+        static void set_unpredict_below(analyze_t& value, std::vector<analyze_t>& indexes,
+                                        analyze_params_t& params,
+                                        const std::vector<analyze_t>& all_indexes, int depth) {
+            std::vector<analyze_t> tmp_indexes{indexes};
+            analyze_t& result = shift_analyze_step(value, tmp_indexes, params, all_indexes, depth);
+            result.is_constexpr = false;
+        }
 
     private:
         void analyze_check_freed(const location_t& loc, analyze_params_t& params) const {
@@ -653,32 +721,51 @@ namespace node {
                                       "attempt to use freed array"};
         }
 
-        void analyze_check_index_out(int index, const location_t& loc, analyze_params_t& params) const {
-            if (index < 0)
+        location_t analyze_get_index_location(size_t depth, const std::vector<analyze_t>& all_indexes) const {
+            if (depth >= a_indexes_.size())
+                return all_indexes[all_indexes.size() - depth - 1].result.value->loc();
+
+            return init_indexes_->get_index_loc(a_indexes_.size() - depth - 1);
+        }
+
+        location_t execute_get_index_location(size_t depth, const std::vector<value_t>& all_indexes) const {
+            if (depth >= e_indexes_.size())
+                return all_indexes[all_indexes.size() - depth - 1].value->loc();
+
+            return init_indexes_->get_index_loc(e_indexes_.size() - depth - 1);
+        }
+
+        void analyze_check_index_out(int index, size_t depth, const std::vector<analyze_t>& all_indexes,
+                                     analyze_params_t params, oper_type type) const {
+            if (index < 0) {
+                location_t loc = analyze_get_index_location(depth, all_indexes);
                 throw error_analyze_t{loc, params.program_str,
                                         "wrong index in array: \"" + std::to_string(index) + "\""
                                       + ", less then 0"};
-            
-            int array_size = values_.size();
-            if (index >= array_size && !is_in_heap_)
+            }
+
+            int array_size = a_values_.size();
+            if (index >= array_size && !is_in_heap_) {
+                location_t loc = analyze_get_index_location(depth, all_indexes);
                 throw error_analyze_t{loc, params.program_str,
                                         "wrong index in array: \"" + std::to_string(index)      + "\""
                                       + ", when array size: \""    + std::to_string(array_size) + "\""};
+            }
         }
 
-        void execute_check_index_out(int index, int depth, const std::vector<value_t>& all_indexes,
-                                     execute_params_t& params) const {
-
-            node_type_t* index_pos = all_indexes[all_indexes.size() - depth - 1].value;
-
-            if (index < 0)
-                throw error_execute_t{index_pos->loc(), params.program_str,
+        void execute_check_index_out(int index, size_t depth, const std::vector<value_t>& all_indexes,
+                                     execute_params_t params, oper_type type) const {
+            if (index < 0) {
+                location_t loc = execute_get_index_location(depth, all_indexes);
+                throw error_execute_t{loc, params.program_str,
                                         "wrong index in array: \"" + std::to_string(index) + "\""
                                       + ", less then 0"};
-            
-            int array_size = values_.size();
+            }
+
+            int array_size = e_values_.size();
             if (index >= array_size) {
-                throw error_execute_t{index_pos->loc(), params.program_str,
+                location_t loc = execute_get_index_location(depth, all_indexes);
+                throw error_execute_t{loc, params.program_str,
                                         "wrong index in array: \"" + std::to_string(index)      + "\""
                                       + ", when array size: \""    + std::to_string(array_size) + "\""};
             }
@@ -702,9 +789,9 @@ namespace node {
             indexes.pop_back();
 
             if (params.is_analyzing)
-                execute_check_index_out(index, depth, all_indexes, params);
+                execute_check_index_out(index, depth, all_indexes, params, oper_type::EXECUTE);
 
-            value_t& result = values_[index];
+            value_t& result = e_values_[index];
 
             if (!indexes.empty() && result.type == node_type_e::ARRAY)
                 return static_cast<node_array_t*>(result.value)->shift_(indexes, params,
@@ -713,68 +800,70 @@ namespace node {
                 return result;
         }
 
-        value_t& shift_analyze_step(value_t& result, std::vector<value_t>& indexes, analyze_params_t& params) {
-            if (result.type == node_type_e::ARRAY) {
-                if (!indexes.empty())
-                    return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params);
-                else
-                    return result;
-            } else {
-                if (!indexes.empty())
-                    throw error_analyze_t{indexes[0].value->loc(), params.program_str,
-                                          "indexing in depth has gone beyond boundary of array"};
-                return result;
-            }
-        }
-
-        value_t& shift_analyze_size_type_input(std::vector<value_t>& indexes, analyze_params_t& params) {
-            value_t& result = values_[0];
+        analyze_t& shift_analyze_size_type_input(std::vector<analyze_t>& indexes, analyze_params_t& params,
+                                                 const std::vector<analyze_t>& all_indexes, int depth) {
+            analyze_t& result = a_values_[0];
             indexes.pop_back();
-            return shift_analyze_step(result, indexes, params);
+            return shift_analyze_step(result, indexes, params, all_indexes, depth + 1);
         }
 
-        value_t& shift_analyze_number(std::vector<value_t>& indexes, node_number_t* index_node,
-                                      analyze_params_t& params) {
+        analyze_t& shift_analyze_number(std::vector<analyze_t>& indexes, node_number_t* index_node,
+                                        analyze_params_t& params,
+                                        const std::vector<analyze_t>& all_indexes, int depth) {
             int index = index_node->get_value();
             indexes.pop_back();
-            value_t& result = values_[index];
-            return shift_analyze_step(result, indexes, params);
+            analyze_t& result = a_values_[index];
+            return shift_analyze_step(result, indexes, params, all_indexes, depth + 1);
         }
 
-        value_t& shift_analyze_undef(std::vector<value_t>& indexes, analyze_params_t& params) {
-            value_t& result = values_[0];
+        analyze_t& shift_analyze_unpredict(std::vector<analyze_t>& indexes, analyze_params_t& params,
+                                           const std::vector<analyze_t>& all_indexes, int depth) {
             indexes.pop_back();
-            // set_all_values_under2input(indexes, params);
-            return shift_analyze_step(result, indexes, params);
-        }
 
-        value_t& shift_analyze_(std::vector<value_t>& indexes, analyze_params_t& params) {
-            if (is_in_heap_)
-                return shift_analyze_size_type_input(indexes, params);
-
-            value_t index = indexes.back();
-            if (index.type == node_type_e::NUMBER) {
-                node_number_t* node_index = static_cast<node_number_t*>(index.value);
-                analyze_check_index_out(node_index->get_value(), index.value->loc(), params);
-                return shift_analyze_number(indexes, node_index, params);
+            const int size = a_values_.size();
+            for (int i : view::iota(0, size)) {
+                analyze_t& result = a_values_[i];
+                set_unpredict_below(result, indexes, params, all_indexes, depth + 1);
             }
 
-            return shift_analyze_undef(indexes, params);
+            return shift_analyze_step(a_values_[0], indexes, params, all_indexes, depth);
+        }
+
+        analyze_t& shift_analyze_(std::vector<analyze_t>& indexes, analyze_params_t& params,
+                                  const std::vector<analyze_t>& all_indexes, int depth) {
+            if (is_in_heap_)
+                return shift_analyze_size_type_input(indexes, params, all_indexes, depth);
+
+            analyze_t a_index = indexes.back();
+            value_t     index = a_index.result;
+            if (a_index.is_constexpr &&
+                index.type == node_type_e::NUMBER) {
+
+                node_number_t* node_index = static_cast<node_number_t*>(index.value);
+
+                if (a_index.is_constexpr)
+                    analyze_check_index_out(node_index->get_value(), depth, all_indexes,
+                                            params, oper_type::ANALYZE);
+
+                return shift_analyze_number(indexes, node_index, params, all_indexes, depth);
+            }
+
+            return shift_analyze_unpredict(indexes, params, all_indexes, depth);
         }
 
         void init(execute_params_t& params) {
-            array_values_data_t values_analyze_res = init_values_->execute(params);
-            values_     = values_analyze_res.first;
+            array_execute_data_t values_analyze_res = init_values_->execute(params);
+            e_values_   = values_analyze_res.first;
+            e_indexes_  = init_indexes_->execute(params);
             is_in_heap_ = values_analyze_res.second;
-            indexes_    = init_indexes_->execute(params);
             is_inited_  = true;
         }
 
         void init_analyze(analyze_params_t& params) {
-            array_values_data_t values_analyze_res = init_values_->analyze(params);
-            values_       = values_analyze_res.first;
+            array_analyze_data_t values_analyze_res = init_values_->analyze(params);
+            a_values_     = values_analyze_res.first;
+            a_indexes_    = init_indexes_->analyze(params);
             is_in_heap_   = values_analyze_res.second;
-            indexes_      = init_indexes_->analyze(params);
             is_inited_    = true;
         }
 
@@ -783,51 +872,53 @@ namespace node {
         : node_loc_t(loc), init_values_(init_values), init_indexes_(indexes) {}
 
         value_t execute(execute_params_t& params) override {
-            std::cerr << "array execute\n";
             if (!is_inited_)
                 init(params);
             
+            if (!e_indexes_.empty())
+                return shift({}, params);
             return {node_type_e::ARRAY, this};
         }
 
         value_t& shift(const std::vector<value_t>& ext_indexes, execute_params_t& params) {
             std::vector<value_t> all_indexes = ext_indexes;
-            all_indexes.insert(all_indexes.end(), indexes_.begin(), indexes_.end());
+            all_indexes.insert(all_indexes.end(), e_indexes_.begin(), e_indexes_.end());
             return shift_(all_indexes, params, std::vector<value_t>{all_indexes}, 0);
         }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             analyze_check_freed(node_loc_t::loc(), params);
             if (!is_inited_)
                 init_analyze(params);
 
-            if (indexes_.size() > 0)
+            if (a_indexes_.size() > 0)
                 shift_analyze({}, params);
 
             return {node_type_e::ARRAY, this};
         }
 
-        value_t& shift_analyze(const std::vector<value_t>& ext_indexes, analyze_params_t& params) {
-            std::vector<value_t> all_indexes = ext_indexes;
-            all_indexes.insert(all_indexes.end(), indexes_.begin(), indexes_.end());
-            analyze_check_freed(all_indexes[0].value->loc(), params);
-            return shift_analyze_(all_indexes, params);
+        analyze_t& shift_analyze(const std::vector<analyze_t>& ext_indexes, analyze_params_t& params) {
+            std::vector<analyze_t> all_indexes = ext_indexes;
+            all_indexes.insert(all_indexes.end(), a_indexes_.begin(), a_indexes_.end());
+            analyze_check_freed(all_indexes[0].result.value->loc(), params);
+            return shift_analyze_(all_indexes, params, std::vector<analyze_t>{all_indexes}, 0);
         }
 
         void print(execute_params_t& params) override {
-            if (!indexes_.empty()) {
+            if (!e_indexes_.empty()) {
                 shift({}, params).value->print(params);
                 return;
             }
+            execute(params);
             
             std::stringstream print_stream;
             execute_params_t print_params{params.buf, &print_stream, params.is,
                                           params.is_analyzing, params.program_str};
 
-            const int size = values_.size();
+            const int size = e_values_.size();
             for (int i : view::iota(0, size - 1))
-                values_[i].value->print(print_params);
-            values_[size - 1].value->print(print_params);
+                e_values_[i].value->print(print_params);
+            e_values_[size - 1].value->print(print_params);
 
             *(params.os) << "[" << transform_print_str(print_stream.str()) << "]\n";
         }
@@ -836,8 +927,10 @@ namespace node {
             is_inited_ = false;
             if (is_in_heap_) {
                 is_freed_ = true;
-                values_.clear();
-                indexes_.clear();
+                e_values_.clear();
+                a_values_.clear();
+                e_indexes_.clear();
+                a_indexes_.clear();
             }
         }
 
@@ -845,7 +938,8 @@ namespace node {
             node_array_t* node_array = buf->add_node<node_array_t>(node_loc_t::loc(),
                                                                    init_values_->copy_vals(buf, parent),
                                                                    init_indexes_->copy(buf, parent));
-            parent->add_array(node_array);
+            if (parent)
+                parent->add_array(node_array);
             return node_array;
         }
 
@@ -857,11 +951,15 @@ namespace node {
     class settable_value_t : public node_t,
                              virtual public node_loc_t {
         bool is_setted = false;
-        value_t value_;
+        value_t   e_value_;
+        analyze_t a_value_;
 
     private:
-        static void expect_types_assignable(const value_t& lvalue, const value_t& rvalue,
+        static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
                                             const location_t& assign_loc, analyze_params_t& params) {
+            value_t lvalue = a_lvalue.result;
+            value_t rvalue = a_rvalue.result;
+            
             node_type_e l_type = lvalue.type;
             node_type_e r_type = rvalue.type;
 
@@ -890,21 +988,22 @@ namespace node {
 
         value_t& shift(const std::vector<value_t>& indexes, execute_params_t& params) {
             if (indexes.size() == 0)
-                return value_;
+                return e_value_;
 
-            node_array_t* array = static_cast<node_array_t*>(value_.value);
+            node_array_t* array = static_cast<node_array_t*>(e_value_.value);
             return array->shift(indexes, params);
         }
 
-        value_t& shift_analyze(const std::vector<value_t>& indexes, analyze_params_t& params) {
+        analyze_t& shift_analyze(const std::vector<analyze_t>& indexes, analyze_params_t& params) {
             if (indexes.size() == 0)
-                return value_;
+                return a_value_;
             
-            expect_types_ne(value_.type, node_type_e::UNDEF,  node_loc_t::loc(), params);
-            expect_types_ne(value_.type, node_type_e::INPUT,  node_loc_t::loc(), params);
-            expect_types_ne(value_.type, node_type_e::NUMBER, node_loc_t::loc(), params);
+            value_t value = a_value_.result;
+            expect_types_ne(value.type, node_type_e::UNDEF,  node_loc_t::loc(), params);
+            expect_types_ne(value.type, node_type_e::INPUT,  node_loc_t::loc(), params);
+            expect_types_ne(value.type, node_type_e::NUMBER, node_loc_t::loc(), params);
 
-            node_array_t* array = static_cast<node_array_t*>(value_.value);
+            node_array_t* array = static_cast<node_array_t*>(value.value);
             return array->shift_analyze(indexes, params);
         }
 
@@ -921,8 +1020,8 @@ namespace node {
             return real_value = new_value;
         }
 
-        value_t analyze(node_indexes_t* ext_indexes, analyze_params_t& params) {
-            std::vector<value_t> indexes = ext_indexes->analyze(params);
+        analyze_t analyze(node_indexes_t* ext_indexes, analyze_params_t& params) {
+            std::vector<analyze_t> indexes = ext_indexes->analyze(params);
             if (indexes.size() > 0 && !is_setted)
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "attempt to indexing by not init variable"};
@@ -930,21 +1029,25 @@ namespace node {
             return shift_analyze(indexes, params);
         }
 
-        value_t set_value_analyze(node_indexes_t* ext_indexes, value_t new_value,
-                                  analyze_params_t& params, const location_t& assign_loc) {
-            std::vector<value_t> indexes = ext_indexes->analyze(params);
+        analyze_t set_value_analyze(node_indexes_t* ext_indexes, analyze_t new_value,
+                                    analyze_params_t& params, const location_t& assign_loc) {
+            std::vector<analyze_t> indexes = ext_indexes->analyze(params);
             if (indexes.size() > 0 && !is_setted)
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "attempt to indexing by not init variable"};
 
-            value_t& shift_result = shift_analyze(indexes, params);
+            analyze_t& shift_result = shift_analyze(indexes, params);
 
             if (is_setted)
                 expect_types_assignable(shift_result, new_value, assign_loc, params);
 
             is_setted = true;
-            return shift_result = new_value;
+            shift_result.result = new_value.result;
+            shift_result.is_constexpr &= new_value.is_constexpr;
+            return shift_result;
         }
+
+        void set_unpredict() { a_value_.is_constexpr = false; }
 
         virtual ~settable_value_t() = default;
     };
@@ -979,11 +1082,12 @@ namespace node {
             return variable_->set_value(indexes_, new_value, params);
         }
 
-        value_t set_value_analyze(value_t new_value, analyze_params_t& params, const location_t& assign_loc) {
+        analyze_t set_value_analyze(analyze_t new_value, analyze_params_t& params,
+                                    const location_t& assign_loc) {
             return variable_->set_value_analyze(indexes_, new_value, params, assign_loc);
         }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             if (!variable_)
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "declaration error: undeclared variable"};
@@ -993,7 +1097,9 @@ namespace node {
         node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             node_variable_t* var_node = nullptr;
             if (variable_) {
-                var_node = static_cast<node_variable_t*>(parent->get_node(variable_->get_name()));
+                if (parent)
+                    var_node = static_cast<node_variable_t*>(parent->get_node(variable_->get_name()));
+                
                 if (!var_node)
                     var_node = variable_->copy(buf);
                 else
@@ -1004,6 +1110,8 @@ namespace node {
 
             return buf->add_node<node_lvalue_t>(node_loc_t::loc(), var_node, indexes_->copy(buf, parent));
         }
+
+        void set_unpredict() override { variable_->set_unpredict(); }
     };
 
     /* ----------------------------------------------------- */
@@ -1019,7 +1127,7 @@ namespace node {
             return lvalue_->set_value(rvalue_->execute(params), params);
         }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             return lvalue_->set_value_analyze(rvalue_->analyze(params), params, node_loc_t::loc());
         }
 
@@ -1028,6 +1136,8 @@ namespace node {
                                                 static_cast<node_lvalue_t*>(lvalue_->copy(buf, parent)),
                                                 rvalue_->copy(buf, parent));
         }
+
+        void set_unpredict() override { lvalue_->set_unpredict(); }
     };
 
     /* ----------------------------------------------------- */
@@ -1096,17 +1206,20 @@ namespace node {
             return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
-        value_t analyze(analyze_params_t& params) override {
-            value_t l_result = left_->analyze(params);
-            value_t r_result = right_->analyze(params);
+        analyze_t analyze(analyze_params_t& params) override {
+            analyze_t a_l_result = left_->analyze(params);
+            analyze_t a_r_result = right_->analyze(params);
+
+            value_t l_result = a_l_result.result;
+            value_t r_result = a_r_result.result;
 
             if (l_result.type == node_type_e::UNDEF ||
                 l_result.type == node_type_e::INPUT)
-                return l_result;
+                return a_l_result;
 
             if (r_result.type == node_type_e::UNDEF ||
                 r_result.type == node_type_e::INPUT)
-                return r_result;
+                return a_r_result;
 
             expect_types_ne(l_result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(r_result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
@@ -1121,6 +1234,8 @@ namespace node {
             return buf->add_node<node_bin_op_t>(node_loc_t::loc(), type_,
                                                 left_->copy(buf, parent), right_->copy(buf, parent));
         }
+
+        void set_unpredict() override {}
     };
 
     /* ----------------------------------------------------- */
@@ -1159,12 +1274,13 @@ namespace node {
             return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
-        value_t analyze(analyze_params_t& params) override {
-            value_t res_exec = node_->analyze(params);
+        analyze_t analyze(analyze_params_t& params) override {
+            analyze_t a_res_exec = node_->analyze(params);
+            value_t     res_exec = a_res_exec.result;
 
             if (res_exec.type == node_type_e::UNDEF ||
                 res_exec.type == node_type_e::INPUT)
-                return res_exec;
+                return a_res_exec;
 
             expect_types_ne(res_exec.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
@@ -1175,6 +1291,8 @@ namespace node {
         node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             return buf->add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
         }
+
+        void set_unpredict() override {}
     };
 
     /* ----------------------------------------------------- */
@@ -1192,13 +1310,15 @@ namespace node {
             return result;
         }
 
-        value_t analyze(analyze_params_t& params) override {
+        analyze_t analyze(analyze_params_t& params) override {
             return argument_->analyze(params);
         }
 
         node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             return buf->add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
         }
+
+        void set_unpredict() override {}
     };
 
     /* ----------------------------------------------------- */
@@ -1223,16 +1343,12 @@ namespace node {
             return static_cast<node_number_t*>(result.value)->get_value();
         }
 
-        inline int step_analyze(analyze_params_t& params) {
-            value_t result = condition_->analyze(params);
+        inline void check_condition(analyze_params_t& params) {
+            analyze_t a_result = condition_->analyze(params);
+            value_t     result = a_result.result;
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);
-
-            if (result.type == node_type_e::INPUT)
-                return 0;
-
-            return static_cast<node_number_t*>(result.value)->get_value();
         }
 
     public:
@@ -1245,7 +1361,8 @@ namespace node {
         }
 
         void analyze(analyze_params_t& params) override {
-            step_analyze(params);
+            check_condition(params);
+            body_->set_unpredict();
             body_->analyze(params);
         }
 
@@ -1253,6 +1370,8 @@ namespace node {
             return buf->add_node<node_loop_t>(node_loc_t::loc(), condition_->copy(buf, parent),
                                              static_cast<node_scope_t*>(body_->copy(buf, parent)));
         }
+
+        void set_unpredict() override {};
     };
 
     /* ----------------------------------------------------- */
@@ -1278,10 +1397,13 @@ namespace node {
         }
 
         void analyze(analyze_params_t& params) override {
-            value_t result = condition_->analyze(params);
+            value_t result = condition_->analyze(params).result;
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);
+
+            body1_->set_unpredict();
+            body2_->set_unpredict();
 
             body1_->analyze(params);
             body2_->analyze(params);
@@ -1292,5 +1414,7 @@ namespace node {
                                               static_cast<node_scope_t*>(body1_->copy(buf, parent)),
                                               static_cast<node_scope_t*>(body2_->copy(buf, parent)));
         }
+
+        void set_unpredict() override {};
     };
 }
