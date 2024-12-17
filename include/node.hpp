@@ -1208,8 +1208,18 @@ namespace node {
         node_scope_t* body_;
 
     private:
+        inline void check_step_type(node_type_e type, execute_params_t& params) const {
+            if (type == node_type_e::UNDEF)
+                throw error_execute_t{node_loc_t::loc(), params.program_str,
+                                      "wrong type: undef, excpected int"};
+        }
+
         inline int step(execute_params_t& params) {
             value_t result = condition_->execute(params);
+
+            if (params.is_analyzing)
+                check_step_type(result.type, params);
+
             return static_cast<node_number_t*>(result.value)->get_value();
         }
 
@@ -1235,8 +1245,8 @@ namespace node {
         }
 
         void analyze(analyze_params_t& params) override {
-            while (step_analyze(params))
-                body_->analyze(params);
+            step_analyze(params);
+            body_->analyze(params);
         }
 
         node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
