@@ -1,0 +1,7 @@
+arr2 = array(array(1, 2, 3), array(4, 5, 6), array(7, 8, 9));
+arr = array(0);
+if (1)
+    arr = arr2[?];
+
+arr_ = array(1, 2)[arr[0]];
+print arr_;
