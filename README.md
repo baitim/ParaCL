@@ -46,7 +46,7 @@
 
 * ### Runtime errors
     
-    include flag <code>--noanalyze</code>
+    include flag <code>--noanalyze</code> if you are confident and don't want safety of simulation
 
     * Checking input type
     * Checking array indexes
