@@ -1221,7 +1221,10 @@ namespace node {
             node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
             node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
             int result = evaluate(l_result_number, r_result_number);
-            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+
+            analyze_t a_result{node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            a_result.is_constexpr = a_l_result.is_constexpr & a_r_result.is_constexpr;
+            return a_result;
         }
 
         node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
@@ -1229,7 +1232,10 @@ namespace node {
                                                 left_->copy(buf, parent), right_->copy(buf, parent));
         }
 
-        void set_unpredict() override {}
+        void set_unpredict() override {
+            left_->set_unpredict();
+            right_->set_unpredict();
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -1279,14 +1285,16 @@ namespace node {
             expect_types_ne(res_exec.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
             int result = evaluate(static_cast<node_number_t*>(res_exec.value));
-            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            analyze_t a_result{node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            a_result.is_constexpr = a_res_exec.is_constexpr;
+            return a_result;
         }
 
         node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             return buf->add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
         }
 
-        void set_unpredict() override {}
+        void set_unpredict() override { node_->set_unpredict(); }
     };
 
     /* ----------------------------------------------------- */
@@ -1312,7 +1320,7 @@ namespace node {
             return buf->add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
         }
 
-        void set_unpredict() override {}
+        void set_unpredict() override { argument_->set_unpredict(); }
     };
 
     /* ----------------------------------------------------- */
@@ -1365,7 +1373,9 @@ namespace node {
                                              static_cast<node_scope_t*>(body_->copy(buf, parent)));
         }
 
-        void set_unpredict() override {};
+        void set_unpredict() override {
+            body_->set_unpredict();
+        };
     };
 
     /* ----------------------------------------------------- */
@@ -1409,6 +1419,9 @@ namespace node {
                                               static_cast<node_scope_t*>(body2_->copy(buf, parent)));
         }
 
-        void set_unpredict() override {};
+        void set_unpredict() override {
+            body1_->set_unpredict();
+            body2_->set_unpredict();
+        };
     };
 }

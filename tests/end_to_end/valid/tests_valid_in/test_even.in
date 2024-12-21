@@ -1,0 +1,20 @@
+count = 50;
+
+arr = repeat(0, count);
+i = 0;
+while (i < count) {
+    arr[i] = ?;
+    i = i + 1;
+}
+print arr;
+
+even_cnt = 0;
+i = 0;
+while (i < count) {
+    if (arr[i] % 2 == 0) {
+        even_cnt = even_cnt + 1;
+        print arr[i];
+    }
+    i = i + 1;
+}
+print even_cnt;
