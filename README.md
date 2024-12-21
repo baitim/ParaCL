@@ -23,7 +23,7 @@
     <code>cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake; cmake --build build</code>
 
 6. Run <br>
-    <code>./build/src/paracl [--analyze]? \<program\></code>
+    <code>./build/src/paracl [--noanalyze]? \<program\></code>
 
 ## How to test
 
@@ -46,7 +46,7 @@
 
 * ### Runtime errors
     
-    include flag <code>--analyze</code>
+    include flag <code>--noanalyze</code>
 
     * Checking input type
     * Checking array indexes

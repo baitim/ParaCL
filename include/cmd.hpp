@@ -52,7 +52,7 @@ namespace cmd {
 
     class cmd_is_analyzing_t final : public cmd_flag_t {
         using cmd_flag_t::is_setted_;
-        bool value_ = false;
+        bool value_ = true;
 
     public:
         cmd_is_analyzing_t() : cmd_flag_t("is_analyzing", false, true) {}
@@ -60,8 +60,10 @@ namespace cmd {
         using cmd_flag_t::name;
         
         bool parse(std::string_view flag) override {
-            if (flag == "--analyze")
-                value_ = is_setted_ = true;
+            if (flag == "--noanalyze") {
+                value_ = false;
+                is_setted_ = true;
+            }
             return is_setted_;
         }
     };

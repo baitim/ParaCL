@@ -13,7 +13,7 @@ class bcolors:
     ENDC = "\033[0m"
 
 def run(program, input, exe_file):
-    command = exe_file + " " + program + " --analyze " + " < " + input
+    command = exe_file + " " + program + " < " + input
     result = subprocess.run(command, shell=True, capture_output=True)
     return result.stdout.decode("utf-8")
 
