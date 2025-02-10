@@ -534,9 +534,9 @@ namespace node {
         int level_ = 0;
 
     private:
-        void check_size_out(int size, execute_params_t& params) const {
+        void check_size_out(int size, std::string_view program_str) const {
             if (size <= 0)
-                throw error_execute_t{count_->loc(), params.program_str,
+                throw error_execute_t{count_->loc(), program_str,
                                         "wrong input size of repeat: \"" + std::to_string(size) + "\""
                                       + ", less then 0"};
         }
@@ -561,7 +561,7 @@ namespace node {
             int real_count = static_cast<node_number_t*>(count.value)->get_value();
 
             if (params.is_analyzing)
-                check_size_out(real_count, params);
+                check_size_out(real_count, params.program_str);
 
             std::vector<value_t> values(real_count);
             for (int i : view::iota(0, real_count)) {
@@ -588,6 +588,8 @@ namespace node {
             expect_types_ne(count_result.type, node_type_e::ARRAY, count_->loc(), params);
 
             size_t real_count = static_cast<node_number_t*>(count_result.value)->get_value();
+            check_size_out(real_count, params.program_str);
+
             std::vector<analyze_t> values;
             values.assign(real_count, init_value.result);
             return {values, false};
