@@ -120,8 +120,6 @@ namespace cmd {
                 cmd_flag_t& flag = *flag_.second.get();
                 if (!flag.is_titeled() || flag.is_setted())
                     continue;
-
-                // if (cmd_flag.size() > 2 && cmd_flag.size())
             
                 if (flag.parse(cmd_flag))
                     return;
@@ -129,7 +127,10 @@ namespace cmd {
 
             for (auto& flag_ : flags_) {
                 cmd_flag_t& flag = *flag_.second.get();
-                if (flag.is_titeled() || flag.is_setted())
+                if (flag.is_titeled() || cmd_flag.substr(0, 2) == "--")
+                    continue;
+                
+                if (flag.is_setted())
                     continue;
 
                 if (flag.parse(cmd_flag))
@@ -201,7 +202,7 @@ namespace cmd {
             
             if (is_help) {
 
-                os << print_lblue("Supproted flags <name> <description>:\n");
+                os << print_lblue("Supported flags <name> <description>:\n");
 
                 for (auto flag_ : get_sorted_flags()) {
 
