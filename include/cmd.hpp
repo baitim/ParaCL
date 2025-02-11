@@ -52,16 +52,16 @@ namespace cmd {
 
     class cmd_is_analyzing_t final : public cmd_flag_t {
         using cmd_flag_t::is_setted_;
-        bool value_ = true;
+        bool value_ = false;
 
     public:
-        cmd_is_analyzing_t() : cmd_flag_t("is_analyzing", false, true) {}
+        cmd_is_analyzing_t() : cmd_flag_t("is_analyze_only", false, true) {}
         bool value() const noexcept { return value_; }
         using cmd_flag_t::name;
         
         bool parse(std::string_view flag) override {
-            if (flag == "--noanalyze") {
-                value_ = false;
+            if (flag == "--analyze_only") {
+                value_ = true;
                 is_setted_ = true;
             }
             return is_setted_;
@@ -152,8 +152,8 @@ namespace cmd {
             return static_cast<cmd_program_file_t*>(flag)->value();
         }
 
-        bool is_analyzing() const noexcept {
-            cmd_flag_t* flag = flags_.find("is_analyzing")->second.get();
+        bool is_analyze_only() const noexcept {
+            cmd_flag_t* flag = flags_.find("is_analyze_only")->second.get();
             return static_cast<cmd_is_analyzing_t*>(flag)->value();
         }
     };

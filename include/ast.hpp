@@ -10,8 +10,7 @@ namespace ast {
         void execute(environments::environments_t& env) {
             if (root_) {
                 node::buffer_t execution_buffer;
-                node::execute_params_t params{&execution_buffer, env.os, env.is,
-                                              env.is_analyzing, env.program_str};
+                node::execute_params_t params{&execution_buffer, env.os, env.is, env.program_str};
                 root_->execute(params);
             } else {
                 throw common::error_t{str_red("execute by nullptr")};

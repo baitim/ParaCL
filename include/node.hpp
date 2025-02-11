@@ -114,7 +114,6 @@ namespace node {
         buffer_t* buf;
         std::ostream* os;
         std::istream* is;
-        bool is_analyzing;
         std::string_view program_str;
     };
 
@@ -406,7 +405,7 @@ namespace node {
         value_t execute(execute_params_t& params) override {
             int value;
             *(params.is) >> value;
-            if (params.is_analyzing && !params.is->good())
+            if (!params.is->good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
             
             return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
@@ -569,8 +568,7 @@ namespace node {
             value_t count = count_->execute(params);
             int real_count = static_cast<node_number_t*>(count.value)->get_value();
 
-            if (params.is_analyzing)
-                check_size_out(real_count, params.program_str);
+            check_size_out(real_count, params.program_str);
 
             std::vector<value_t> values(real_count);
             for (int i : view::iota(0, real_count)) {
@@ -795,8 +793,7 @@ namespace node {
             int index = node_index->get_value();
             indexes.pop_back();
 
-            if (params.is_analyzing)
-                execute_check_index_out(index, depth, all_indexes, params);
+            execute_check_index_out(index, depth, all_indexes, params);
 
             value_t& result = e_values_[index];
 
@@ -918,8 +915,7 @@ namespace node {
             execute(params);
             
             std::stringstream print_stream;
-            execute_params_t print_params{params.buf, &print_stream, params.is,
-                                          params.is_analyzing, params.program_str};
+            execute_params_t print_params{params.buf, &print_stream, params.is, params.program_str};
 
             const int size = e_values_.size();
             for (int i : view::iota(0, size - 1))
@@ -1356,8 +1352,7 @@ namespace node {
         inline int step(execute_params_t& params) {
             value_t result = condition_->execute(params);
 
-            if (params.is_analyzing)
-                check_step_type(result.type, params);
+            check_step_type(result.type, params);
 
             return static_cast<node_number_t*>(result.value)->get_value();
         }
