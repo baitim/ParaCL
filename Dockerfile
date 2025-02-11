@@ -22,7 +22,7 @@ RUN ctest --test-dir build/Release --rerun-failed --output-on-failure
 
 RUN conan install . --build=missing -c tools.system.package_manager:mode=install \
     -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Debug
-RUN cmake --preset build; cmake --build build/Debug
+RUN cmake --preset debug; cmake --build build/Debug
 RUN ctest --test-dir build/Debug --rerun-failed --output-on-failure
 
 ENTRYPOINT ["/app"]
