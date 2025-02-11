@@ -76,8 +76,8 @@ namespace cmd {
     private:
         std::pair<int, int> get_cnt_flags() {
             std::pair<int, int> cnt = {0, 0};
-            for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *(it->second.get());
+            for (auto& flag_ : flags_) {
+                cmd_flag_t& flag = *flag_.second.get();
                 
                 cnt.second++;
                 if (flag.is_necessery())
@@ -88,20 +88,18 @@ namespace cmd {
 
     protected:
         void parse_token(std::string_view cmd_flag) {
-            for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *(it->second.get());
-                if (!flag.is_titeled() ||
-                     flag.is_setted())
+            for (auto& flag_ : flags_) {
+                cmd_flag_t& flag = *flag_.second.get();
+                if (!flag.is_titeled() || flag.is_setted())
                     continue;
-
+            
                 if (flag.parse(cmd_flag))
                     return;
             }
 
-            for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *(it->second.get());
-                if (flag.is_titeled() ||
-                    flag.is_setted())
+            for (auto& flag_ : flags_) {
+                cmd_flag_t& flag = *flag_.second.get();
+                if (flag.is_titeled() || flag.is_setted())
                     continue;
 
                 if (flag.parse(cmd_flag))
@@ -121,8 +119,8 @@ namespace cmd {
         }
 
         void check_valid() {
-            for (auto it = flags_.begin(), end = flags_.end(); it != end; ++it) {
-                cmd_flag_t& flag = *it->second.get();
+            for (auto& flag_ : flags_) {
+                cmd_flag_t& flag = *flag_.second.get();
                 if ( flag.is_necessery() &&
                     !flag.is_setted())
                     throw error_undecl_flag_t{flag.name()};
