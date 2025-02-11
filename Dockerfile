@@ -17,16 +17,12 @@ RUN conan profile detect --force
 
 RUN conan install . --build=missing -c tools.system.package_manager:mode=install \
     -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Release
-RUN cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake \
-    -DCMAKE_BUILD_TYPE=Release; cmake --build build
-RUN ctest --test-dir build --rerun-failed --output-on-failure
-
-RUN rm -rf build
+RUN cmake --preset release; cmake --build build/Release
+RUN ctest --test-dir build/Release --rerun-failed --output-on-failure
 
 RUN conan install . --build=missing -c tools.system.package_manager:mode=install \
     -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20 -s build_type=Debug
-RUN cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Debug/generators/conan_toolchain.cmake \
-    -DCMAKE_BUILD_TYPE=Debug; cmake --build build
-RUN ctest --test-dir build --rerun-failed --output-on-failure
+RUN cmake --preset build; cmake --build build/Debug
+RUN ctest --test-dir build/Debug --rerun-failed --output-on-failure
 
 ENTRYPOINT ["/app"]

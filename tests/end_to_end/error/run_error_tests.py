@@ -8,8 +8,8 @@ class bcolors:
     FAIL = '\033[31m'
     ENDC = '\033[0m'
 
-curr_dir = str(Path(__file__).parent)
-proj_dir = curr_dir + "/../../.."
+tests_dir = str(Path(__file__).parent)
+build_dir = str(Path.cwd())
 is_OK = True
 
 def run(program, input, exe_file):
@@ -21,11 +21,11 @@ def run(program, input, exe_file):
         is_OK = False
     return result.returncode
 
-paracl_exe = proj_dir + "/build/src/paracl"
-program_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/error/tests_error_in/test_*.in")))
+paracl_exe = build_dir + "/paracl"
+program_files = list(map(str, glob.glob(tests_dir + "/tests_error_in/test_*.in")))
 program_files.sort()
 
-input_data_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/error/input4tests_in/input_*.in")))
+input_data_files = list(map(str, glob.glob(tests_dir + "/input4tests_in/input_*.in")))
 input_data_files.sort()
 
 if (len(input_data_files) != len(program_files)):

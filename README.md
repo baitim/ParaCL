@@ -16,20 +16,21 @@
     write <code>conan profile detect --force</code> in terminal
 
 4. Init dependencies <br>
-    write <code>conan install . --build=missing -c tools.system.package_manager:mode=install -c tools.system.package_manager:sudo=True -s compiler.cppstd=gnu20</code> in terminal <br>
+    write <code>conan install . --build=missing -s compiler.cppstd=gnu20</code> in terminal <br>
     maybe you will need these flags for the conan <code>-s build_type=Debug</code>
     
 5. Build <br>
-    <code>cmake . -B build -DCMAKE_TOOLCHAIN_FILE=build/Release/generators/conan_toolchain.cmake; cmake --build build</code>
+    <code>cmake --preset release</code><br>
+    <code>cmake --build build/Release</code>
 
 6. Run <br>
-    <code>./build/src/paracl [--noanalyze]? \<program\></code>
+    <code>./build/Release/src/paracl [--analyze-only]? \<program\></code>
 
 ## How to test
 
 * Testing
     - valid & error end to end <br>
-        <code>ctest --test-dir build --output-on-failure</code>
+        <code>ctest --test-dir build/Release --output-on-failure</code>
 
 * Print
     - error end to end <br>
@@ -42,14 +43,7 @@
 * ### Compile errors
     * Unknown token
     * Undeclared variable
-    * Wrong types <br>
-
-* ### Runtime errors
-    
-    include flag <code>--noanalyze</code> if you are confident and don't want safety of simulation
-
-    * Checking input type
-    * Checking array indexes
+    * Wrong types
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 

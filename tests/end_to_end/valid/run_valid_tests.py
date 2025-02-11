@@ -3,8 +3,8 @@ import glob
 import subprocess
 from pathlib import Path
 
-curr_dir = str(Path(__file__).parent)
-proj_dir = curr_dir + "/../../.."
+tests_dir = str(Path(__file__).parent)
+build_dir = str(Path.cwd())
 
 def run(program, input, answer_dir, exe_file):
     os.system("mkdir -p " + answer_dir)
@@ -16,13 +16,13 @@ def run(program, input, answer_dir, exe_file):
     ans_file.write(subprocess.check_output(command, shell=True).decode("utf-8"))
     ans_file.close()
 
-paracl_exe = proj_dir + "/build/src/paracl"
-paracl_answers_dir =  proj_dir + "/tests/end_to_end/valid/answers_get"
+paracl_exe = build_dir + "/paracl"
+paracl_answers_dir =  tests_dir + "/answers_get"
 
-program_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/valid/tests_valid_in/test_*.in")))
+program_files = list(map(str, glob.glob(tests_dir + "/tests_valid_in/test_*.in")))
 program_files.sort()
 
-input_data_files = list(map(str, glob.glob(proj_dir + "/tests/end_to_end/valid/input4tests_in/input_*.in")))
+input_data_files = list(map(str, glob.glob(tests_dir + "/input4tests_in/input_*.in")))
 input_data_files.sort()
 
 if (len(input_data_files) != len(program_files)):
