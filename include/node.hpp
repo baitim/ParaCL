@@ -139,8 +139,9 @@ namespace node {
     class node_scope_t;
 
     class node_expression_t : public node_t,
-                              virtual public node_loc_t {
+                              public node_loc_t {
     public:
+        node_expression_t(const location_t& loc) : node_loc_t(loc) {}
         virtual value_t   execute(execute_params_t& params) = 0;
         virtual analyze_t analyze(analyze_params_t& params) = 0;
         virtual void set_unpredict() = 0;
@@ -151,6 +152,7 @@ namespace node {
 
     class node_type_t : public node_expression_t {
     public:
+        node_type_t(const location_t& loc) : node_expression_t(loc) {}
         virtual void print(execute_params_t& params) = 0;
         virtual int  level() const = 0;
         void set_unpredict() override {}
@@ -158,6 +160,7 @@ namespace node {
 
     class node_simple_type_t : public node_type_t {
     public:
+        node_simple_type_t(const location_t& loc) : node_type_t(loc) {}
         int level() const override { return 0; };
     };
 
@@ -213,8 +216,9 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_statement_t : public node_t,
-                             virtual public node_loc_t {
+                             public node_loc_t {
     public:
+        node_statement_t(const location_t& loc) : node_loc_t(loc) {}
         virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_unpredict() = 0;
@@ -227,7 +231,8 @@ namespace node {
         node_expression_t* expr_ = nullptr;
 
     public:
-        node_instruction_t(const location_t& loc, node_expression_t* expr) : node_loc_t(loc), expr_(expr) {}
+        node_instruction_t(const location_t& loc, node_expression_t* expr)
+        : node_statement_t(loc), expr_(expr) {}
 
         void execute(execute_params_t& params) override {
             assert(expr_);
@@ -307,7 +312,8 @@ namespace node {
         std::vector<node_statement_t*> statements_;
 
     public:
-        node_scope_t(const location_t& loc, node_scope_t* parent) : node_loc_t(loc), parent_(parent) {} 
+        node_scope_t(const location_t& loc, node_scope_t* parent)
+        : node_statement_t(loc), parent_(parent) {} 
 
         void add_statement(node_statement_t* node) { statements_.push_back(node); }
 
@@ -351,7 +357,7 @@ namespace node {
         int number_;
 
     public:
-        node_number_t(const location_t& loc, int number) : node_loc_t(loc), number_(number) {}
+        node_number_t(const location_t& loc, int number) : node_simple_type_t(loc), number_(number) {}
 
         value_t execute(execute_params_t& params) override {
             return {node_type_e::NUMBER, this};
@@ -374,7 +380,7 @@ namespace node {
 
     class node_undef_t final : public node_simple_type_t {
     public:
-        node_undef_t(const location_t& loc) : node_loc_t(loc) {}
+        node_undef_t(const location_t& loc) : node_simple_type_t(loc) {}
 
         value_t execute(execute_params_t& params) override {
             return {node_type_e::UNDEF, this};
@@ -395,7 +401,7 @@ namespace node {
 
     class node_input_t final : public node_simple_type_t {
     public:
-        node_input_t(const location_t& loc) : node_loc_t(loc) {}
+        node_input_t(const location_t& loc) : node_simple_type_t(loc) {}
 
         value_t execute(execute_params_t& params) override {
             int value;
@@ -420,7 +426,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_indexes_t final : public node_t,
-                                 virtual public node_loc_t {
+                                 public node_loc_t {
         std::vector<node_expression_t*> indexes_;
 
     public:
@@ -493,8 +499,9 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_array_value_t : public node_t,
-                               virtual public node_loc_t {
+                               public node_loc_t {
     public:
+        node_array_value_t(const location_t& loc) : node_loc_t(loc) {}
         virtual void add_value(std::vector<value_t>& values,
                                execute_params_t& params) const = 0;
         virtual void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) = 0;
@@ -508,7 +515,7 @@ namespace node {
 
     public:
         node_expression_value_t(const location_t& loc, node_expression_t* value)
-        : node_loc_t(loc), value_(value) {}
+        : node_array_value_t(loc), value_(value) {}
 
         void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
             value_t result = value_->execute(params);
@@ -534,6 +541,8 @@ namespace node {
         int level_ = 0;
 
     private:
+        node_repeat_values_t(const location_t& loc) : node_array_value_t(loc) {}
+
         void check_size_out(int size, std::string_view program_str) const {
             if (size <= 0)
                 throw error_execute_t{count_->loc(), program_str,
@@ -543,7 +552,7 @@ namespace node {
 
     public:
         node_repeat_values_t(const location_t& loc, node_expression_t* value, node_expression_t* count)
-        : node_loc_t(loc), value_(value), count_(count) {}
+        : node_array_value_t(loc), value_(value), count_(count) {}
 
         void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
             std::vector<value_t> result = execute(params).first;
@@ -611,11 +620,12 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class node_list_values_t : public node_t,
-                               virtual public node_loc_t,
+                               public node_loc_t,
                                public node_array_values_t {
         std::vector<node_array_value_t*> values_;
         int level_ = 0;
 
+    private:
         void level_analyze(const std::vector<analyze_t>& values, analyze_params_t& params) {
             bool is_setted = false;
             const int size = values.size();
@@ -865,7 +875,7 @@ namespace node {
 
     public:
         node_array_t(const location_t& loc, node_array_values_t* init_values, node_indexes_t* indexes)
-        : node_loc_t(loc), init_values_(init_values), init_indexes_(indexes) {}
+        : node_type_t(loc), init_values_(init_values), init_indexes_(indexes) {}
 
         value_t execute(execute_params_t& params) override {
             if (!is_inited_)
@@ -945,7 +955,7 @@ namespace node {
     /* ----------------------------------------------------- */
 
     class settable_value_t : public node_t,
-                             virtual public node_loc_t {
+                             public node_loc_t {
         bool is_setted = false;
         value_t   e_value_;
         analyze_t a_value_;
@@ -1004,6 +1014,8 @@ namespace node {
         }
 
     public:
+        settable_value_t(const location_t& loc) : node_loc_t(loc) {}
+
         value_t execute(node_indexes_t* indexes, execute_params_t& params) {
             value_t& real_value = shift(indexes->execute(params), params);
             return real_value;
@@ -1053,10 +1065,13 @@ namespace node {
     class node_variable_t final : public id_t,
                                   public settable_value_t {
     public:
-        node_variable_t(const location_t& loc, std::string_view id) : node_loc_t(loc), id_t(id) {}
+        node_variable_t(const location_t& loc, std::string_view id)
+        : id_t(id), settable_value_t(loc) {}
+
         node_variable_t* copy(buffer_t* buf) const {
             return buf->add_node<node_variable_t>(node_loc_t::loc(), id_t::get_name());
         }
+
         void set_loc(const location_t& loc) { node_loc_t::set_loc(loc); }
     };
 
@@ -1068,7 +1083,7 @@ namespace node {
 
     public:
         node_lvalue_t(const location_t& loc, node_variable_t* variable, node_indexes_t* indexes)
-        : node_loc_t(loc), variable_(variable), indexes_(indexes) {}
+        : node_expression_t(loc), variable_(variable), indexes_(indexes) {}
 
         value_t execute(execute_params_t& params) override {
             return variable_->execute(indexes_, params);
@@ -1118,7 +1133,7 @@ namespace node {
 
     public:
         node_assign_t(const location_t& loc, node_lvalue_t* lvalue, node_expression_t* rvalue)
-        : node_loc_t(loc), lvalue_(lvalue), rvalue_(rvalue) {}
+        : node_expression_t(loc), lvalue_(lvalue), rvalue_(rvalue) {}
         value_t execute(execute_params_t& params) override {
             return lvalue_->set_value(rvalue_->execute(params), params);
         }
@@ -1186,7 +1201,7 @@ namespace node {
     public:
         node_bin_op_t(const location_t& loc, binary_operators_e type,
                       node_expression_t* left, node_expression_t* right)
-        : node_loc_t(loc), type_(type), left_(left), right_(right) {}
+        : node_expression_t(loc), type_(type), left_(left), right_(right) {}
 
         value_t execute(execute_params_t& params) override {
             value_t l_result = left_ ->execute(params);
@@ -1264,7 +1279,7 @@ namespace node {
 
     public:
         node_un_op_t(const location_t& loc, unary_operators_e type, node_expression_t* node)
-        : node_loc_t(loc), type_(type), node_(node) {}
+        : node_expression_t(loc), type_(type), node_(node) {}
 
         value_t execute(execute_params_t& params) override {
             value_t res_exec = node_->execute(params);
@@ -1306,7 +1321,7 @@ namespace node {
 
     public:
         node_print_t(const location_t& loc, node_expression_t* argument)
-        : node_loc_t(loc), argument_(argument) {}
+        : node_expression_t(loc), argument_(argument) {}
 
         value_t execute(execute_params_t& params) override {
             value_t result = argument_->execute(params);
@@ -1357,7 +1372,7 @@ namespace node {
 
     public:
         node_loop_t(const location_t& loc, node_expression_t* condition, node_scope_t* body)
-        : node_loc_t(loc), condition_(condition), body_(body) {}
+        : node_statement_t(loc), condition_(condition), body_(body) {}
 
         void execute(execute_params_t& params) override {
             while (step(params))
@@ -1390,7 +1405,7 @@ namespace node {
     public:
         node_fork_t(const location_t& loc, node_expression_t* condition,
                     node_scope_t* body1, node_scope_t* body2)
-        : node_loc_t(loc), condition_(condition), body1_(body1), body2_(body2) {}
+        : node_statement_t(loc), condition_(condition), body1_(body1), body2_(body2) {}
 
         void execute(execute_params_t& params) override {
             value_t result = condition_->execute(params);
