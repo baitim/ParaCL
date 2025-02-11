@@ -49,7 +49,7 @@ namespace cmd {
         std::string value_;
 
     public:
-        cmd_program_file_t() : cmd_flag_t("program_file", true, false, "file with paracl source code") {}
+        cmd_program_file_t() : cmd_flag_t("<program_file>", true, false, "file with paracl source code") {}
         const std::string& value() const { return value_; }
         using cmd_flag_t::name;
 
@@ -65,12 +65,12 @@ namespace cmd {
         bool value_ = false;
 
     public:
-        cmd_is_analyze_only_t() : cmd_flag_t("is_analyze_only", false, true, "turn off execution") {}
+        cmd_is_analyze_only_t() : cmd_flag_t("--analyze_only", false, true, "turn off execution") {}
         bool value() const noexcept { return value_; }
         using cmd_flag_t::name;
         
         bool parse(std::string_view flag) override {
-            if (flag == "--analyze_only") {
+            if (flag == name()) {
                 value_ = true;
                 is_setted_ = true;
             }
@@ -83,12 +83,12 @@ namespace cmd {
         bool value_ = false;
 
     public:
-        cmd_is_help_t() : cmd_flag_t("is_help", false, true, "print info") {}
+        cmd_is_help_t() : cmd_flag_t("--help", false, true, "print info") {}
         bool value() const noexcept { return value_; }
         using cmd_flag_t::name;
         
         bool parse(std::string_view flag) override {
-            if (flag == "--help") {
+            if (flag == name()) {
                 value_ = true;
                 is_setted_ = true;
             }
@@ -120,6 +120,8 @@ namespace cmd {
                 cmd_flag_t& flag = *flag_.second.get();
                 if (!flag.is_titeled() || flag.is_setted())
                     continue;
+
+                // if (cmd_flag.size() > 2 && cmd_flag.size())
             
                 if (flag.parse(cmd_flag))
                     return;
@@ -157,6 +159,14 @@ namespace cmd {
             }
         }
 
+        std::vector<std::pair<std::string, cmd_flag_t*>> get_sorted_flags() const {
+            std::vector<std::pair<std::string, cmd_flag_t*>> sorted_flags;
+            for (auto& flag_ : flags_)
+                sorted_flags.push_back({flag_.first, flag_.second.get()});
+            sort(sorted_flags.begin(), sorted_flags.end());
+            return sorted_flags;
+        }
+
         virtual ~cmd_flags_t() = default;
     };
 
@@ -177,26 +187,31 @@ namespace cmd {
         }
 
         const std::string& program_file() const {
-            cmd_flag_t* flag = flags_.find("program_file")->second.get();
+            cmd_flag_t* flag = flags_.find("<program_file>")->second.get();
             return static_cast<cmd_program_file_t*>(flag)->value();
         }
 
         bool is_analyze_only() const noexcept {
-            cmd_flag_t* flag = flags_.find("is_analyze_only")->second.get();
+            cmd_flag_t* flag = flags_.find("--analyze_only")->second.get();
             return static_cast<cmd_is_analyze_only_t*>(flag)->value();
         }
         std::ostream& lookup_print_help(std::ostream& os) const {
-            cmd_flag_t* flag = flags_.find("is_help")->second.get();
+            cmd_flag_t* flag = flags_.find("--help")->second.get();
             bool is_help = static_cast<cmd_is_help_t*>(flag)->value();
+            
             if (is_help) {
-                for (auto& flag_ : flags_) {
-                    os << print_lcyan(flag_.first);
+
+                os << print_lblue("Supproted flags <name> <description>:\n");
+
+                for (auto flag_ : get_sorted_flags()) {
+
+                    os << "  " << print_lcyan(flag_.first);
 
                     int added_scapes = flag_.second->max_length() - flag_.first.size();
                     for (int _ : view::iota(0, added_scapes))
                         os << " ";
 
-                    const cmd_flag_t& flag = *flag_.second.get();
+                    const cmd_flag_t& flag = *flag_.second;
                     os << print_lcyan(flag.description()) << "\n";
                 }
             }
