@@ -24,7 +24,7 @@
     <code>cmake --build build/Release</code>
 
 6. Run <br>
-    <code>./build/Release/src/paracl [--analyze-only]? \<program\></code>
+    <code>./build/Release/src/paracl \<program\></code>
 
 ## How to test
 
@@ -44,6 +44,10 @@
     * Unknown token
     * Undeclared variable
     * Wrong types
+
+## Supported flags
+* print info <code>--help</code>
+* analization without execution <code>--analyze_only</code>
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
