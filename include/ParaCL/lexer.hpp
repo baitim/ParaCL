@@ -1,12 +1,12 @@
 #pragma once
 
 #include "ANSI_colors.hpp"
-#include <iostream>
 
 #ifndef yyFlexLexer
-#include <../FlexLexer.h>
+#include <FlexLexer.h>
 #endif
 
+#include <iostream>
 #include <fstream>
 #include <sstream>
 

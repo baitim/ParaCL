@@ -24,8 +24,9 @@ add_executable(paracl
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
+target_include_directories(paracl ${CMAKE_CURRENT_BINARY_DIR})
 target_sources(paracl
     PRIVATE
     FILE_SET HEADERS
-    BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+    BASE_DIRS ${INCLUDE_DIR}
 )
