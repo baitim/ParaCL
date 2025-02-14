@@ -25,8 +25,7 @@ add_executable(paracl
     ${FLEX_lexer_OUTPUTS}
 )
 target_sources(paracl
-PRIVATE
-FILE_SET HEADERS
-BASE_DIRS ${INCLUDE_DIR}
+    PRIVATE
+    FILE_SET HEADERS
+    BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_include_directories(paracl PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
