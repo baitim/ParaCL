@@ -4,7 +4,7 @@
 #include <iostream>
 
 #ifndef yyFlexLexer
-#include <FlexLexer.h>
+#include <../FlexLexer.h>
 #endif
 
 #include <fstream>
