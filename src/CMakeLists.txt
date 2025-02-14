@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.11)
 project(src)
 
-set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 find_package(BISON REQUIRED)
 find_package(FLEX  REQUIRED)
@@ -24,20 +24,8 @@ add_executable(paracl
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
-target_include_directories(paracl PUBLIC ${INCLUDE_DIR})
-target_include_directories(paracl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-
-target_compile_features(paracl PRIVATE cxx_std_20)
-
-set(PYTHON_SCRIPT_RUN_VALID "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/valid/run_valid_tests.py")
-set(PYTHON_SCRIPT_RUN_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/error/run_error_tests.py")
-
-add_test(
-    NAME end_to_end_valid_paracl_target
-    COMMAND bash -c "python3 ${PYTHON_SCRIPT_RUN_VALID}"
-)
-
-add_test(
-    NAME end_to_end_error_paracl_target
-    COMMAND bash -c "python3 ${PYTHON_SCRIPT_RUN_ERROR}"
+target_sources(paracl
+    PRIVATE
+    FILE_SET HEADERS
+    BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )

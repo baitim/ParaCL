@@ -1,6 +1,6 @@
-#include "ast.hpp"
-#include "driver.hpp"
-#include "cmd.hpp"
+#include "ParaCL/ast.hpp"
+#include "ParaCL/driver.hpp"
+#include "ParaCL/cmd.hpp"
 
 int main(int argc, char* argv[]) {
     cmd::cmd_data_t cmd_data;

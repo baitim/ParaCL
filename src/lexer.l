@@ -3,7 +3,7 @@
 
 %{
     #include "parser.tab.hh"
-    #include "driver.hpp"
+    #include "ParaCL/driver.hpp"
     #define YY_USER_ACTION update_new_token();
 %}
 
