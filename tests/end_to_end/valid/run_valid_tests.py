@@ -16,7 +16,7 @@ def run(program, input, answer_dir, exe_file):
     ans_file.write(subprocess.check_output(command, shell=True).decode("utf-8"))
     ans_file.close()
 
-paracl_exe = build_dir + "/paracl"
+paracl_exe = build_dir + "/../../src/paracl"
 paracl_answers_dir =  tests_dir + "/answers_get"
 
 program_files = list(map(str, glob.glob(tests_dir + "/tests_valid_in/test_*.in")))
@@ -27,7 +27,7 @@ input_data_files.sort()
 
 if (len(input_data_files) != len(program_files)):
     print("count of input files != count of program files")
-    exit()
+    exit(1)
 
 for test_num in range(0, len(input_data_files)) :
     run(program_files[test_num], input_data_files[test_num], paracl_answers_dir, paracl_exe)

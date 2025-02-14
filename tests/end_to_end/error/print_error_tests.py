@@ -26,7 +26,7 @@ input_data_files.sort()
 
 if (len(input_data_files) != len(program_files)):
     print("count of input files != count of program files")
-    exit()
+    exit(1)
 
 result_str = ""
 for test_num in range(0, len(input_data_files)) :

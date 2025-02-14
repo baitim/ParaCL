@@ -1,0 +1,10 @@
+[project]
+name = "paracl"
+version = "1.0"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = [
+  "conan>=2.8.0",
+]
