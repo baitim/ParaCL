@@ -1118,7 +1118,7 @@ namespace node {
             return buf->add_node<node_lvalue_t>(node_loc_t::loc(), var_node, indexes_->copy(buf, parent));
         }
 
-        void set_unpredict() override { variable_->set_unpredict(); }
+        void set_unpredict() override { if (variable_) variable_->set_unpredict(); }
     };
 
     /* ----------------------------------------------------- */
