@@ -17,6 +17,7 @@ class paraclRecipe(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "fPIC": [True, False]}
     default_options = {"shared": False, "fPIC": True}
+    requires = "flex/2.6.4", "bison/3.8.2"
     test_requires = "gtest/1.15.0"
 
     # Sources are located in the same place as this recipe, copy them to the recipe
