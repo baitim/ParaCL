@@ -2,7 +2,7 @@
 %option yyclass="yy::lexer_t"
 
 %{
-    #include "ptab.h"
+    #include "parser.tab.hh"
     #include "ParaCL/driver.hpp"
     #define YY_USER_ACTION update_new_token();
 %}
