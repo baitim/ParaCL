@@ -39,6 +39,7 @@ Grammar:
 %define api.value.type variant
 %locations
 %define api.location.file "location.hh"
+%define YY_PREFIX paracl_
 
 %code requires
 {
