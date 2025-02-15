@@ -30,11 +30,7 @@ target_sources(paracl
     BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_library(ParaCL
-    driver.cpp
-    ${BISON_parser_OUTPUTS}
-    ${FLEX_lexer_OUTPUTS}
-)
+add_library(ParaCL driver.cpp)
 target_include_directories(ParaCL PUBLIC
     $<BUILD_INTERFACE:${INCLUDE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>

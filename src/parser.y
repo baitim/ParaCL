@@ -42,7 +42,6 @@ Grammar:
 
 %code requires
 {
-    #define YY_PREFIX parser_
     #include "ParaCL/node.hpp"
     using namespace node;
     #include <stack>
