@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.11)
 project(src)
 
-set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
-find_package(BISON REQUIRED)
 find_package(FLEX  REQUIRED)
+find_package(BISON REQUIRED)
 
 flex_target(lexer
     lexer.l
@@ -24,20 +24,33 @@ add_executable(paracl
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
-target_include_directories(paracl PUBLIC ${INCLUDE_DIR})
-target_include_directories(paracl PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-
-target_compile_features(paracl PRIVATE cxx_std_20)
-
-set(PYTHON_SCRIPT_RUN_VALID "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/valid/run_valid_tests.py")
-set(PYTHON_SCRIPT_RUN_ERROR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/end_to_end/error/run_error_tests.py")
-
-add_test(
-    NAME end_to_end_valid_paracl_target
-    COMMAND bash -c "python3 ${PYTHON_SCRIPT_RUN_VALID}"
+target_sources(paracl
+    PRIVATE
+    FILE_SET HEADERS
+    BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_test(
-    NAME end_to_end_error_paracl_target
-    COMMAND bash -c "python3 ${PYTHON_SCRIPT_RUN_ERROR}"
+add_library(ParaCL
+    driver.cpp
+    ${BISON_parser_OUTPUTS}
+    ${FLEX_lexer_OUTPUTS}
+)
+target_include_directories(ParaCL PUBLIC
+    $<BUILD_INTERFACE:${INCLUDE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+
+install(TARGETS ParaCL EXPORT ParaCLTargets
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+)
+
+install(DIRECTORY ${INCLUDE_DIR}/ParaCL DESTINATION include)
+
+install(EXPORT ParaCLTargets
+    FILE ParaCLConfig.cmake
+    DESTINATION lib/cmake/ParaCL
 )

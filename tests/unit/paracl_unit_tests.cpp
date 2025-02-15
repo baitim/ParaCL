@@ -47,3 +47,8 @@ TEST(Paracl_shuffle, end_to_end) {
             EXPECT_EQ(ans_get[j], ans_src[j]) << "test: " << i + 1 << " string: " << j + 1;
     }
 }
+
+int main(int argc, char** argv) {
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

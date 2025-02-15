@@ -42,7 +42,7 @@ Grammar:
 
 %code requires
 {
-    #include "node.hpp"
+    #include "ParaCL/node.hpp"
     using namespace node;
     #include <stack>
     namespace yy { class driver_t; }
@@ -53,7 +53,7 @@ Grammar:
 
 %code
 {
-    #include "driver.hpp"
+    #include "ParaCL/driver.hpp"
     namespace yy {
         parser::token_type yylex(parser::semantic_type* yylval,
                                  location* loc,

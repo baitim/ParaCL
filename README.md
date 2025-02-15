@@ -4,6 +4,10 @@
 
  Implementation of the simple programming language, with flex and bison.
 
+## How to integrate
+ 
+ use [storage](https://github.com/baitim/ConanPackages), project = "paracl", version = "1.0", user = "baitim"
+
 ## How to run
 
 1. Clone <br>
@@ -13,12 +17,13 @@
     <code>cd ParaCL</code>
 
 3. Prepare conan <br>
-    write <code>conan profile detect --force</code> in terminal
+    <code>uv sync --group dev; source .venv/bin/activate</code><br>
+    <code>conan profile detect --force</code>
 
 4. Init dependencies <br>
-    write <code>conan install . --build=missing -s compiler.cppstd=gnu20</code> in terminal <br>
+    <code>conan install . --build=missing -s compiler.cppstd=gnu20</code><br>
     maybe you will need these flags for the conan <code>-s build_type=Debug</code>
-    
+
 5. Build <br>
     <code>cmake --preset release</code><br>
     <code>cmake --build build/Release</code>
