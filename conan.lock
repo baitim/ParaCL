@@ -1,13 +1,9 @@
 {
     "version": "0.5",
     "requires": [
-        "m4/1.4.19#b38ced39a01e31fef5435bc634461fd2%1700758725.451",
-        "gtest/1.15.0#9eb07f548819215e766e41399858454f%1721318797.609",
-        "flex/2.6.4#e35bc44b3fcbcd661e0af0dc5b5b1ad4%1674818991.113"
+        "gtest/1.15.0#9eb07f548819215e766e41399858454f%1721318797.609"
     ],
-    "build_requires": [
-        "m4/1.4.19#b38ced39a01e31fef5435bc634461fd2%1700758725.451"
-    ],
+    "build_requires": [],
     "python_requires": [],
     "config_requires": []
 }
