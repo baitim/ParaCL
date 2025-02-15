@@ -14,7 +14,7 @@ flex_target(lexer
 bison_target(parser
     parser.y
     ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    COMPILE_FLAGS "-Wcounterexamples --defines=${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh"
+    COMPILE_FLAGS "-Wcounterexamples --defines=${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh -DYY_NO_UNPUT"
 )
 
 add_flex_bison_dependency(lexer parser)
