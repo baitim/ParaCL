@@ -34,15 +34,19 @@ add_executable(paracl
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
+pre_build_modify_parser_header(paracl)
 target_sources(paracl
     PRIVATE
     FILE_SET HEADERS
     BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
-pre_build_modify_parser_header(paracl)
 
 
-add_library(ParaCL driver.cpp)
+add_library(ParaCL
+    driver.cpp
+    ${BISON_parser_OUTPUTS}
+    ${FLEX_lexer_OUTPUTS}
+)
 pre_build_modify_parser_header(ParaCL)
 target_sources(ParaCL
     PRIVATE
