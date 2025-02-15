@@ -1,6 +1,6 @@
 #pragma once
 
-#include "parser.tab.hh"
+#include "ptab.h"
 #include "ast.hpp"
 #include "lexer.hpp"
 
