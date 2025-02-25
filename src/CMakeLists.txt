@@ -11,43 +11,49 @@ flex_target(lexer
     ${CMAKE_CURRENT_BINARY_DIR}/lexer.cpp
 )
 
+if(DEFINED ENV{CI})
+    set(BISON_PARSER_TAB_HH "parser.tab.hh")
+else()
+    set(BISON_PARSER_TAB_HH "${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh")
+endif()
+
 bison_target(parser
     parser.y
     ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    COMPILE_FLAGS "-Wcounterexamples --defines=${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh"
+    COMPILE_FLAGS "-Wcounterexamples --defines=${BISON_PARSER_TAB_HH}"
 )
 
 add_flex_bison_dependency(lexer parser)
 
-function(pre_build_modify_parser_header target_name)
-    add_custom_command(
-        TARGET ${target_name} PRE_BUILD
-        COMMAND sed -i -e "45s/.*/#ifndef YY_YY_PARACL_SRC_PARSER_TAB_HH/" ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
-        COMMAND sed -i -e "46s/.*/#define YY_YY_PARACL_SRC_PARSER_TAB_HH/" ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
-        COMMENT "Modifying parser.tab.hh for target ${target_name}"
+if(DEFINED ENV{CI})
+    add_custom_target(copy_parser_tab ALL
+        COMMAND ${CMAKE_COMMAND} -E move
+        ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.hh
+        ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
+        COMMENT "Copying parser.tab.hh from source directory to binary directory"
         DEPENDS ${BISON_parser_OUTPUTS}
     )
-endfunction()
+endif()
 
 add_executable(paracl
     driver.cpp
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
-pre_build_modify_parser_header(paracl)
 target_sources(paracl
     PRIVATE
     FILE_SET HEADERS
     BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
-
+if(DEFINED ENV{CI})
+    add_dependencies(paracl copy_parser_tab)
+endif()
 
 add_library(ParaCL
     driver.cpp
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
-pre_build_modify_parser_header(ParaCL)
 target_sources(ParaCL
     PRIVATE
     FILE_SET HEADERS
@@ -58,6 +64,9 @@ target_include_directories(ParaCL INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include>
 )
+if(DEFINED ENV{CI})
+    add_dependencies(ParaCL copy_parser_tab)
+endif()
 
 install(TARGETS ParaCL EXPORT ParaCLTargets
     INCLUDES DESTINATION include
