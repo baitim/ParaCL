@@ -11,7 +11,7 @@ flex_target(lexer
     ${CMAKE_CURRENT_BINARY_DIR}/lexer.cpp
 )
 
-if(DEFINED ENV{CI})
+if(DEFINED ENV{CONAN_PACKAGE})
     set(BISON_PARSER_TAB_HH "parser.tab.hh")
 else()
     set(BISON_PARSER_TAB_HH "${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh")
@@ -25,9 +25,9 @@ bison_target(parser
 
 add_flex_bison_dependency(lexer parser)
 
-if(DEFINED ENV{CI})
+if(DEFINED ENV{CONAN_PACKAGE})
     add_custom_target(copy_parser_tab ALL
-        COMMAND ${CMAKE_COMMAND} -E move
+        COMMAND ${CMAKE_COMMAND} -E rename
         ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.hh
         ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
         COMMENT "Copying parser.tab.hh from source directory to binary directory"
@@ -45,7 +45,7 @@ target_sources(paracl
     FILE_SET HEADERS
     BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
 )
-if(DEFINED ENV{CI})
+if(DEFINED ENV{CONAN_PACKAGE})
     add_dependencies(paracl copy_parser_tab)
 endif()
 
@@ -64,7 +64,7 @@ target_include_directories(ParaCL INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include>
 )
-if(DEFINED ENV{CI})
+if(DEFINED ENV{CONAN_PACKAGE})
     add_dependencies(ParaCL copy_parser_tab)
 endif()
 
