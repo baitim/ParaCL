@@ -81,7 +81,6 @@ jobs:
 
       - name: create conan package
         run: |
-          echo "CONAN_PACKAGE=true" >> $GITHUB_ENV
           conan create . --build=missing -s build_type=Release
           conan create . --build=missing -s build_type=Debug
 

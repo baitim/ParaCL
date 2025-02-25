@@ -1,3 +1,4 @@
+import os
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 
@@ -36,6 +37,7 @@ class paraclRecipe(ConanFile):
         tc.generate()
 
     def build(self):
+        os.environ["CONAN_PACKAGE"] = "1"
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
