@@ -30,7 +30,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
         COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.hh
         ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
-        COMMENT "Moving parser.tab.hh from source directory to binary directory"
+        COMMENT "Copying parser.tab.hh from source directory to binary directory"
         DEPENDS ${BISON_parser_OUTPUTS}
     )
 endif()

@@ -209,7 +209,7 @@ namespace cmd {
                     os << "  " << print_lcyan(flag_.first);
 
                     int added_scapes = flag_.second->max_length() - flag_.first.size();
-                    for (int _ : view::iota(0, added_scapes))
+                    for ([[maybe_unused]] int _ : view::iota(0, added_scapes))
                         os << " ";
 
                     const cmd_flag_t& flag = *flag_.second;
