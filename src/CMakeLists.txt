@@ -49,32 +49,33 @@ if(DEFINED ENV{CONAN_PACKAGE})
     add_dependencies(paracl copy_parser_tab)
 endif()
 
-add_library(ParaCL
-    driver.cpp
-    ${BISON_parser_OUTPUTS}
-    ${FLEX_lexer_OUTPUTS}
-)
-target_sources(ParaCL
-    PRIVATE
-    FILE_SET HEADERS
-    BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
-)
-target_include_directories(ParaCL INTERFACE
-    $<BUILD_INTERFACE:${INCLUDE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
 if(DEFINED ENV{CONAN_PACKAGE})
+    add_library(ParaCL
+        driver.cpp
+        ${BISON_parser_OUTPUTS}
+        ${FLEX_lexer_OUTPUTS}
+    )
+    target_sources(ParaCL
+        PRIVATE
+        FILE_SET HEADERS
+        BASE_DIRS ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    target_include_directories(ParaCL INTERFACE
+        $<BUILD_INTERFACE:${INCLUDE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+        $<INSTALL_INTERFACE:include>
+    )
+
     add_dependencies(ParaCL copy_parser_tab)
+
+    install(TARGETS ParaCL EXPORT ParaCLTargets
+        INCLUDES DESTINATION include
+    )
+
+    install(DIRECTORY ${INCLUDE_DIR}/ParaCL DESTINATION include)
+
+    install(EXPORT ParaCLTargets
+        FILE ParaCLConfig.cmake
+        DESTINATION lib/cmake/ParaCL
+    )
 endif()
-
-install(TARGETS ParaCL EXPORT ParaCLTargets
-    INCLUDES DESTINATION include
-)
-
-install(DIRECTORY ${INCLUDE_DIR}/ParaCL DESTINATION include)
-
-install(EXPORT ParaCLTargets
-    FILE ParaCLConfig.cmake
-    DESTINATION lib/cmake/ParaCL
-)
