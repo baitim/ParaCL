@@ -50,6 +50,8 @@ if(DEFINED ENV{CONAN_PACKAGE})
 endif()
 
 if(DEFINED ENV{CONAN_PACKAGE})
+    include(GNUInstallDirs)
+
     add_library(ParaCL
         driver.cpp
         ${BISON_parser_OUTPUTS}
@@ -63,16 +65,19 @@ if(DEFINED ENV{CONAN_PACKAGE})
     target_include_directories(ParaCL INTERFACE
         $<BUILD_INTERFACE:${INCLUDE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-        $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     )
 
     add_dependencies(ParaCL copy_parser_tab)
 
     install(TARGETS ParaCL EXPORT ParaCLTargets
-        INCLUDES DESTINATION include
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 
-    install(DIRECTORY ${INCLUDE_DIR}/ParaCL DESTINATION include)
+    install(DIRECTORY ${INCLUDE_DIR}/ParaCL DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
     install(EXPORT ParaCLTargets
         FILE ParaCLConfig.cmake
