@@ -213,7 +213,7 @@ namespace cmd {
                         os << " ";
 
                     const cmd_flag_t& flag = *flag_.second;
-                    os << print_lcyan(flag.description()) << "\n";
+                    os << print_lcyan(flag.description()) << '\n';
                 }
             }
             return os;

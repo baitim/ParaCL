@@ -46,15 +46,15 @@ namespace node {
 
             error_line << line.substr(0, loc)
                        << print_red(line.substr(loc, length))
-                       << line.substr(loc + length, line_length) << "\n";
+                       << line.substr(loc + length, line_length) << '\n';
 
             for (int i : view::iota(0, line_length)) {
                 if (i >= loc && i < loc + length)
-                    error_line << print_red("^");
+                    error_line << print_red('^');
                 else
-                    error_line << " ";
+                    error_line << ' ';
             }
-            error_line << "\n";
+            error_line << '\n';
             error_line << print_red("at location: (" << loc_.row << ", " << loc_.col << ")\n");
             return error_line.str();
         }
@@ -187,8 +187,8 @@ namespace node {
         node_type_t* value;
 
         void print() const {
-            std::cout << "value type : " << type2str(type) << "\n";
-            std::cout << "value value: " << value << "\n";
+            std::cout << "value type : " << type2str(type) << '\n';
+            std::cout << "value value: " << value << '\n';
         }
     };
 
@@ -362,7 +362,7 @@ namespace node {
             return {node_type_e::NUMBER, this};
         }
 
-        void print(execute_params_t& params) override { *(params.os) << number_ << "\n"; }
+        void print(execute_params_t& params) override { *(params.os) << number_ << '\n'; }
 
         int get_value() const noexcept { return number_; }
 
@@ -545,7 +545,7 @@ namespace node {
         void check_size_out(int size, std::string_view program_str) const {
             if (size <= 0)
                 throw error_execute_t{count_->loc(), program_str,
-                                        "wrong input size of repeat: \"" + std::to_string(size) + "\""
+                                        "wrong input size of repeat: \"" + std::to_string(size) + '\"'
                                       + ", less then 0"};
         }
 
@@ -745,7 +745,7 @@ namespace node {
             if (index < 0) {
                 location_t loc = analyze_get_index_location(depth, all_indexes);
                 throw error_analyze_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index) + "\""
+                                        "wrong index in array: \"" + std::to_string(index) + '\"'
                                       + ", less then 0"};
             }
 
@@ -753,8 +753,8 @@ namespace node {
             if (index >= array_size && !is_in_heap_) {
                 location_t loc = analyze_get_index_location(depth, all_indexes);
                 throw error_analyze_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index)      + "\""
-                                      + ", when array size: \""    + std::to_string(array_size) + "\""};
+                                        "wrong index in array: \"" + std::to_string(index)      + '\"'
+                                      + ", when array size: \""    + std::to_string(array_size) + '\"'};
             }
         }
 
@@ -763,7 +763,7 @@ namespace node {
             if (index < 0) {
                 location_t loc = execute_get_index_location(depth, all_indexes);
                 throw error_execute_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index) + "\""
+                                        "wrong index in array: \"" + std::to_string(index) + '\"'
                                       + ", less then 0"};
             }
 
@@ -771,8 +771,8 @@ namespace node {
             if (index >= array_size) {
                 location_t loc = execute_get_index_location(depth, all_indexes);
                 throw error_execute_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index)      + "\""
-                                      + ", when array size: \""    + std::to_string(array_size) + "\""};
+                                        "wrong index in array: \"" + std::to_string(index)      + '\"'
+                                      + ", when array size: \""    + std::to_string(array_size) + '\"'};
             }
         }
 
@@ -922,7 +922,7 @@ namespace node {
                 e_values_[i].value->print(print_params);
             e_values_[size - 1].value->print(print_params);
 
-            *(params.os) << "[" << transform_print_str(print_stream.str()) << "]\n";
+            *(params.os) << '[' << transform_print_str(print_stream.str()) << "]\n";
         }
 
         void clear(buffer_t* buf) {
