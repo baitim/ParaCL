@@ -13,7 +13,7 @@
         "binaryDir": "${sourceDir}/build/Debug",
         "cacheVariables": {
           "CMAKE_BUILD_TYPE": "Debug",
-          "CMAKE_CXX_FLAGS_DEBUG": "-Wall -g -O0 -fsanitize=address -fsanitize=undefined",
+          "CMAKE_CXX_FLAGS_DEBUG": "-Wall -fsanitize=address -fsanitize=undefined",
           "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/Debug/generators/conan_toolchain.cmake"
         }
       },
@@ -25,6 +25,7 @@
         "binaryDir": "${sourceDir}/build/Release",
         "cacheVariables": {
             "CMAKE_BUILD_TYPE": "Release",
+            "CMAKE_CXX_FLAGS_DEBUG": "-Wall -O2",
             "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/Release/generators/conan_toolchain.cmake"
         }
       }
