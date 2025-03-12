@@ -25,8 +25,7 @@
     maybe you will need these flags for the conan <code>-s build_type=Debug</code>
 
 5. Build <br>
-    <code>cmake --preset release</code><br>
-    <code>cmake --build build/Release</code>
+    <code>cmake --preset release; cmake --build build/Release</code>
 
 6. Run <br>
     <code>./build/Release/src/paracl \<program\></code>

@@ -5,8 +5,8 @@
 
 namespace environments {
     struct environments_t final {
-        std::ostream* os;
-        std::istream* is;
-        std::string_view program_str;
+        std::ostream* os = nullptr;
+        std::istream* is = nullptr;
+        std::string_view program_str = {};
     };
 }

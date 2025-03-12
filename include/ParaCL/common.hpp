@@ -21,7 +21,6 @@ namespace common {
     public:
         template <error_str MsgT>
         error_t(MsgT msg) : std::runtime_error(msg) {}
-        using std::runtime_error::what;
     };
 
     inline std::string file2str(const std::string& file_name) {
@@ -32,6 +31,6 @@ namespace common {
             input_file.close();
             return sstr.str();
         }
-        throw common::error_t{str_red("can't open program file")};
+        throw common::error_t{str_red(std::string{"can't open program file: "} + file_name)};
     }
 }

@@ -10,55 +10,56 @@
 
 namespace node {
     struct location_t final {
-        int row;
-        int col;
-        int len;
+        int row = -1;
+        int col = -1;
+        int len = -1;
     };
 
     /* ----------------------------------------------------- */
 
-    class error_location_t : public common::error_t {
-    private:
-        static std::pair<std::string_view, int> get_current_line(const location_t& loc,
-                                                                 std::string_view program_str) {
-            int line = 0;
-            for ([[maybe_unused]]int _ : view::iota(0, loc.row))
-                line = program_str.find('\n', line + 1);
+    inline std::pair<std::string_view, int> get_current_line(const location_t& loc,
+                                                             std::string_view program_str) {
+        int line = 0;
+        for ([[maybe_unused]]int _ : view::iota(0, loc.row))
+            line = program_str.find('\n', line + 1);
 
-            if (line > 0)
-                line++;
+        if (line > 0)
+            line++;
 
-            int end_of_line = program_str.find('\n', line);
-            if (end_of_line == -1)
-                end_of_line = program_str.length();
+        int end_of_line = program_str.find('\n', line);
+        if (end_of_line == -1)
+            end_of_line = program_str.length();
 
-            return std::make_pair(program_str.substr(line, end_of_line - line), loc.col - 2);
-        };
+        return std::make_pair(program_str.substr(line, end_of_line - line), loc.col - 2);
+    };
 
-        static std::string get_error_line(const location_t& loc_, std::string_view program_str) {
-            std::stringstream error_line;
+    inline std::string get_error_line(const location_t& loc_, std::string_view program_str) {
+        std::stringstream error_line;
 
-            std::pair<std::string_view, int> line_info = get_current_line(loc_, program_str);
-            std::string_view line = line_info.first;
-            int length = loc_.len;
-            int loc = line_info.second - length + 1;
-            const int line_length = line.length();
+        std::pair<std::string_view, int> line_info = get_current_line(loc_, program_str);
+        std::string_view line = line_info.first;
+        int length = loc_.len;
+        int loc = line_info.second - length + 1;
+        const int line_length = line.length();
 
-            error_line << line.substr(0, loc)
-                       << print_red(line.substr(loc, length))
-                       << line.substr(loc + length, line_length) << '\n';
+        error_line << line.substr(0, loc)
+        << print_red(line.substr(loc, length))
+        << line.substr(loc + length, line_length) << '\n';
 
-            for (int i : view::iota(0, line_length)) {
-                if (i >= loc && i < loc + length)
-                    error_line << print_red('^');
+        for (int i : view::iota(0, line_length)) {
+            if (i >= loc && i < loc + length)
+                error_line << print_red('^');
                 else
-                    error_line << ' ';
-            }
-            error_line << '\n';
-            error_line << print_red("at location: (" << loc_.row << ", " << loc_.col << ")\n");
-            return error_line.str();
+                error_line << ' ';
         }
+        error_line << '\n';
+        error_line << print_red("at location: (" << loc_.row << ", " << loc_.col << ")\n");
+        return error_line.str();
+    }
 
+    /* ----------------------------------------------------- */
+
+    class error_location_t : public common::error_t {
     public:
         error_location_t(const location_t& loc, std::string_view program_str, const std::string& msg)
         : common::error_t(get_error_line(loc, program_str) + str_red(msg)) {}
@@ -104,17 +105,17 @@ namespace node {
     /* ----------------------------------------------------- */
 
     struct analyze_params_t final {
-        buffer_t* buf;
-        std::string_view program_str;
+        buffer_t* buf = nullptr;
+        std::string_view program_str = {};
     };
 
     /* ----------------------------------------------------- */
 
     struct execute_params_t final {
-        buffer_t* buf;
-        std::ostream* os;
-        std::istream* is;
-        std::string_view program_str;
+        buffer_t* buf = nullptr;
+        std::ostream* os = nullptr;
+        std::istream* is = nullptr;
+        std::string_view program_str = {};
     };
 
     /* ----------------------------------------------------- */
@@ -184,7 +185,7 @@ namespace node {
 
     struct value_t final {
         node_type_e  type;
-        node_type_t* value;
+        node_type_t* value = nullptr;
 
         void print() const {
             std::cout << "value type : " << type2str(type) << '\n';
@@ -433,9 +434,8 @@ namespace node {
 
         std::vector<value_t> execute(execute_params_t& params) const {
             std::vector<value_t> indexes;
-            const int size = indexes_.size();
-            for (int i : view::iota(0, size)) {
-                value_t index = indexes_[i]->execute(params);
+            for (auto index_ : indexes_) {
+                value_t index = index_->execute(params);
                 indexes.push_back(index);
             }
             reverse(indexes.begin(), indexes.end());
@@ -444,9 +444,8 @@ namespace node {
 
         std::vector<int> execute2ints(execute_params_t& params) const {
             std::vector<int> indexes;
-            const int size = indexes_.size();
-            for (int i : view::iota(0, size)) {
-                value_t index = indexes_[i]->execute(params);
+            for (auto index_ : indexes_) {
+                value_t index = index_->execute(params);
                 int value = static_cast<node_number_t*>(index.value)->get_value();
                 indexes.push_back(value);
             }
@@ -484,7 +483,7 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    using array_execute_data_t = std::pair<std::vector<value_t>, bool>; // vals, is_in_heap
+    using array_execute_data_t = std::pair<std::vector<value_t  >, bool>; // vals, is_in_heap
     using array_analyze_data_t = std::pair<std::vector<analyze_t>, bool>; // vals, is_in_heap
     class node_array_values_t {
     public:
@@ -570,11 +569,14 @@ namespace node {
 
             check_size_out(real_count, params.program_str);
 
-            std::vector<value_t> values(real_count);
-            for (int i : view::iota(0, real_count)) {
-                node_type_t* copy_val = static_cast<node_type_t*>(value.value->copy(params.buf, nullptr));
-                values[i] = {value.type, copy_val};
-            }
+            std::vector<value_t> values;
+            values.reserve(real_count);
+            std::generate_n(std::back_inserter(values), real_count,
+                [&]() {
+                    node_type_t* copy_val = static_cast<node_type_t*>(value.value->copy(params.buf, nullptr));
+                    return value_t{value.type, copy_val};
+                }
+            );
             
             if (count.type == node_type_e::INPUT)
                 return {values, true};
@@ -624,11 +626,11 @@ namespace node {
         int level_ = 0;
 
     private:
-        void level_analyze(const std::vector<analyze_t>& values, analyze_params_t& params) {
+        void level_analyze(const std::vector<analyze_t>& a_values, analyze_params_t& params) {
             bool is_setted = false;
-            const int size = values.size();
-            for (int i : view::iota(0, size)) {
-                int elem_level = values[i].result.value->level();
+            for (auto a_value : a_values) {
+                node_type_t* value = a_value.result.value;
+                int elem_level = value->level();
 
                 if (!is_setted) {
                     level_ = elem_level;
@@ -637,7 +639,7 @@ namespace node {
                 }
 
                 if (level_ != elem_level)
-                    throw error_analyze_t{values_[i]->loc(), params.program_str,
+                    throw error_analyze_t{value->loc(), params.program_str,
                                           "different type in array"};
             }
         }
@@ -647,9 +649,8 @@ namespace node {
 
         array_execute_data_t execute(execute_params_t& params) const override {
             std::vector<value_t> values;
-            const int size = values_.size();
-            for (int i : view::iota(0, size))
-                values_[i]->add_value(values, params);
+            for (auto value : values_)
+                value->add_value(values, params);
             return {values, false};
         }
 
@@ -658,9 +659,8 @@ namespace node {
         array_analyze_data_t analyze(analyze_params_t& params) override {
             std::vector<analyze_t> values;
 
-            const int size = values_.size();
-            for (int i : view::iota(0, size))
-                values_[i]->add_value_analyze(values, params);
+            for (auto value : values_)
+                value->add_value_analyze(values, params);
 
             level_analyze(values, params);
             return {values, false};
@@ -824,11 +824,8 @@ namespace node {
                                            const std::vector<analyze_t>& all_indexes, int depth) {
             indexes.pop_back();
 
-            const int size = a_values_.size();
-            for (int i : view::iota(0, size)) {
-                analyze_t& result = a_values_[i];
-                set_unpredict_below(result, indexes, params, all_indexes, depth + 1);
-            }
+            for (auto& a_value : a_values_)
+                set_unpredict_below(a_value, indexes, params, all_indexes, depth + 1);
 
             return shift_analyze_step(a_values_[0], indexes, params, all_indexes, depth);
         }
@@ -917,10 +914,8 @@ namespace node {
             std::stringstream print_stream;
             execute_params_t print_params{params.buf, &print_stream, params.is, params.program_str};
 
-            const int size = e_values_.size();
-            for (int i : view::iota(0, size - 1))
-                e_values_[i].value->print(print_params);
-            e_values_[size - 1].value->print(print_params);
+            for (auto e_value : e_values_)
+                e_value.value->print(print_params);
 
             *(params.os) << '[' << transform_print_str(print_stream.str()) << "]\n";
         }
@@ -1343,13 +1338,13 @@ namespace node {
         node_scope_t* body_;
 
     private:
-        inline void check_step_type(node_type_e type, execute_params_t& params) const {
+        void check_step_type(node_type_e type, execute_params_t& params) const {
             if (type == node_type_e::UNDEF)
                 throw error_execute_t{node_loc_t::loc(), params.program_str,
                                       "wrong type: undef, excpected int"};
         }
 
-        inline int step(execute_params_t& params) {
+        int step(execute_params_t& params) {
             value_t result = condition_->execute(params);
 
             check_step_type(result.type, params);
@@ -1357,7 +1352,7 @@ namespace node {
             return static_cast<node_number_t*>(result.value)->get_value();
         }
 
-        inline void check_condition(analyze_params_t& params) {
+        void check_condition(analyze_params_t& params) {
             analyze_t a_result = condition_->analyze(params);
             value_t     result = a_result.result;
 
