@@ -1,26 +1,14 @@
 #pragma once
 
 #include "ANSI_colors.hpp"
-#include <ranges>
 #include <sstream>
 #include <fstream>
 
-namespace rng  = std::ranges;
-namespace view = rng::views;
-
-namespace common {
-
-    template <typename MsgT>
-    concept error_str =
-    std::is_constructible_v<std::string, MsgT> &&
-    requires(std::ostream& os, MsgT msg) {
-        { os << msg } -> std::same_as<std::ostream&>;
-    };
+namespace paracl {
 
     class error_t : public std::runtime_error {
     public:
-        template <error_str MsgT>
-        error_t(MsgT msg) : std::runtime_error(msg) {}
+        error_t(std::string msg) : std::runtime_error(msg) {}
     };
 
     inline std::string file2str(const std::string& file_name) {
@@ -31,6 +19,6 @@ namespace common {
             input_file.close();
             return sstr.str();
         }
-        throw common::error_t{str_red(std::string{"can't open program file: "} + file_name)};
+        throw error_t{str_red(std::string{"can't open program file: "} + file_name)};
     }
 }

@@ -5,10 +5,11 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
-#include <vector>
+#include <ranges>
 #include <unordered_map>
+#include <vector>
 
-namespace node {
+namespace paracl {
     struct location_t final {
         int row = -1;
         int col = -1;
@@ -20,7 +21,7 @@ namespace node {
     inline std::pair<std::string_view, int> get_current_line(const location_t& loc,
                                                              std::string_view program_str) {
         int line = 0;
-        for ([[maybe_unused]]int _ : view::iota(0, loc.row))
+        for ([[maybe_unused]]int _ : std::views::iota(0, loc.row))
             line = program_str.find('\n', line + 1);
 
         if (line > 0)
@@ -46,7 +47,7 @@ namespace node {
         << print_red(line.substr(loc, length))
         << line.substr(loc + length, line_length) << '\n';
 
-        for (int i : view::iota(0, line_length)) {
+        for (int i : std::views::iota(0, line_length)) {
             if (i >= loc && i < loc + length)
                 error_line << print_red('^');
                 else
@@ -59,10 +60,10 @@ namespace node {
 
     /* ----------------------------------------------------- */
 
-    class error_location_t : public common::error_t {
+    class error_location_t : public error_t {
     public:
         error_location_t(const location_t& loc, std::string_view program_str, const std::string& msg)
-        : common::error_t(get_error_line(loc, program_str) + str_red(msg)) {}
+        : error_t(get_error_line(loc, program_str) + str_red(msg)) {}
     };
 
     /* ----------------------------------------------------- */
@@ -324,6 +325,13 @@ namespace node {
         node_scope_t* parent_;
         std::vector<node_statement_t*> statements_;
 
+    private:
+        template <typename FuncT>
+        void process_statements(FuncT&& func) const {
+            for (auto statement : statements_)
+                func(statement);
+        }
+
     public:
         node_scope_t(const location_t& loc, node_scope_t* parent)
         : node_statement_t(loc), parent_(parent) {} 
@@ -340,27 +348,23 @@ namespace node {
         }
 
         void execute(execute_params_t& params) override {
-            for (auto statement : statements_)
-                statement->execute(params);
+            process_statements([&params](auto statement) { statement->execute(params); });
             memory_table_t::clear_memory(params.buf);
         }
 
         void analyze(analyze_params_t& params) override {
-            for (auto statement : statements_)
-                statement->analyze(params);
+            process_statements([&params](auto statement) { statement->analyze(params); });
             memory_table_t::clear_memory(params.buf);
         }
 
         node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
             node_scope_t* scope = buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
-            for (auto statement : statements_)
-                scope->add_statement(statement->copy(buf, scope));
+            process_statements([&](auto statement) { scope->add_statement(statement->copy(buf, scope)); });
             return scope;
         }
 
         void set_unpredict() override {
-            for (auto statement : statements_)
-                statement->set_unpredict();
+            process_statements([](auto statement) { statement->set_unpredict(); });
         }
     };
 
@@ -442,44 +446,50 @@ namespace node {
                                  public node_loc_t {
         std::vector<node_expression_t*> indexes_;
 
+    private:
+        template <typename ElemT, typename FuncT, typename ParamsT>
+        std::vector<ElemT> process_indexes(FuncT&& func, ParamsT& params) const {
+            std::vector<ElemT> indexes;
+            for (auto index_ : indexes_)
+                indexes.push_back(func(index_, params));
+            reverse(indexes.begin(), indexes.end());
+            return indexes;
+        }
+
     public:
         node_indexes_t(const location_t& loc) : node_loc_t(loc) {}
 
+        void add_index(node_expression_t* index) { assert(index); indexes_.push_back(index); }
+
         std::vector<value_t> execute(execute_params_t& params) const {
-            std::vector<value_t> indexes;
-            for (auto index_ : indexes_) {
-                value_t index = index_->execute(params);
-                indexes.push_back(index);
-            }
-            reverse(indexes.begin(), indexes.end());
-            return indexes;
+            return process_indexes<value_t>(
+                [](auto index_, execute_params_t& params) {
+                    return index_->execute(params);
+                },
+                params
+            );
         }
 
         std::vector<int> execute2ints(execute_params_t& params) const {
-            std::vector<int> indexes;
-            for (auto index_ : indexes_) {
-                value_t index = index_->execute(params);
-                int value = static_cast<node_number_t*>(index.value)->get_value();
-                indexes.push_back(value);
-            }
-            reverse(indexes.begin(), indexes.end());
-            return indexes;
+            return process_indexes<int>(
+                [](auto index_, execute_params_t& params) {
+                    value_t index = index_->execute(params);
+                    return static_cast<node_number_t*>(index.value)->get_value();
+                },
+                params
+            );
         }
 
-        void add_index(node_expression_t* index) { assert(index); indexes_.push_back(index); }
-
-        std::vector<analyze_t> analyze(analyze_params_t& params) {
-            std::vector<analyze_t> indexes;
-            for (auto index : indexes_) {
-                analyze_t result = index->analyze(params);
-
-                expect_types_ne(result.result.type, node_type_e::ARRAY, index->loc(), params);
-                expect_types_ne(result.result.type, node_type_e::UNDEF, index->loc(), params);
-
-                indexes.push_back(result);
-            }
-            reverse(indexes.begin(), indexes.end());
-            return indexes;
+        std::vector<analyze_t> analyze(analyze_params_t& params) const {
+            return process_indexes<analyze_t>(
+                [](auto index_, analyze_params_t& params) {
+                    analyze_t result = index_->analyze(params);
+                    expect_types_ne(result.result.type, node_type_e::ARRAY, index_->loc(), params);
+                    expect_types_ne(result.result.type, node_type_e::UNDEF, index_->loc(), params);
+                    return result;
+                },
+                params
+            );
         }
 
         node_indexes_t* copy(buffer_t* buf, node_scope_t* parent) const {
@@ -524,18 +534,22 @@ namespace node {
     class node_expression_value_t : public node_array_value_t {
         node_expression_t* value_;
 
+    private:
+        template <typename ElemT, typename FuncT, typename ParamsT>
+        void process_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
+            values.push_back(func(value_, params));
+        }
+
     public:
         node_expression_value_t(const location_t& loc, node_expression_t* value)
         : node_array_value_t(loc), value_(value) { assert(value_); }
 
         void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
-            value_t result = value_->execute(params);
-            values.push_back(result);
+            process_value(values, [](auto value, auto& params) { return value->execute(params); }, params);
         }
 
         void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
-            analyze_t result = value_->analyze(params);
-            values.push_back(result);
+            process_value(values, [](auto value, auto& params) { return value->analyze(params); }, params);
         }
 
         node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const override {
@@ -552,7 +566,40 @@ namespace node {
         int level_ = 0;
 
     private:
-        node_repeat_values_t(const location_t& loc) : node_array_value_t(loc) {}
+        template <typename ElemT, typename FuncT, typename ParamsT>
+        void process_add_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
+            std::vector<ElemT> result = func(params).first;
+            values.insert(values.end(), result.begin(), result.end());
+        }
+
+        template <typename DataT, typename FuncT, typename ParamsT, typename EvalFuncT>
+        DataT process_array(FuncT&& func, ParamsT& params, EvalFuncT&& eval_func) const {
+            auto  count = eval_func(count_, params);
+            auto& count_value = [&]() -> auto& {
+                if constexpr (std::is_same_v<DataT, array_execute_data_t>)
+                    return count;
+                else
+                    return count.result;
+            }();
+
+            if constexpr (std::is_same_v<DataT, array_analyze_data_t>) {
+                if (count_value.type == node_type_e::INPUT) {
+                    auto init_value = eval_func(value_, params);
+                    return {{init_value.result}, true};
+                }
+                expect_types_ne(count_value.type, node_type_e::UNDEF, count_->loc(), params);
+                expect_types_ne(count_value.type, node_type_e::ARRAY, count_->loc(), params);
+            }
+
+            int real_count = static_cast<node_number_t*>(count_value.value)->get_value();
+            check_size_out(real_count, params.program_str);
+
+            std::vector<typename DataT::first_type::value_type> values;
+            values.reserve(real_count);
+            func(values, real_count, params, eval_func(value_, params));
+
+            return {values, count_value.type == node_type_e::INPUT};
+        }
 
         void check_size_out(int size, std::string_view program_str) const {
             if (size <= 0)
@@ -569,55 +616,35 @@ namespace node {
         }
 
         void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
-            std::vector<value_t> result = execute(params).first;
-            values.insert(values.end(), result.begin(), result.end());
+            process_add_value(values, [&](auto& params) { return execute(params); }, params);
         }
 
         void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
-            std::vector<analyze_t> result = analyze(params).first;
-            values.insert(values.end(), result.begin(), result.end());
+            process_add_value(values, [&](auto& params) { return analyze(params); }, params);
         }
 
         array_execute_data_t execute(execute_params_t& params) const override {
-            value_t value = value_->execute(params);
-            value_t count = count_->execute(params);
-            int real_count = static_cast<node_number_t*>(count.value)->get_value();
-
-            check_size_out(real_count, params.program_str);
-
-            std::vector<value_t> values;
-            values.reserve(real_count);
-            std::generate_n(std::back_inserter(values), real_count,
-                [&]() {
-                    node_type_t* copy_val = static_cast<node_type_t*>(value.value->copy(params.buf, nullptr));
-                    return value_t{value.type, copy_val};
-                }
+            return process_array<array_execute_data_t>(
+                [&](auto& values, int real_count, execute_params_t& params, value_t value) {
+                    std::generate_n(std::back_inserter(values), real_count, [&]() {
+                        auto* copy_val = static_cast<node_type_t*>(value.value->copy(params.buf, nullptr));
+                        return value_t{value.type, copy_val};
+                    });
+                },
+                params,
+                [](auto expr, auto& params) { return expr->execute(params); }
             );
-            
-            if (count.type == node_type_e::INPUT)
-                return {values, true};
-            return {values, false};
         }
-
+        
         array_analyze_data_t analyze(analyze_params_t& params) override {
-            analyze_t count      = count_->analyze(params);
-            analyze_t init_value = value_->analyze(params);
-
-            level_ = init_value.result.value->level();
-
-            value_t count_result = count.result;
-            if (count_result.type == node_type_e::INPUT)
-                return {{init_value.result}, true};
-
-            expect_types_ne(count_result.type, node_type_e::UNDEF, count_->loc(), params);
-            expect_types_ne(count_result.type, node_type_e::ARRAY, count_->loc(), params);
-
-            size_t real_count = static_cast<node_number_t*>(count_result.value)->get_value();
-            check_size_out(real_count, params.program_str);
-
-            std::vector<analyze_t> values;
-            values.assign(real_count, init_value.result);
-            return {values, false};
+            return process_array<array_analyze_data_t>(
+                [&](auto& values, int real_count, analyze_params_t&, analyze_t init_value) {
+                    level_ = init_value.result.value->level();
+                    values.assign(real_count, init_value.result);
+                },
+                params,
+                [](auto expr, auto& params) { return expr->analyze(params); }
+            );
         }
 
         node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
@@ -642,6 +669,14 @@ namespace node {
         int level_ = 0;
 
     private:
+        template <typename DataT, typename FuncT, typename ParamsT>
+        DataT process_values(FuncT&& func, ParamsT& params) const {
+            std::vector<typename DataT::first_type::value_type> values;
+            for (auto value : values_)
+                func(value, values, params);
+            return {values, false};
+        }
+
         void level_analyze(const std::vector<analyze_t>& a_values, analyze_params_t& params) {
             bool is_setted = false;
             for (auto a_value : a_values) {
@@ -664,22 +699,21 @@ namespace node {
         node_list_values_t(const location_t& loc) : node_loc_t(loc) {}
 
         array_execute_data_t execute(execute_params_t& params) const override {
-            std::vector<value_t> values;
-            for (auto value : values_)
-                value->add_value(values, params);
-            return {values, false};
+            return process_values<array_execute_data_t>(
+                [](auto value, auto& values, auto& params) { value->add_value(values, params); },
+                params
+            );
         }
 
         void add_value(node_array_value_t* value) { assert(value); values_.push_back(value); }
 
         array_analyze_data_t analyze(analyze_params_t& params) override {
-            std::vector<analyze_t> values;
-
-            for (auto value : values_)
-                value->add_value_analyze(values, params);
-
-            level_analyze(values, params);
-            return {values, false};
+            auto data = process_values<array_analyze_data_t>(
+                [](auto value, auto& values, auto& params) { value->add_value_analyze(values, params); },
+                params
+            );
+            level_analyze(data.first, params);
+            return data;
         }
 
         node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
@@ -699,16 +733,106 @@ namespace node {
         bool is_inited_ = false;
         node_array_values_t* init_values_;
         node_indexes_t*      init_indexes_;
+
         std::vector<value_t>   e_values_;
-                                            // need to split this stuff, SRP:(
         std::vector<analyze_t> a_values_;
+
         std::vector<value_t>   e_indexes_;
         std::vector<analyze_t> a_indexes_;
 
         bool is_in_heap_ = false;
-        bool is_freed_ = false;
+        bool is_freed_   = false;
 
     private:
+        template <typename DataT, typename FuncT, typename ParamsT>
+        void init(FuncT&& eval_func, ParamsT& params,
+                  std::vector<typename DataT::first_type::value_type>& values,
+                  std::vector<typename DataT::first_type::value_type>& indexes) {
+            auto values_res = eval_func(init_values_, params);
+            values          = values_res.first;
+            is_in_heap_     = values_res.second;
+            indexes         = eval_func(init_indexes_, params);
+            is_inited_      = true;
+        }
+
+        std::string transform_print_str(const std::string& str) const {
+            std::string result = str.substr(0, str.rfind('\n'));
+            size_t pos = result.find('\n');
+            while (pos != std::string::npos) {
+                result.replace(pos, 1, ", ");
+                pos = result.find('\n', pos + 2);
+            }
+            return result;
+        }
+
+        static void set_unpredict_below(analyze_t& value, std::vector<analyze_t>& indexes,
+                                        analyze_params_t& params,
+                                        const std::vector<analyze_t>& all_indexes, int depth) {
+            std::vector<analyze_t> tmp_indexes{indexes};
+            analyze_t& result = shift_analyze_step(value, tmp_indexes, params, all_indexes, depth);
+            result.is_constexpr = false;
+        }
+
+        void analyze_check_freed(const location_t& loc, analyze_params_t& params) const {
+            if (is_freed_)
+                throw error_analyze_t{loc, params.program_str,
+                                      "attempt to use freed array"};
+        }
+
+        template <typename ElemT>
+        location_t get_index_location(size_t depth, const std::vector<ElemT>& all_indexes) const {
+            const auto& index = all_indexes[all_indexes.size() - depth - 1];
+
+            auto [indexes, value] = [&]() {
+                if constexpr (std::is_same_v<ElemT, value_t>) 
+                    return std::make_tuple(e_indexes_, index.value);
+                else 
+                    return std::make_tuple(a_indexes_, index.result.value);
+            }();
+
+            if (depth >= indexes.size())
+                return value->loc();
+
+            return init_indexes_->get_index_loc(indexes.size() - depth - 1);
+        }
+
+        template <typename ErrorT, typename ElemT, typename ParamsT>
+        void check_index_out(int index, size_t depth, 
+                             const std::vector<ElemT>& all_indexes,
+                             ParamsT params) const {
+            if (index < 0) {
+                location_t loc = get_index_location<ElemT>(depth, all_indexes);
+                throw ErrorT{loc, params.program_str,
+                             "wrong index in array: \"" + std::to_string(index) + "\", less than 0"};
+            }
+
+            int array_size = std::is_same_v<ElemT, value_t> ? e_values_.size() : a_values_.size();
+            if (index >= array_size && (!is_in_heap_ || !std::is_same_v<ElemT, analyze_t>)) {
+                location_t loc = get_index_location<ElemT>(depth, all_indexes);
+                throw ErrorT{loc, params.program_str,
+                               "wrong index in array: \"" + std::to_string(index)
+                             + "\", when array size: \""  + std::to_string(array_size) + "\""};
+            }
+        }
+
+        value_t& shift_(std::vector<value_t>& indexes, execute_params_t& params,
+            const std::vector<value_t>& all_indexes, int depth) {
+            value_t index_value = indexes.back().value->execute(params);
+            node_number_t* node_index = static_cast<node_number_t*>(index_value.value);
+            int index = node_index->get_value();
+            indexes.pop_back();
+
+            check_index_out<error_execute_t>(index, depth, all_indexes, params);
+
+            value_t& result = e_values_[index];
+
+            if (!indexes.empty() && result.type == node_type_e::ARRAY)
+                return static_cast<node_array_t*>(result.value)->shift_(indexes, params,
+                                                                        all_indexes, depth + 1);
+            else
+                return result;
+        }
+
         static analyze_t& shift_analyze_step(analyze_t& value, std::vector<analyze_t>& indexes,
                                              analyze_params_t& params,
                                              const std::vector<analyze_t>& all_indexes, int depth) {
@@ -725,99 +849,6 @@ namespace node {
                                           "indexing in depth has gone beyond boundary of array"};
                 return value;
             }
-        }
-
-        static void set_unpredict_below(analyze_t& value, std::vector<analyze_t>& indexes,
-                                        analyze_params_t& params,
-                                        const std::vector<analyze_t>& all_indexes, int depth) {
-            std::vector<analyze_t> tmp_indexes{indexes};
-            analyze_t& result = shift_analyze_step(value, tmp_indexes, params, all_indexes, depth);
-            result.is_constexpr = false;
-        }
-
-    private:
-        void analyze_check_freed(const location_t& loc, analyze_params_t& params) const {
-            if (is_freed_)
-                throw error_analyze_t{loc, params.program_str,
-                                      "attempt to use freed array"};
-        }
-
-        location_t analyze_get_index_location(size_t depth, const std::vector<analyze_t>& all_indexes) const {
-            if (depth >= a_indexes_.size())
-                return all_indexes[all_indexes.size() - depth - 1].result.value->loc();
-
-            return init_indexes_->get_index_loc(a_indexes_.size() - depth - 1);
-        }
-
-        location_t execute_get_index_location(size_t depth, const std::vector<value_t>& all_indexes) const {
-            if (depth >= e_indexes_.size())
-                return all_indexes[all_indexes.size() - depth - 1].value->loc();
-
-            return init_indexes_->get_index_loc(e_indexes_.size() - depth - 1);
-        }
-
-        void analyze_check_index_out(int index, size_t depth, const std::vector<analyze_t>& all_indexes,
-                                     analyze_params_t params) const {
-            if (index < 0) {
-                location_t loc = analyze_get_index_location(depth, all_indexes);
-                throw error_analyze_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index) + '\"'
-                                      + ", less then 0"};
-            }
-
-            int array_size = a_values_.size();
-            if (index >= array_size && !is_in_heap_) {
-                location_t loc = analyze_get_index_location(depth, all_indexes);
-                throw error_analyze_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index)      + '\"'
-                                      + ", when array size: \""    + std::to_string(array_size) + '\"'};
-            }
-        }
-
-        void execute_check_index_out(int index, size_t depth, const std::vector<value_t>& all_indexes,
-                                     execute_params_t params) const {
-            if (index < 0) {
-                location_t loc = execute_get_index_location(depth, all_indexes);
-                throw error_execute_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index) + '\"'
-                                      + ", less then 0"};
-            }
-
-            int array_size = e_values_.size();
-            if (index >= array_size) {
-                location_t loc = execute_get_index_location(depth, all_indexes);
-                throw error_execute_t{loc, params.program_str,
-                                        "wrong index in array: \"" + std::to_string(index)      + '\"'
-                                      + ", when array size: \""    + std::to_string(array_size) + '\"'};
-            }
-        }
-
-        std::string transform_print_str(const std::string& str) const {
-            std::string result = str.substr(0, str.rfind('\n'));
-            size_t pos = result.find('\n');
-            while (pos != std::string::npos) {
-                result.replace(pos, 1, ", ");
-                pos = result.find('\n', pos + 2);
-            }
-            return result;
-        }
-
-        value_t& shift_(std::vector<value_t>& indexes, execute_params_t& params,
-                        const std::vector<value_t>& all_indexes, int depth) {
-            value_t index_value = indexes.back().value->execute(params);
-            node_number_t* node_index = static_cast<node_number_t*>(index_value.value);
-            int index = node_index->get_value();
-            indexes.pop_back();
-
-            execute_check_index_out(index, depth, all_indexes, params);
-
-            value_t& result = e_values_[index];
-
-            if (!indexes.empty() && result.type == node_type_e::ARRAY)
-                return static_cast<node_array_t*>(result.value)->shift_(indexes, params,
-                                                                        all_indexes, depth + 1);
-            else
-                return result;
         }
 
         analyze_t& shift_analyze_size_type_input(std::vector<analyze_t>& indexes, analyze_params_t& params,
@@ -858,29 +889,46 @@ namespace node {
 
                 node_number_t* node_index = static_cast<node_number_t*>(index.value);
 
-                if (a_index.is_constexpr)
-                    analyze_check_index_out(node_index->get_value(), depth, all_indexes, params);
-
+                if (a_index.is_constexpr) {
+                    check_index_out<error_analyze_t>(
+                        node_index->get_value(), depth, all_indexes, params
+                    );
+                }
                 return shift_analyze_number(indexes, node_index, params, all_indexes, depth);
             }
 
             return shift_analyze_unpredict(indexes, params, all_indexes, depth);
         }
 
-        void init(execute_params_t& params) {
-            array_execute_data_t values_analyze_res = init_values_->execute(params);
-            e_values_   = values_analyze_res.first;
-            e_indexes_  = init_indexes_->execute(params);
-            is_in_heap_ = values_analyze_res.second;
-            is_inited_  = true;
-        }
+        template <typename DataT, typename ParamsT>
+        DataT::first_type::value_type process(ParamsT& params) {
+            using ElemT = DataT::first_type::value_type;
+            constexpr bool is_array_execute = std::is_same_v<ElemT, value_t>;
+            constexpr bool is_array_analyze = std::is_same_v<ElemT, analyze_t>;
 
-        void init_analyze(analyze_params_t& params) {
-            array_analyze_data_t values_analyze_res = init_values_->analyze(params);
-            a_values_     = values_analyze_res.first;
-            a_indexes_    = init_indexes_->analyze(params);
-            is_in_heap_   = values_analyze_res.second;
-            is_inited_    = true;
+            if constexpr (is_array_analyze)
+                analyze_check_freed(node_loc_t::loc(), params);
+
+            auto [values, indexes] = [&]() {
+                if constexpr (is_array_execute) 
+                    return std::make_tuple(std::ref(e_values_), std::ref(e_indexes_));
+                else 
+                    return std::make_tuple(std::ref(a_values_), std::ref(a_indexes_));
+            }();
+
+            auto func = [](auto* node, auto& params) {
+                if constexpr (is_array_execute)
+                    return node->execute(params);
+                else
+                    return node->analyze(params);
+            };
+
+            if (!is_inited_)
+                init<DataT>(func, params, values, indexes);
+
+            if (!indexes.empty())
+                return shift(std::vector<ElemT>{}, params);
+            return {node_type_e::ARRAY, this};
         }
 
     public:
@@ -891,45 +939,44 @@ namespace node {
         }
 
         value_t execute(execute_params_t& params) override {
-            if (!is_inited_)
-                init(params);
-            
-            if (!e_indexes_.empty())
-                return shift({}, params);
-            return {node_type_e::ARRAY, this};
-        }
-
-        value_t& shift(const std::vector<value_t>& ext_indexes, execute_params_t& params) {
-            std::vector<value_t> all_indexes = ext_indexes;
-            all_indexes.insert(all_indexes.end(), e_indexes_.begin(), e_indexes_.end());
-            return shift_(all_indexes, params, std::vector<value_t>{all_indexes}, 0);
+            return process<array_execute_data_t>(params);
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            analyze_check_freed(node_loc_t::loc(), params);
-            if (!is_inited_)
-                init_analyze(params);
-
-            if (a_indexes_.size() > 0)
-                shift_analyze({}, params);
-
-            return {node_type_e::ARRAY, this};
+            return process<array_analyze_data_t>(params);
         }
 
-        analyze_t& shift_analyze(const std::vector<analyze_t>& ext_indexes, analyze_params_t& params) {
-            std::vector<analyze_t> all_indexes = ext_indexes;
-            all_indexes.insert(all_indexes.end(), a_indexes_.begin(), a_indexes_.end());
-            analyze_check_freed(all_indexes[0].result.value->loc(), params);
-            return shift_analyze_(all_indexes, params, std::vector<analyze_t>{all_indexes}, 0);
+        template <typename ElemT, typename ParamsT>
+        ElemT& shift(const std::vector<ElemT>& ext_indexes, ParamsT& params) {
+            constexpr bool is_array_execute = std::is_same_v<ElemT, value_t>;
+            constexpr bool is_array_analyze = std::is_same_v<ElemT, analyze_t>;
+
+            const auto& indexes = [&]() {
+                if constexpr (is_array_execute)
+                    return e_indexes_;
+                else
+                    return a_indexes_;
+            }();
+
+            std::vector<ElemT> all_indexes = ext_indexes;
+            all_indexes.insert(all_indexes.end(), indexes.begin(), indexes.end());
+
+            if constexpr (is_array_analyze)
+                analyze_check_freed(all_indexes[0].result.value->loc(), params);
+
+            if constexpr (is_array_execute)
+                return shift_(all_indexes, params, all_indexes, 0);
+            else
+                return shift_analyze_(all_indexes, params, all_indexes, 0);
         }
 
         void print(execute_params_t& params) override {
             if (!e_indexes_.empty()) {
-                shift({}, params).value->print(params);
+                shift(std::vector<value_t>{}, params).value->print(params);
                 return;
             }
             execute(params);
-            
+
             std::stringstream print_stream;
             execute_params_t print_params{params.buf, &print_stream, params.is, params.program_str};
 
@@ -1020,7 +1067,7 @@ namespace node {
             expect_types_ne(value.type, node_type_e::NUMBER, node_loc_t::loc(), params);
 
             node_array_t* array = static_cast<node_array_t*>(value.value);
-            return array->shift_analyze(indexes, params);
+            return array->shift(indexes, params);
         }
 
     public:
@@ -1196,6 +1243,7 @@ namespace node {
         node_expression_t* left_;
         node_expression_t* right_;
 
+    private:
         int evaluate(node_number_t* l_result, node_number_t* r_result) {
             assert(l_result);
             assert(r_result);
@@ -1218,7 +1266,7 @@ namespace node {
                 case binary_operators_e::MUL: return LHS * RHS;
                 case binary_operators_e::DIV: return LHS / RHS;
                 case binary_operators_e::MOD: return LHS % RHS;
-                default: throw common::error_t{"attempt to execute unknown binary operator"};
+                default: throw error_t{"attempt to execute unknown binary operator"};
             }
         }
 
@@ -1301,7 +1349,7 @@ namespace node {
                 case unary_operators_e::ADD: return  value;
                 case unary_operators_e::SUB: return -value;
                 case unary_operators_e::NOT: return !value;
-                default: throw common::error_t{"attempt to execute unknown unary operator"};
+                default: throw error_t{"attempt to execute unknown unary operator"};
             }
         }
 

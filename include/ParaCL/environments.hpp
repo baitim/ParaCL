@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 
-namespace environments {
+namespace paracl {
     struct environments_t final {
         std::ostream* os = nullptr;
         std::istream* is = nullptr;

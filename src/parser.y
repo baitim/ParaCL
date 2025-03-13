@@ -43,13 +43,13 @@ Grammar:
 %code requires
 {
     #include "ParaCL/node.hpp"
-    using namespace node;
+    using namespace paracl;
     #include <stack>
     namespace yy { class driver_t; }
 }
 
 %param       { yy::driver_t* driver }
-%parse-param { node::node_scope_t*& root }
+%parse-param { node_scope_t*& root }
 
 %code
 {

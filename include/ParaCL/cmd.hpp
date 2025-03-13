@@ -5,11 +5,11 @@
 #include <memory>
 #include <unordered_map>
 
-namespace cmd {
-    class error_undecl_flag_t : public common::error_t {
+namespace paracl {
+    class error_undecl_flag_t : public error_t {
     public:
         error_undecl_flag_t(std::string_view flag_name)
-        : common::error_t(str_red(std::string("undecalred necessary flag: ") + std::string(flag_name))) {}
+        : error_t(str_red(std::string("undecalred necessary flag: ") + std::string(flag_name))) {}
     };
 
     class cmd_flag_t {
@@ -27,7 +27,7 @@ namespace cmd {
         cmd_flag_t(std::string_view name, bool is_necessery, bool is_titeled, std::string_view descripiton)
         : name_(name), is_necessery_(is_necessery), is_titeled_(is_titeled), descripiton_(descripiton) {
             if (name.size() > max_length_)
-                throw common::error_t(str_red(std::string("too long name of flag: ") + std::string(name)));
+                throw error_t(str_red(std::string("too long name of flag: ") + std::string(name)));
         }
 
         std::string_view name() const { return name_; }
@@ -178,9 +178,9 @@ namespace cmd {
     public:
         void parse(int argc, char* argv[]) {
             if (argc < cnt_flags_.first)
-                throw common::error_t{"Invalid argument: argc = 2, argv[1] = name of file\n"};
+                throw error_t{"Invalid argument: argc = 2, argv[1] = name of file\n"};
 
-            for (int i : view::iota(1, argc))
+            for (int i : std::views::iota(1, argc))
                 cmd_flags_t::parse_token(argv[i]);
 
             lookup_print_help(std::cout);
@@ -209,7 +209,7 @@ namespace cmd {
                     os << "  " << print_lcyan(flag_.first);
 
                     int added_scapes = flag_.second->max_length() - flag_.first.size();
-                    for ([[maybe_unused]] int _ : view::iota(0, added_scapes))
+                    for ([[maybe_unused]] int _ : std::views::iota(0, added_scapes))
                         os << " ";
 
                     const cmd_flag_t& flag = *flag_.second;

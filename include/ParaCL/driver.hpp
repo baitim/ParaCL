@@ -68,8 +68,8 @@ namespace yy {
             return buf_->add_node<NodeT>(make_loc(loc, len), std::forward<ArgsT>(args)...);
         }
 
-        bool parse(const std::string& file_name, node::buffer_t& buf,
-                   node::node_scope_t*& root, std::string_view program_str) {
+        bool parse(const std::string& file_name, buffer_t& buf,
+                   node_scope_t*& root, std::string_view program_str) {
             program_str_ = program_str;
             buf_ = &buf;
 
