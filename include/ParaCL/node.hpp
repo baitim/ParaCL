@@ -329,7 +329,7 @@ namespace paracl {
         template <typename FuncT>
         void process_statements(FuncT&& func) const {
             for (auto statement : statements_)
-                func(statement);
+                std::forward<FuncT>(func)(statement);
         }
 
     public:
@@ -451,7 +451,7 @@ namespace paracl {
         std::vector<ElemT> process_indexes(FuncT&& func, ParamsT& params) const {
             std::vector<ElemT> indexes;
             for (auto index_ : indexes_)
-                indexes.push_back(func(index_, params));
+                indexes.push_back(std::forward<FuncT>(func)(index_, params));
             reverse(indexes.begin(), indexes.end());
             return indexes;
         }
@@ -536,7 +536,7 @@ namespace paracl {
     private:
         template <typename ElemT, typename FuncT, typename ParamsT>
         void process_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            values.push_back(func(value_, params));
+            values.push_back(std::forward<FuncT>(func)(value_, params));
         }
 
     public:
@@ -567,13 +567,13 @@ namespace paracl {
     private:
         template <typename ElemT, typename FuncT, typename ParamsT>
         void process_add_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            std::vector<ElemT> result = func(params).first;
+            std::vector<ElemT> result = std::forward<FuncT>(func)(params).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
         template <typename DataT, typename FuncT, typename ParamsT, typename EvalFuncT>
         DataT process_array(FuncT&& func, ParamsT& params, EvalFuncT&& eval_func) const {
-            auto  count = eval_func(count_, params);
+            auto  count = std::forward<EvalFuncT>(eval_func)(count_, params);
             auto& count_value = [&]() -> auto& {
                 if constexpr (std::is_same_v<DataT, array_execute_data_t>)
                     return count;
@@ -583,7 +583,7 @@ namespace paracl {
 
             if constexpr (std::is_same_v<DataT, array_analyze_data_t>) {
                 if (count_value.type == node_type_e::INPUT) {
-                    auto init_value = eval_func(value_, params);
+                    auto init_value = std::forward<EvalFuncT>(eval_func)(value_, params);
                     return {{init_value.result}, true};
                 }
                 expect_types_ne(count_value.type, node_type_e::UNDEF, count_->loc(), params);
@@ -595,7 +595,9 @@ namespace paracl {
 
             std::vector<typename DataT::first_type::value_type> values;
             values.reserve(real_count);
-            func(values, real_count, params, eval_func(value_, params));
+            std::forward<FuncT>(func)(
+                values, real_count, params, std::forward<EvalFuncT>(eval_func)(value_, params)
+            );
 
             return {values, count_value.type == node_type_e::INPUT};
         }
@@ -672,7 +674,7 @@ namespace paracl {
         DataT process_values(FuncT&& func, ParamsT& params) const {
             std::vector<typename DataT::first_type::value_type> values;
             for (auto value : values_)
-                func(value, values, params);
+                std::forward<FuncT>(func)(value, values, params);
             return {values, false};
         }
 
@@ -747,10 +749,10 @@ namespace paracl {
         void init(FuncT&& eval_func, ParamsT& params,
                   std::vector<typename DataT::first_type::value_type>& values,
                   std::vector<typename DataT::first_type::value_type>& indexes) {
-            auto values_res = eval_func(init_values_, params);
+            auto values_res = std::forward<FuncT>(eval_func)(init_values_, params);
             values          = values_res.first;
             is_in_heap_     = values_res.second;
-            indexes         = eval_func(init_indexes_, params);
+            indexes         = std::forward<FuncT>(eval_func)(init_indexes_, params);
             is_inited_      = true;
         }
 
