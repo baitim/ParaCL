@@ -523,8 +523,7 @@ namespace paracl {
                                public node_loc_t {
     public:
         node_array_value_t(const location_t& loc) : node_loc_t(loc) {}
-        virtual void add_value(std::vector<value_t>& values,
-                               execute_params_t& params) const = 0;
+        virtual void add_value_execute(std::vector<value_t  >& values, execute_params_t& params) const = 0;
         virtual void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) = 0;
         virtual node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const = 0;
     };
@@ -544,7 +543,7 @@ namespace paracl {
         node_expression_value_t(const location_t& loc, node_expression_t* value)
         : node_array_value_t(loc), value_(value) { assert(value_); }
 
-        void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
+        void add_value_execute(std::vector<value_t>& values, execute_params_t& params) const override {
             process_value(values, [](auto value, auto& params) { return value->execute(params); }, params);
         }
 
@@ -615,7 +614,7 @@ namespace paracl {
             assert(count_);
         }
 
-        void add_value(std::vector<value_t>& values, execute_params_t& params) const override {
+        void add_value_execute(std::vector<value_t>& values, execute_params_t& params) const override {
             process_add_value(values, [&](auto& params) { return execute(params); }, params);
         }
 
@@ -700,7 +699,7 @@ namespace paracl {
 
         array_execute_data_t execute(execute_params_t& params) const override {
             return process_values<array_execute_data_t>(
-                [](auto value, auto& values, auto& params) { value->add_value(values, params); },
+                [](auto value, auto& values, auto& params) { value->add_value_execute(values, params); },
                 params
             );
         }
@@ -816,7 +815,7 @@ namespace paracl {
         }
 
         value_t& shift_(std::vector<value_t>& indexes, execute_params_t& params,
-            const std::vector<value_t>& all_indexes, int depth) {
+                        const std::vector<value_t>& all_indexes, int depth) {
             value_t index_value = indexes.back().value->execute(params);
             node_number_t* node_index = static_cast<node_number_t*>(index_value.value);
             int index = node_index->get_value();
@@ -965,9 +964,9 @@ namespace paracl {
                 analyze_check_freed(all_indexes[0].result.value->loc(), params);
 
             if constexpr (is_array_execute)
-                return shift_(all_indexes, params, all_indexes, 0);
+                return shift_(all_indexes, params, std::vector<value_t>{all_indexes}, 0);
             else
-                return shift_analyze_(all_indexes, params, all_indexes, 0);
+                return shift_analyze_(all_indexes, params, std::vector<analyze_t>{all_indexes}, 0);
         }
 
         void print(execute_params_t& params) override {
