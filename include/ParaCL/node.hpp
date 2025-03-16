@@ -308,8 +308,9 @@ namespace paracl {
 
     protected:
         void clear_memory(buffer_t* buf) {
-            for (auto iter : arrays_)
+            std::ranges::for_each(arrays_, [buf](auto iter) {
                 iter->clear(buf);
+            });
         }
 
     public:
@@ -328,8 +329,9 @@ namespace paracl {
     private:
         template <typename FuncT>
         void process_statements(FuncT&& func) const {
-            for (auto statement : statements_)
+            std::ranges::for_each(statements_, [&func](auto statement) {
                 std::forward<FuncT>(func)(statement);
+            });
         }
 
     public:
@@ -449,9 +451,12 @@ namespace paracl {
     private:
         template <typename ElemT, typename FuncT, typename ParamsT>
         std::vector<ElemT> process_indexes(FuncT&& func, ParamsT& params) const {
-            std::vector<ElemT> indexes;
-            for (auto index_ : indexes_)
-                indexes.push_back(std::forward<FuncT>(func)(index_, params));
+            std::vector<ElemT> indexes(indexes_.size());
+            std::transform(indexes_.begin(), indexes_.end(), indexes.begin(),
+                [&func, &params](const auto& index_) {
+                   return std::forward<FuncT>(func)(index_, params);
+                }
+            );
             reverse(indexes.begin(), indexes.end());
             return indexes;
         }
@@ -494,8 +499,9 @@ namespace paracl {
 
         node_indexes_t* copy(buffer_t* buf, node_scope_t* parent) const {
             node_indexes_t* node_indexes = buf->add_node<node_indexes_t>(node_loc_t::loc());
-            for (auto index : indexes_)
+            std::ranges::for_each(indexes_, [node_indexes, buf, parent](auto index) {
                 node_indexes->add_index(index->copy(buf, parent));
+            });
             return node_indexes;
         }
 
@@ -673,27 +679,28 @@ namespace paracl {
         template <typename DataT, typename FuncT, typename ParamsT>
         DataT process_values(FuncT&& func, ParamsT& params) const {
             std::vector<typename DataT::first_type::value_type> values;
-            for (auto value : values_)
+            std::ranges::for_each(values_, [&](auto value) {
                 std::forward<FuncT>(func)(value, values, params);
+            });
             return {values, false};
         }
 
         void level_analyze(const std::vector<analyze_t>& a_values, analyze_params_t& params) {
             bool is_setted = false;
-            for (auto a_value : a_values) {
+            std::ranges::for_each(a_values, [&](auto a_value) {
                 node_type_t* value = a_value.result.value;
                 int elem_level = value->level();
 
                 if (!is_setted) {
                     level_ = elem_level;
                     is_setted = true;
-                    continue;
+                    return;
                 }
 
                 if (level_ != elem_level)
                     throw error_analyze_t{value->loc(), params.program_str,
                                           "different type in array"};
-            }
+            });
         }
 
     public:
@@ -719,8 +726,9 @@ namespace paracl {
 
         node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
             node_list_values_t* node_values = buf->add_node<node_list_values_t>(node_loc_t::loc());
-            for (auto value : values_)
+            std::ranges::for_each(values_, [node_values, buf, parent](auto value) {
                 node_values->add_value(value->copy_val(buf, parent));
+            });
             return node_values;
         }
 
@@ -871,10 +879,9 @@ namespace paracl {
         analyze_t& shift_analyze_unpredict(std::vector<analyze_t>& indexes, analyze_params_t& params,
                                            const std::vector<analyze_t>& all_indexes, int depth) {
             indexes.pop_back();
-
-            for (auto& a_value : a_values_)
+            std::ranges::for_each(a_values_, [&](auto a_value) {
                 set_unpredict_below(a_value, indexes, params, all_indexes, depth + 1);
-
+            });
             return shift_analyze_step(a_values_[0], indexes, params, all_indexes, depth);
         }
 
@@ -952,7 +959,7 @@ namespace paracl {
             constexpr bool is_array_execute = std::is_same_v<ElemT, value_t>;
             constexpr bool is_array_analyze = std::is_same_v<ElemT, analyze_t>;
 
-            const auto& indexes = [&]() {
+            const auto& indexes = [&]() -> const auto& {
                 if constexpr (is_array_execute)
                     return e_indexes_;
                 else
@@ -981,8 +988,9 @@ namespace paracl {
             std::stringstream print_stream;
             execute_params_t print_params{params.buf, &print_stream, params.is, params.program_str};
 
-            for (auto e_value : e_values_)
+            std::ranges::for_each(e_values_, [&print_params](auto e_value) {
                 e_value.value->print(print_params);
+            });
 
             *(params.os) << '[' << transform_print_str(print_stream.str()) << "]\n";
         }
