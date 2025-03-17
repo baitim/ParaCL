@@ -5,7 +5,6 @@ Grammar:
     scope        -> '{' statements '}'
     statement    -> fork  | loop | instruction
     instruction  -> expression;
-    rvalue       -> expression | array_repeat
     expression   -> print | assignment | expression_lgc
 
     fork         -> if condition body | if condition body else body
@@ -15,7 +14,11 @@ Grammar:
     body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print expression
-    assignment   -> variable indexes = rvalue
+
+
+    lvalue       -> variable indexes
+    rvalue       -> expression | array_repeat
+    assignment   -> lvalue = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -116,7 +119,6 @@ Grammar:
 
 %nterm <node_statement_t*>  statement
 %nterm <node_statement_t*>  instruction
-%nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> expression
 
 %nterm <node_statement_t*>  fork
@@ -124,6 +126,9 @@ Grammar:
 %nterm <node_expression_t*> condition
 
 %nterm <node_expression_t*> print
+
+%nterm <node_lvalue_t*>     lvalue
+%nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> assignment
 
 %nterm <node_expression_t*> terminal
@@ -200,10 +205,6 @@ statement: fork         { $$ = $1; }
 instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
-rvalue: expression   { $$ = $1; }
-      | array_repeat { $$ = $1; }
-;
-
 expression: print          { $$ = $1; }
           | assignment     { $$ = $1; }
           | expression_lgc { $$ = $1; }
@@ -233,12 +234,17 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-assignment: variable indexes ASSIGN rvalue
-        {
-            node_variable_t* var    = decl_var($1, @1, driver);
-            node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
-            $$ = driver->add_node<node_assign_t>(@3, 1, lvalue, $4);
-        }
+lvalue: variable indexes { 
+                            node_variable_t* var = decl_var($1, @1, driver);
+                            $$ = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+                         }
+;
+
+rvalue: expression   { $$ = $1; }
+      | array_repeat { $$ = $1; }
+;
+
+assignment: lvalue ASSIGN rvalue { $$ = driver->add_node<node_assign_t>(@3, 1, $1, $3); }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }
