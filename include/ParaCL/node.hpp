@@ -445,11 +445,11 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_r_t final : public node_expression_t,
-                                 public scope_base_t {
+    class node_block_t final : public node_expression_t,
+                               public scope_base_t {
 
     public:
-        node_scope_r_t(const location_t& loc, scope_base_t* parent)
+        node_block_t(const location_t& loc, scope_base_t* parent)
         : node_expression_t(loc), scope_base_t(parent) {}
 
         value_t execute(execute_params_t& params) override {
@@ -484,7 +484,7 @@ namespace paracl {
         }
 
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
-            return copy_impl<node_scope_r_t, node_expression_t>(node_loc_t::loc(), buf, parent);
+            return copy_impl<node_block_t, node_expression_t>(node_loc_t::loc(), buf, parent);
         }
 
         void set_unpredict() override {

@@ -4,7 +4,7 @@ Grammar:
     statements   -> statements   statement | statements;   | statements   scope | statements   return | empty
     statements_r -> statements_r statement | statements_r; | statements_r scope | statements_r return | empty
     scope        -> { statements   }
-    scope_r      -> { statements_r } | { statements_r expression; }
+    block        -> { statements_r } | { statements_r expression; }
 
     return       -> return expression;
 
@@ -20,7 +20,7 @@ Grammar:
 
     print        -> print expression
 
-    rvalue       -> scope_r | expression | array_repeat
+    rvalue       -> block | expression | array_repeat
     assignment   -> variable indexes = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
@@ -119,9 +119,9 @@ Grammar:
 %token <std::string>        ID
 
 %nterm <node_scope_t*>      statements
-%nterm <node_scope_r_t*>    statements_r
+%nterm <node_block_t*>      statements_r
 %nterm <node_scope_t*>      scope
-%nterm <node_scope_r_t*>    scope_r
+%nterm <node_block_t*>      block
 %nterm <node_expression_t*> return
 
 %nterm <node_scope_t*>      body
@@ -207,7 +207,7 @@ statements: %empty                 {
 ;
 
 statements_r: %empty               {
-                                        $$ = driver->add_node<node_scope_r_t>(@$, 1, current_scope);
+                                        $$ = driver->add_node<node_block_t>(@$, 1, current_scope);
                                         drill_down_to_scope($$);
                                    }
           | statements_r statement { $$ = $1; $$->add_statement($2); }
@@ -219,8 +219,8 @@ statements_r: %empty               {
 scope:   LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
 ;
 
-scope_r: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
-       | LBRACKET_CURLY statements_r expression SCOLON RBRACKET_CURLY %prec SCOLON { $$ = $2; $$->add_return($3); }
+block: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
+     | LBRACKET_CURLY statements_r expression SCOLON RBRACKET_CURLY %prec SCOLON { $$ = $2; $$->add_return($3); }
 ;
 
 return: RETURN expression SCOLON { $$ = $2; }
@@ -264,7 +264,7 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-rvalue: scope_r      { $$ = $1; }
+rvalue: block        { $$ = $1; }
       | expression   { $$ = $1; }
       | array_repeat { $$ = $1; }
 ;
