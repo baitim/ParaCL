@@ -7,6 +7,7 @@
 #include <memory>
 #include <ranges>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace paracl {
@@ -84,6 +85,14 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class error_type_deduction_t : public error_location_t {
+    public:
+        error_type_deduction_t(const location_t& loc, std::string_view program_str, const std::string& msg)
+        : error_location_t(loc, program_str, str_red("type deduction failed: " + msg)) {}
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_t {
     public:
         virtual ~node_t() = default;
@@ -105,35 +114,6 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    struct analyze_params_t final {
-        buffer_t* buf;
-        std::string_view program_str = {};
-
-        analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})
-        : buf(buf_), program_str(program_str_) {
-            assert(buf);
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
-    struct execute_params_t final {
-        buffer_t* buf;
-        std::ostream* os = nullptr;
-        std::istream* is = nullptr;
-        std::string_view program_str = {};
-
-        execute_params_t(buffer_t* buf_,   std::ostream* os_,
-                         std::istream* is_, std::string_view program_str_)
-        : buf(buf_), os(os_), is(is_), program_str(program_str_) {
-            assert(buf);
-            assert(os);
-            assert(is);
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
     class node_loc_t {
         location_t loc_;
 
@@ -150,7 +130,9 @@ namespace paracl {
 
     class value_t;
     class analyze_t;
-    class node_scope_t;
+    class scope_base_t;
+    class execute_params_t;
+    class analyze_params_t;
 
     class node_expression_t : public node_t,
                               public node_loc_t {
@@ -159,7 +141,7 @@ namespace paracl {
         virtual value_t   execute(execute_params_t& params) = 0;
         virtual analyze_t analyze(analyze_params_t& params) = 0;
         virtual void set_unpredict() = 0;
-        virtual node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
+        virtual node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -210,6 +192,26 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    struct execute_params_t final {
+        buffer_t* buf;
+        std::ostream* os = nullptr;
+        std::istream* is = nullptr;
+        std::string_view program_str = {};
+
+        bool is_return = false;
+        value_t return_result;
+
+        execute_params_t(buffer_t* buf_,   std::ostream* os_,
+                         std::istream* is_, std::string_view program_str_)
+        : buf(buf_), os(os_), is(is_), program_str(program_str_) {
+            assert(buf);
+            assert(os);
+            assert(is);
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
     struct analyze_t final {
         value_t result;
         bool    is_constexpr = true;
@@ -218,6 +220,21 @@ namespace paracl {
         analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
         analyze_t(const value_t& value_) : result(value_) {}
         analyze_t(node_type_e type_, node_type_t* value_) : result(type_, value_) { assert(value_); }
+    };
+
+    /* ----------------------------------------------------- */
+
+    struct analyze_params_t final {
+        buffer_t* buf;
+        std::string_view program_str = {};
+
+        bool is_return = false;
+        analyze_t return_result;
+
+        analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})
+        : buf(buf_), program_str(program_str_) {
+            assert(buf);
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -237,11 +254,11 @@ namespace paracl {
         virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_unpredict() = 0;
-        virtual node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const = 0;
+        virtual node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
-    
+
     class node_instruction_t final : public node_statement_t {
         node_expression_t* expr_;
 
@@ -257,7 +274,7 @@ namespace paracl {
             expr_->analyze(params);
         }
 
-        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(buf, parent));
         }
 
@@ -320,25 +337,60 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_t final : public node_statement_t,
-                               public name_table_t,
-                               public memory_table_t {
-        node_scope_t* parent_;
-        std::vector<node_statement_t*> statements_;
+    class scope_base_t : public name_table_t,
+                         public memory_table_t {
+        scope_base_t* parent_;
 
-    private:
+    protected:
+        std::vector<node_statement_t*> statements_;
+        node_expression_t* return_expr_ = nullptr;
+
+    protected:
+        template <typename FuncT, typename ParamsT>
+        void process_statements(FuncT&& func, ParamsT& params) const {
+            for (auto statement : statements_) {
+                std::forward<FuncT>(func)(statement, params);
+                if (params.is_return)
+                    break;
+            }
+        }
+
         template <typename FuncT>
-        void process_statements(FuncT&& func) const {
+        void through_statements(FuncT&& func) const {
             std::ranges::for_each(statements_, [&func](auto statement) {
                 std::forward<FuncT>(func)(statement);
             });
         }
 
-    public:
-        node_scope_t(const location_t& loc, node_scope_t* parent)
-        : node_statement_t(loc), parent_(parent) {} 
+        template <typename ScopeT, typename ResT>
+        ResT* copy_impl(const location_t& loc, buffer_t* buf, scope_base_t* parent) const {
+            ScopeT* scope = buf->add_node<ScopeT>(loc, parent);
+            through_statements([&](auto statement) { scope->add_statement(statement->copy(buf, scope)); });
+            if (return_expr_)
+                scope->add_return(return_expr_->copy(buf, scope));
+            return scope;
+        }
 
-        void add_statement(node_statement_t* node) { assert(node); statements_.push_back(node); }
+        void set_unpredict_impl() {
+            through_statements([](auto statement) { statement->set_unpredict(); });
+            if (return_expr_)
+                return_expr_->set_unpredict();
+        }
+
+    public:
+        scope_base_t(scope_base_t* parent) : parent_(parent) {} 
+
+        void add_statement(node_statement_t* node) {
+            assert(node);
+            if (!return_expr_)
+                statements_.push_back(node);
+        }
+
+        void add_return(node_expression_t* node) {
+            assert(node);
+            if (!return_expr_)
+                return_expr_ = node;
+        }
 
         id_t* get_node(std::string_view name) const {
             for (auto scope = this; scope; scope = scope->parent_) {
@@ -348,29 +400,97 @@ namespace paracl {
             }
             return nullptr;
         }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_scope_t final : public node_statement_t,
+                               public scope_base_t {
+
+    public:
+        node_scope_t(const location_t& loc, scope_base_t* parent)
+        : node_statement_t(loc), scope_base_t(parent) {} 
 
         void execute(execute_params_t& params) override {
-            process_statements([&params](auto statement) { statement->execute(params); });
+            process_statements([](auto statements, auto& params) { statements->execute(params); }, params);
+
+            if (return_expr_) {
+                params.return_result = return_expr_->execute(params);
+                params.is_return = true;
+            }
+
             memory_table_t::clear_memory(params.buf);
         }
 
         void analyze(analyze_params_t& params) override {
-            process_statements([&params](auto statement) { statement->analyze(params); });
+            through_statements([&params](auto statement) { statement->analyze(params); });
+            process_statements([](auto statements, auto& params) { statements->analyze(params); }, params);
+
+            if (return_expr_) {
+                params.return_result = return_expr_->analyze(params);
+                params.is_return = true;
+            }
+
             memory_table_t::clear_memory(params.buf);
         }
 
-        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
-            node_scope_t* scope = buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
-            process_statements([&](auto statement) { scope->add_statement(statement->copy(buf, scope)); });
-            return scope;
+        node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
+            return copy_impl<node_scope_t, node_statement_t>(node_loc_t::loc(), buf, parent);
         }
 
         void set_unpredict() override {
-            process_statements([](auto statement) { statement->set_unpredict(); });
+            set_unpredict_impl();
         }
     };
 
     /* ----------------------------------------------------- */
+
+    class node_scope_r_t final : public node_expression_t,
+                                 public scope_base_t {
+
+    public:
+        node_scope_r_t(const location_t& loc, scope_base_t* parent)
+        : node_expression_t(loc), scope_base_t(parent) {}
+
+        value_t execute(execute_params_t& params) override {
+            process_statements([](auto statement, auto& params) { statement->execute(params); }, params);
+
+            if (params.is_return) {
+                params.is_return = false;
+                return params.return_result;
+            }
+
+            value_t result = return_expr_->execute(params);
+            memory_table_t::clear_memory(params.buf);
+            return result;
+        }
+
+        analyze_t analyze(analyze_params_t& params) override {
+            through_statements([&params](auto statement) { statement->analyze(params); });
+            process_statements([](auto statement, auto& params) { statement->analyze(params); }, params);
+
+            if (params.is_return) {
+                params.is_return = false;
+                return params.return_result;
+            }
+
+            if (!return_expr_)
+                throw error_type_deduction_t{node_loc_t::loc(), params.program_str,
+                                             "missing required return statement"};;
+
+            analyze_t result = return_expr_->analyze(params);
+            memory_table_t::clear_memory(params.buf);
+            return result;
+        }
+
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
+            return copy_impl<node_scope_r_t, node_expression_t>(node_loc_t::loc(), buf, parent);
+        }
+
+        void set_unpredict() override {
+            set_unpredict_impl();
+        }
+    };
 
     class node_number_t final : public node_simple_type_t {
         int number_;
@@ -382,15 +502,15 @@ namespace paracl {
             return {node_type_e::NUMBER, this};
         }
 
-        void print(execute_params_t& params) override { *(params.os) << number_ << '\n'; }
-
-        int get_value() const noexcept { return number_; }
-
         analyze_t analyze(analyze_params_t& params) override {
             return {node_type_e::NUMBER, this};
         }
+
+        void print(execute_params_t& params) override { *(params.os) << number_ << '\n'; }
+
+        int get_value() const noexcept { return number_; }
     
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_number_t>(node_loc_t::loc(), number_);
         }
     };
@@ -411,7 +531,7 @@ namespace paracl {
             return {node_type_e::UNDEF, this};
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_undef_t>(node_loc_t::loc());
         }
     };
@@ -437,7 +557,7 @@ namespace paracl {
 
         void print(execute_params_t& params) override { *(params.os) << "?\n"; }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_input_t>(node_loc_t::loc());
         }
     };
@@ -497,7 +617,7 @@ namespace paracl {
             );
         }
 
-        node_indexes_t* copy(buffer_t* buf, node_scope_t* parent) const {
+        node_indexes_t* copy(buffer_t* buf, scope_base_t* parent) const {
             node_indexes_t* node_indexes = buf->add_node<node_indexes_t>(node_loc_t::loc());
             std::ranges::for_each(indexes_, [node_indexes, buf, parent](auto index) {
                 node_indexes->add_index(index->copy(buf, parent));
@@ -519,7 +639,7 @@ namespace paracl {
         virtual array_execute_data_t execute(execute_params_t& params) const = 0;
         virtual array_analyze_data_t analyze(analyze_params_t& params) = 0;
         virtual int get_level() const = 0;
-        virtual node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const = 0;
+        virtual node_array_values_t* copy_vals(buffer_t* buf, scope_base_t* parent) const = 0;
         virtual ~node_array_values_t() = default;
     };
 
@@ -531,7 +651,7 @@ namespace paracl {
         node_array_value_t(const location_t& loc) : node_loc_t(loc) {}
         virtual void add_value_execute(std::vector<value_t  >& values, execute_params_t& params) const = 0;
         virtual void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) = 0;
-        virtual node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const = 0;
+        virtual node_array_value_t* copy_val(buffer_t* buf, scope_base_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -557,7 +677,7 @@ namespace paracl {
             process_value(values, [](auto value, auto& params) { return value->analyze(params); }, params);
         }
 
-        node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const override {
+        node_array_value_t* copy_val(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_expression_value_t>(node_loc_t::loc(), value_->copy(buf, parent));
         }
     };
@@ -654,12 +774,12 @@ namespace paracl {
             );
         }
 
-        node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
+        node_array_values_t* copy_vals(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
                                                        count_->copy(buf, parent));
         }
 
-        node_array_value_t* copy_val(buffer_t* buf, node_scope_t* parent) const override {
+        node_array_value_t* copy_val(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_repeat_values_t>(node_loc_t::loc(), value_->copy(buf, parent),
                                                        count_->copy(buf, parent));
         }
@@ -724,7 +844,7 @@ namespace paracl {
             return data;
         }
 
-        node_array_values_t* copy_vals(buffer_t* buf, node_scope_t* parent) const override {
+        node_array_values_t* copy_vals(buffer_t* buf, scope_base_t* parent) const override {
             node_list_values_t* node_values = buf->add_node<node_list_values_t>(node_loc_t::loc());
             std::ranges::for_each(values_, [node_values, buf, parent](auto value) {
                 node_values->add_value(value->copy_val(buf, parent));
@@ -808,7 +928,7 @@ namespace paracl {
         template <typename ErrorT, typename ElemT, typename ParamsT>
         void check_index_out(int index, size_t depth, 
                              const std::vector<ElemT>& all_indexes,
-                             ParamsT params) const {
+                             ParamsT& params) const {
             if (index < 0) {
                 location_t loc = get_index_location<ElemT>(depth, all_indexes);
                 throw ErrorT{loc, params.program_str,
@@ -1006,7 +1126,7 @@ namespace paracl {
             }
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             node_array_t* node_array = buf->add_node<node_array_t>(node_loc_t::loc(),
                                                                    init_values_->copy_vals(buf, parent),
                                                                    init_indexes_->copy(buf, parent));
@@ -1148,13 +1268,12 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     class node_lvalue_t final : public node_expression_t {
-        node_variable_t* variable_ = nullptr;
+        node_variable_t* variable_;
         node_indexes_t*  indexes_;
 
     public:
         node_lvalue_t(const location_t& loc, node_variable_t* variable, node_indexes_t* indexes)
         : node_expression_t(loc), variable_(variable), indexes_(indexes) {
-            assert(variable_);
             assert(indexes_);
         }
 
@@ -1178,7 +1297,7 @@ namespace paracl {
             return variable_->analyze(indexes_, params);
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             node_variable_t* var_node = nullptr;
             if (variable_) {
                 if (parent)
@@ -1219,7 +1338,7 @@ namespace paracl {
             return lvalue_->set_value_analyze(rvalue_->analyze(params), params, node_loc_t::loc());
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_assign_t>(node_loc_t::loc(),
                                                 static_cast<node_lvalue_t*>(lvalue_->copy(buf, parent)),
                                                 rvalue_->copy(buf, parent));
@@ -1328,7 +1447,7 @@ namespace paracl {
             return a_result;
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_bin_op_t>(node_loc_t::loc(), type_,
                                                 left_->copy(buf, parent), right_->copy(buf, parent));
         }
@@ -1392,7 +1511,7 @@ namespace paracl {
             return a_result;
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
         }
 
@@ -1418,7 +1537,7 @@ namespace paracl {
             return argument_->analyze(params);
         }
 
-        node_expression_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
         }
 
@@ -1470,11 +1589,12 @@ namespace paracl {
             check_condition(params);
             body_->set_unpredict();
             body_->analyze(params);
+            params.is_return = false;
         }
 
-        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_loop_t>(node_loc_t::loc(), condition_->copy(buf, parent),
-                                             static_cast<node_scope_t*>(body_->copy(buf, parent)));
+                                              static_cast<node_scope_t*>(body_->copy(buf, parent)));
         }
 
         void set_unpredict() override {
@@ -1519,9 +1639,11 @@ namespace paracl {
 
             body1_->analyze(params);
             body2_->analyze(params);
+
+            params.is_return = false;
         }
 
-        node_statement_t* copy(buffer_t* buf, node_scope_t* parent) const override {
+        node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_fork_t>(node_loc_t::loc(), condition_->copy(buf, parent),
                                               static_cast<node_scope_t*>(body1_->copy(buf, parent)),
                                               static_cast<node_scope_t*>(body2_->copy(buf, parent)));

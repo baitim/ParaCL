@@ -1,8 +1,13 @@
 /*
 Grammar:
     program      -> statements
-    statements   -> statements statement | statements; | statements scope | empty
-    scope        -> '{' statements '}'
+    statements   -> statements   statement | statements;   | statements   scope | statements   return | empty
+    statements_r -> statements_r statement | statements_r; | statements_r scope | statements_r return | empty
+    scope        -> { statements   }
+    scope_r      -> { statements_r } | { statements_r expression; }
+
+    return       -> return expression;
+
     statement    -> fork  | loop | instruction
     instruction  -> expression;
     expression   -> print | assignment | expression_lgc
@@ -10,30 +15,28 @@ Grammar:
     fork         -> if condition body | if condition body else body
     loop         -> while condition body
 
-    condition    -> '(' expression ')'
+    condition    -> ( expression )
     body         -> scope | lghost_scope statement rghost_scope | ;
 
     print        -> print expression
 
-
-    lvalue       -> variable indexes
-    rvalue       -> expression | array_repeat
-    assignment   -> lvalue = rvalue
+    rvalue       -> scope_r | expression | array_repeat
+    assignment   -> variable indexes = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> '(' expression ')' | number | undef | array | ? | un_oper terminal | variable indexes
+    terminal       -> ( expression ) | number | undef | array | ? | un_oper terminal | variable indexes
     variable       -> id
 
-    array          -> array '(' array_values ')' indexes
+    array          -> array ( array_values ) indexes
     array_repeat   -> repeat_values indexes
-    repeat_values  -> repeat '(' expression, expression ')'
+    repeat_values  -> repeat ( expression, expression )
     list_values    -> array_values, array_value | array_value
     array_value    -> expression | repeat_values
     indexes        -> indexes index | empty
-    index          -> '[' expression ']'
+    index          -> [ expression ]
 */
 
 %language "c++"
@@ -65,6 +68,7 @@ Grammar:
 }
 
 %token
+    RETURN
     PRINT
     INPUT
     IF
@@ -108,11 +112,18 @@ Grammar:
 %precedence THEN
 %precedence ELSE
 
+%precedence SCOLON
+%precedence RBRACKET_CURLY
+
 %token <int>                NUMBER
 %token <std::string>        ID
 
 %nterm <node_scope_t*>      statements
+%nterm <node_scope_r_t*>    statements_r
 %nterm <node_scope_t*>      scope
+%nterm <node_scope_r_t*>    scope_r
+%nterm <node_expression_t*> return
+
 %nterm <node_scope_t*>      body
 %nterm <node_scope_t*>      lghost_scope
 %nterm                      rghost_scope
@@ -127,7 +138,6 @@ Grammar:
 
 %nterm <node_expression_t*> print
 
-%nterm <node_lvalue_t*>     lvalue
 %nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> assignment
 
@@ -156,10 +166,10 @@ Grammar:
 
 %code
 {
-    std::stack<node_scope_t*> scopes_stack;
-    node_scope_t* current_scope = nullptr;
+    std::stack<scope_base_t*> scopes_stack;
+    scope_base_t* current_scope = nullptr;
 
-    void drill_down_to_scope(node_scope_t* scope) {
+    void drill_down_to_scope(scope_base_t* scope) {
         scopes_stack.push(scope);
         current_scope = scope;
     }
@@ -193,9 +203,28 @@ statements: %empty                 {
           | statements statement   { $$ = $1; $$->add_statement($2); }
           | statements SCOLON      { $$ = $1; }
           | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
+          | statements return      { $$ = $1; $$->add_return($2); }
 ;
 
-scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
+statements_r: %empty               {
+                                        $$ = driver->add_node<node_scope_r_t>(@$, 1, current_scope);
+                                        drill_down_to_scope($$);
+                                   }
+          | statements_r statement { $$ = $1; $$->add_statement($2); }
+          | statements_r SCOLON    { $$ = $1; }
+          | statements_r scope     { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
+          | statements_r return    { $$ = $1; $$->add_return($2); }
+;
+
+scope:   LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
+;
+
+scope_r: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
+       | LBRACKET_CURLY statements_r expression SCOLON RBRACKET_CURLY %prec SCOLON { $$ = $2; $$->add_return($3); }
+;
+
+return: RETURN expression SCOLON { $$ = $2; }
+;
 
 statement: fork         { $$ = $1; }
          | loop         { $$ = $1; }
@@ -223,9 +252,10 @@ loop: LOOP condition body { $$ = driver->add_node<node_loop_t>(@1, 5, $2, $3); }
 condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 ;
 
-body: scope                                 { $$ = $1; lift_up_from_scope(); }
-    | lghost_scope statement rghost_scope   { $1->add_statement($2); $$ = $1; }
-    | SCOLON                                { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); }
+body: scope   { $$ = $1; lift_up_from_scope(); }
+    | lghost_scope return    rghost_scope             { $1->add_return($2);    $$ = $1; }
+    | lghost_scope statement rghost_scope %prec THEN  { $1->add_statement($2); $$ = $1; }
+    | SCOLON  { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); }
 ;
 
 lghost_scope: %empty { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
@@ -234,17 +264,17 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-lvalue: variable indexes { 
-                            node_variable_t* var = decl_var($1, @1, driver);
-                            $$ = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
-                         }
-;
-
-rvalue: expression   { $$ = $1; }
+rvalue: scope_r      { $$ = $1; }
+      | expression   { $$ = $1; }
       | array_repeat { $$ = $1; }
 ;
 
-assignment: lvalue ASSIGN rvalue { $$ = driver->add_node<node_assign_t>(@3, 1, $1, $3); }
+assignment: variable indexes ASSIGN rvalue
+        {
+            node_variable_t* var    = decl_var($1, @1, driver);
+            node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+            $$ = driver->add_node<node_assign_t>(@3, 1, lvalue, $4);
+        }
 ;
 
 expression_lgc: expression_lgc bin_oper_lgc expression_cmp { $$ = driver->add_node<node_bin_op_t>(@2, 1, $2, $1, $3); }

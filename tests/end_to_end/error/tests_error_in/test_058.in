@@ -1,0 +1,6 @@
+arr2 = array(repeat(array(1, 2, 3), 3), array(0, 1));
+
+x = 1;
+x = {
+    arr2[0];
+};
