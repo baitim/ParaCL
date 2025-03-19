@@ -1,0 +1,2 @@
+foo = func(x, x) { x + x; };
+result = foo(1, 1);

@@ -3,10 +3,15 @@ Grammar:
     program      -> statements
     statements   -> statements   statement | statements;   | statements   scope | statements   return | empty
     statements_r -> statements_r statement | statements_r; | statements_r scope | statements_r return | empty
-    scope        -> { statements   }
-    block        -> { statements_r } | { statements_r expression; }
+    scope        -> { statements }
+    
+    function_decl -> foo ( function_decl_args ) block
+    function_call -> variable_shifted ( function_call_args )
+    block         -> { statements_r } | { statements_r expression; }
+    return        -> return expression;
 
-    return       -> return expression;
+    function_decl_args -> function_decl_args, variable   | variable   | empty
+    function_call_args -> function_call_args, expression | expression | empty
 
     statement    -> fork  | loop | instruction
     instruction  -> expression;
@@ -20,15 +25,17 @@ Grammar:
 
     print        -> print expression
 
-    rvalue       -> block | expression | array_repeat
+    rvalue       -> function_decl | block | expression | array_repeat
     assignment   -> variable indexes = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
     expression_pls -> expression_pls bin_oper_pls expression_mul | expression_mul
     expression_mul -> expression_mul bin_oper_mul terminal       | terminal
-    terminal       -> ( expression ) | number | undef | array | ? | un_oper terminal | variable indexes
-    variable       -> id
+    terminal       -> ( expression ) | number | undef | array | ? |
+                                       un_oper terminal | variable_shifted | function_call
+    variable         -> id
+    variable_shifted -> variable indexes
 
     array          -> array ( array_values ) indexes
     array_repeat   -> repeat_values indexes
@@ -68,6 +75,7 @@ Grammar:
 }
 
 %token
+    FUNC
     RETURN
     PRINT
     INPUT
@@ -121,8 +129,14 @@ Grammar:
 %nterm <node_scope_t*>      statements
 %nterm <node_block_t*>      statements_r
 %nterm <node_scope_t*>      scope
-%nterm <node_block_t*>      block
-%nterm <node_expression_t*> return
+
+%nterm <node_function_t*>      function_decl
+%nterm <node_function_call_t*> function_call
+%nterm <node_block_t*>         block
+%nterm <node_expression_t*>    return
+
+%nterm <function_decl_args_t> function_decl_args
+%nterm <function_call_args_t> function_call_args
 
 %nterm <node_scope_t*>      body
 %nterm <node_scope_t*>      lghost_scope
@@ -143,6 +157,7 @@ Grammar:
 
 %nterm <node_expression_t*> terminal
 %nterm <std::string>        variable
+%nterm <node_lvalue_t*>     variable_shifted
 
 %nterm <node_array_t*>         array
 %nterm <node_array_t*>         array_repeat
@@ -166,6 +181,8 @@ Grammar:
 
 %code
 {
+    std::vector<node_variable_t*> func_decl_args;
+
     std::stack<scope_base_t*> scopes_stack;
     scope_base_t* current_scope = nullptr;
 
@@ -207,8 +224,9 @@ statements: %empty                 {
 ;
 
 statements_r: %empty               {
-                                        $$ = driver->add_node<node_block_t>(@$, 1, current_scope);
+                                        $$ = driver->add_node<node_block_t>(@$, 1, nullptr);
                                         drill_down_to_scope($$);
+                                        $$->add_variables(func_decl_args.begin(), func_decl_args.end());
                                    }
           | statements_r statement { $$ = $1; $$->add_statement($2); }
           | statements_r SCOLON    { $$ = $1; }
@@ -216,7 +234,21 @@ statements_r: %empty               {
           | statements_r return    { $$ = $1; $$->add_return($2); }
 ;
 
-scope:   LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
+scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
+;
+
+function_decl: FUNC LBRACKET_ROUND function_decl_args RBRACKET_ROUND block
+            {
+                $$ = driver->add_node<node_function_t>(@1, 4, $3, $5);
+                lift_up_from_scope();
+                func_decl_args = {};
+            }
+;
+
+function_call: variable_shifted LBRACKET_ROUND function_call_args RBRACKET_ROUND
+        {
+            $$ = driver->add_node<node_function_call_t>(@1, $1->loc().len, $1, $3);
+        }
 ;
 
 block: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
@@ -224,6 +256,27 @@ block: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
 ;
 
 return: RETURN expression SCOLON { $$ = $2; }
+;
+
+function_decl_args: %empty { $$ = function_decl_args_t(); }
+                  | function_decl_args COMMA variable
+                        {
+                            $$ = std::move($1);
+                            node_variable_t* var = driver->add_node<node_variable_t>(@3, $3.length(), $3);
+                            $$.add_arg(var);
+                            func_decl_args.push_back(var);
+                        }
+                  | variable
+                        {
+                            node_variable_t* var = driver->add_node<node_variable_t>(@1, $1.length(), $1);
+                            $$.add_arg(var);
+                            func_decl_args.push_back(var);
+                        }
+;
+
+function_call_args: %empty { $$ = function_call_args_t(); }
+                  | function_call_args COMMA expression { $$ = std::move($1); $$.add_arg($3); }
+                  | expression                          { $$.add_arg($1); }
 ;
 
 statement: fork         { $$ = $1; }
@@ -264,9 +317,10 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-rvalue: block        { $$ = $1; }
-      | expression   { $$ = $1; }
-      | array_repeat { $$ = $1; }
+rvalue: function_decl { $$ = $1; }
+      | block         { $$ = $1; }
+      | expression    { $$ = $1; }
+      | array_repeat  { $$ = $1; }
 ;
 
 assignment: variable indexes ASSIGN rvalue
@@ -299,11 +353,18 @@ terminal: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
         | INPUT             { $$ = driver->add_node<node_input_t>(@1, 1); }
         | array             { $$ = $1; }
         | un_oper terminal  { $$ = driver->add_node<node_un_op_t>(@1, 1, $1, $2); }
-        | variable indexes  { $$ = driver->add_node<node_lvalue_t>(@1, $1.length(),
-                                        static_cast<node_variable_t*>(current_scope->get_node($1)), $2); }
+        | variable_shifted  { $$ = $1; }
+        | function_call     { $$ = $1; }
 ;
 
 variable: ID { $$ = $1; }
+;
+
+variable_shifted: variable indexes
+        {
+            node_variable_t* var = static_cast<node_variable_t*>(current_scope->get_node($1));
+            $$ = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+        }
 ;
 
 array: ARRAY LBRACKET_ROUND list_values RBRACKET_ROUND indexes

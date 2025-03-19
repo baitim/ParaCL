@@ -20,6 +20,7 @@ COMMENTS "//".*
 {COMMENTS}      // nothing
 {NS}            { update_new_line(); }
 
+"func"          { return yy::parser::token_type::FUNC;   }
 "return"        { return yy::parser::token_type::RETURN; }
 "print"         { return yy::parser::token_type::PRINT;  }
 "?"             { return yy::parser::token_type::INPUT;  }

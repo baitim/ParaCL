@@ -6,7 +6,9 @@
 #include <cassert>
 #include <memory>
 #include <ranges>
+#include <stack>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -16,6 +18,16 @@ namespace paracl {
         int col = -1;
         int len = -1;
     };
+
+    inline std::ostream& operator<<(std::ostream& os, const location_t& location) {
+        os << "location:\n";
+        os << "\trow:" << location.row << "\n";
+        os << "\tcol:" << location.col << "\n";
+        os << "\tlen:" << location.len;
+        return os;
+    }
+
+    static const int DEFAULT_INT_VALUE = 0;
 
     /* ----------------------------------------------------- */
 
@@ -85,6 +97,14 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class error_declaration_t : public error_location_t {
+    public:
+        error_declaration_t(const location_t& loc, std::string_view program_str, const std::string& msg)
+        : error_location_t(loc, program_str, str_red("undeclared variable: " + msg)) {}
+    };
+
+    /* ----------------------------------------------------- */
+
     class error_type_deduction_t : public error_location_t {
     public:
         error_type_deduction_t(const location_t& loc, std::string_view program_str, const std::string& msg)
@@ -140,19 +160,37 @@ namespace paracl {
         node_expression_t(const location_t& loc) : node_loc_t(loc) {}
         virtual value_t   execute(execute_params_t& params) = 0;
         virtual analyze_t analyze(analyze_params_t& params) = 0;
-        virtual void set_unpredict() = 0;
+        virtual void set_predict(bool value) = 0;
         virtual node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const = 0;
     };
 
     /* ----------------------------------------------------- */
+
+    enum class general_type_e {
+        INTEGER,
+        ARRAY,
+        FUNCTION
+    };
+
+    inline std::string type2str(general_type_e type) {
+        switch (type) {
+            case general_type_e::INTEGER:  return "integer";
+            case general_type_e::ARRAY:    return "array";
+            case general_type_e::FUNCTION: return "function";
+            default:                       return "unknown type";
+        }
+    }
 
     class node_type_t : public node_expression_t {
     public:
         node_type_t(const location_t& loc) : node_expression_t(loc) {}
         virtual void print(execute_params_t& params) = 0;
         virtual int  level() const = 0;
-        void set_unpredict() override {}
+        void set_predict(bool value) override {}
+        virtual general_type_e get_general_type() const noexcept = 0;
     };
+
+    /* ----------------------------------------------------- */
 
     class node_simple_type_t : public node_type_t {
     public:
@@ -163,19 +201,21 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     enum class node_type_e {
-        NUMBER,
+        INTEGER,
         UNDEF,
         ARRAY,
-        INPUT
+        INPUT,
+        FUNCTION
     };
 
     inline std::string type2str(node_type_e type) {
         switch (type) {
-            case node_type_e::NUMBER: return "number";
-            case node_type_e::UNDEF:  return "undef";
-            case node_type_e::ARRAY:  return "array";
-            case node_type_e::INPUT:  return "number";
-            default:                  return "unknown type";
+            case node_type_e::INTEGER:  return "integer";
+            case node_type_e::UNDEF:    return "undef";
+            case node_type_e::ARRAY:    return "array";
+            case node_type_e::INPUT:    return "number";
+            case node_type_e::FUNCTION: return "function";
+            default:                    return "unknown type";
         }
     }
 
@@ -192,14 +232,59 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    template <typename ElemT>
+    class stack_t final {
+        std::stack<ElemT> stack;
+
+    public:
+        void push_value(const ElemT& value) {
+            stack.push(value);
+        }
+
+        ElemT pop_value() {
+            if (stack.empty())
+                throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+
+            ElemT value = stack.top();
+            stack.pop();
+            return value;
+        }
+
+        template <typename IterT>
+        void push_values(IterT begin, IterT end) {
+            for (auto it = begin; it != end; ++it)
+                stack.push(*it);
+        }
+
+        std::vector<ElemT> pop_values(size_t count) {
+            std::vector<ElemT> result;
+            result.reserve(count);
+
+            while (count-- > 0) {
+                if (stack.empty())
+                    throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+
+                result.push_back(stack.top());
+                stack.pop();
+            }
+
+            return result;
+        }
+
+        size_t size() const {
+            return stack.size();
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
     struct execute_params_t final {
         buffer_t* buf;
         std::ostream* os = nullptr;
         std::istream* is = nullptr;
         std::string_view program_str = {};
 
-        bool is_return = false;
-        value_t return_result;
+        stack_t<value_t> stack;
 
         execute_params_t(buffer_t* buf_,   std::ostream* os_,
                          std::istream* is_, std::string_view program_str_)
@@ -228,14 +313,21 @@ namespace paracl {
         buffer_t* buf;
         std::string_view program_str = {};
 
-        bool is_return = false;
-        analyze_t return_result;
+        stack_t<analyze_t> stack;
 
         analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})
         : buf(buf_), program_str(program_str_) {
             assert(buf);
         }
     };
+
+    /* ----------------------------------------------------- */
+
+    inline void expect_types_eq(node_type_e result,    node_type_e expected,
+                                const location_t& loc, analyze_params_t& params) {
+        if (result != expected)
+            throw error_analyze_t{loc, params.program_str, "wrong type: " + type2str(result)};
+    }
 
     /* ----------------------------------------------------- */
 
@@ -253,7 +345,7 @@ namespace paracl {
         node_statement_t(const location_t& loc) : node_loc_t(loc) {}
         virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
-        virtual void set_unpredict() = 0;
+        virtual void set_predict(bool value) = 0;
         virtual node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const = 0;
     };
 
@@ -278,7 +370,7 @@ namespace paracl {
             return buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(buf, parent));
         }
 
-        void set_unpredict() override { expr_->set_unpredict(); };
+        void set_predict(bool value) override { expr_->set_predict(value); };
     };
 
     /* ----------------------------------------------------- */
@@ -299,6 +391,16 @@ namespace paracl {
 
     public:
         void add_variable(id_t* node) { assert(node); variables_.emplace(node->get_name(), node); }
+
+        template <typename IterT>
+        requires std::is_base_of_v<id_t,
+                                   std::remove_pointer_t<typename std::iterator_traits<IterT>::value_type>>
+        void add_variables(IterT begin, IterT end) {
+            for (auto it = begin; it != end; ++it) {
+                assert(*it);
+                variables_.emplace((*it)->get_name(), *it);
+            }
+        }
 
         id_t* get_var_node(std::string_view name) const {
             auto var_iter = variables_.find(name);
@@ -347,12 +449,14 @@ namespace paracl {
 
     protected:
         template <typename FuncT, typename ParamsT>
-        void process_statements(FuncT&& func, ParamsT& params) const {
+        bool process_statements(FuncT&& func, ParamsT& params) const {
+            size_t old_stack_size = params.stack.size();
             for (auto statement : statements_) {
                 std::forward<FuncT>(func)(statement, params);
-                if (params.is_return)
-                    break;
+                if (old_stack_size != params.stack.size())
+                    return true;
             }
+            return false;
         }
 
         template <typename FuncT>
@@ -363,18 +467,17 @@ namespace paracl {
         }
 
         template <typename ScopeT, typename ResT>
-        ResT* copy_impl(const location_t& loc, buffer_t* buf, scope_base_t* parent) const {
-            ScopeT* scope = buf->add_node<ScopeT>(loc, parent);
+        ResT* copy_impl(ScopeT* scope, buffer_t* buf) const {
             through_statements([&](auto statement) { scope->add_statement(statement->copy(buf, scope)); });
             if (return_expr_)
                 scope->add_return(return_expr_->copy(buf, scope));
             return scope;
         }
 
-        void set_unpredict_impl() {
-            through_statements([](auto statement) { statement->set_unpredict(); });
+        void set_predict_impl(bool value) {
+            through_statements([value](auto statement) { statement->set_predict(value); });
             if (return_expr_)
-                return_expr_->set_unpredict();
+                return_expr_->set_predict(value);
         }
 
     public:
@@ -412,34 +515,35 @@ namespace paracl {
         : node_statement_t(loc), scope_base_t(parent) {} 
 
         void execute(execute_params_t& params) override {
-            process_statements([](auto statements, auto& params) { statements->execute(params); }, params);
+            bool is_return = process_statements([](auto statements, auto& params) {
+                                                    statements->execute(params);
+                                                }, params);
 
-            if (return_expr_) {
-                params.return_result = return_expr_->execute(params);
-                params.is_return = true;
-            }
+            if (!is_return && return_expr_)
+                params.stack.push_value(return_expr_->execute(params));
 
             memory_table_t::clear_memory(params.buf);
         }
 
         void analyze(analyze_params_t& params) override {
             through_statements([&params](auto statement) { statement->analyze(params); });
-            process_statements([](auto statements, auto& params) { statements->analyze(params); }, params);
+            bool is_return = process_statements([](auto statements, auto& params) {
+                                                    statements->analyze(params);
+                                                }, params);
 
-            if (return_expr_) {
-                params.return_result = return_expr_->analyze(params);
-                params.is_return = true;
-            }
+            if (!is_return && return_expr_)
+                params.stack.push_value(return_expr_->analyze(params));
 
             memory_table_t::clear_memory(params.buf);
         }
 
         node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
-            return copy_impl<node_scope_t, node_statement_t>(node_loc_t::loc(), buf, parent);
+            node_scope_t* scope = buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
+            return copy_impl<node_scope_t, node_statement_t>(scope, buf);
         }
 
-        void set_unpredict() override {
-            set_unpredict_impl();
+        void set_predict(bool value) override {
+            set_predict_impl(value);
         }
     };
 
@@ -453,12 +557,12 @@ namespace paracl {
         : node_expression_t(loc), scope_base_t(parent) {}
 
         value_t execute(execute_params_t& params) override {
-            process_statements([](auto statement, auto& params) { statement->execute(params); }, params);
+            bool is_return = process_statements([](auto statement, auto& params) {
+                                                    statement->execute(params);
+                                                }, params);
 
-            if (params.is_return) {
-                params.is_return = false;
-                return params.return_result;
-            }
+            if (is_return)
+                return params.stack.pop_value();
 
             value_t result = return_expr_->execute(params);
             memory_table_t::clear_memory(params.buf);
@@ -466,17 +570,17 @@ namespace paracl {
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            through_statements([&params](auto statement) { statement->analyze(params); });
-            process_statements([](auto statement, auto& params) { statement->analyze(params); }, params);
-
-            if (params.is_return) {
-                params.is_return = false;
-                return params.return_result;
-            }
-
             if (!return_expr_)
                 throw error_type_deduction_t{node_loc_t::loc(), params.program_str,
-                                             "missing required return statement"};;
+                                             "missing required return statement"};
+
+            through_statements([&params](auto statement) { statement->analyze(params); });
+            bool is_return = process_statements([](auto statement, auto& params) {
+                                                    statement->analyze(params);
+                                                }, params);
+
+            if (is_return)
+                return params.stack.pop_value();
 
             analyze_t result = return_expr_->analyze(params);
             memory_table_t::clear_memory(params.buf);
@@ -484,13 +588,23 @@ namespace paracl {
         }
 
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
-            return copy_impl<node_block_t, node_expression_t>(node_loc_t::loc(), buf, parent);
+            node_block_t* block = buf->add_node<node_block_t>(node_loc_t::loc(), nullptr);
+            return copy_impl<node_block_t, node_expression_t>(block, buf);
         }
 
-        void set_unpredict() override {
-            set_unpredict_impl();
+        template <typename IterT>
+        node_block_t* copy_with_args(buffer_t* buf, IterT args_begin, IterT args_end) const {
+            auto* block_copy = buf->add_node<node_block_t>(node_loc_t::loc(), nullptr);
+            block_copy->add_variables(args_begin, args_end);
+            return copy_impl<node_block_t, node_block_t>(block_copy, buf);
+        }
+
+        void set_predict(bool value) override {
+            set_predict_impl(value);
         }
     };
+
+    /* ----------------------------------------------------- */
 
     class node_number_t final : public node_simple_type_t {
         int number_;
@@ -499,11 +613,11 @@ namespace paracl {
         node_number_t(const location_t& loc, int number) : node_simple_type_t(loc), number_(number) {}
 
         value_t execute(execute_params_t& params) override {
-            return {node_type_e::NUMBER, this};
+            return {node_type_e::INTEGER, this};
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            return {node_type_e::NUMBER, this};
+            return {node_type_e::INTEGER, this};
         }
 
         void print(execute_params_t& params) override { *(params.os) << number_ << '\n'; }
@@ -513,6 +627,8 @@ namespace paracl {
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_number_t>(node_loc_t::loc(), number_);
         }
+
+        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
@@ -534,6 +650,8 @@ namespace paracl {
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_undef_t>(node_loc_t::loc());
         }
+
+        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
@@ -548,7 +666,7 @@ namespace paracl {
             if (!params.is->good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
             
-            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
+            return {node_type_e::INTEGER, params.buf->add_node<node_number_t>(node_loc_t::loc(), value)};
         }
 
         analyze_t analyze(analyze_params_t& params) override {
@@ -560,6 +678,8 @@ namespace paracl {
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
             return buf->add_node<node_input_t>(node_loc_t::loc());
         }
+
+        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
@@ -1013,7 +1133,7 @@ namespace paracl {
             analyze_t a_index = indexes.back();
             value_t     index = a_index.result;
             if (a_index.is_constexpr &&
-                index.type == node_type_e::NUMBER) {
+                index.type == node_type_e::INTEGER) {
 
                 node_number_t* node_index = static_cast<node_number_t*>(index.value);
 
@@ -1135,7 +1255,8 @@ namespace paracl {
             return node_array;
         }
 
-        int level() const override { return 1 + init_values_->get_level(); };
+        int level() const override { return 1 + init_values_->get_level(); }
+        general_type_e get_general_type() const noexcept override { return general_type_e::ARRAY; }
     };
 
     /* ----------------------------------------------------- */
@@ -1147,35 +1268,38 @@ namespace paracl {
         analyze_t a_value_;
 
     private:
-        static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
-                                            const location_t& assign_loc, analyze_params_t& params) {
-            value_t lvalue = a_lvalue.result;
-            value_t rvalue = a_rvalue.result;
-            
-            node_type_e l_type = lvalue.type;
-            node_type_e r_type = rvalue.type;
-
-            if (l_type != node_type_e::ARRAY &&
-                r_type != node_type_e::ARRAY)
+        static void check_types_in_assign(general_type_e l_type, general_type_e r_type,
+                                          const location_t& loc_set, analyze_params_t& params) {
+            if (l_type == r_type)
                 return;
-            
-            if (l_type == node_type_e::ARRAY &&
-                r_type == node_type_e::ARRAY) {
-                int l_level = lvalue.value->level();
-                int r_level = rvalue.value->level();
+
+            std::string error_msg =   "wrong types in assign: " + type2str(r_type)
+                                    + " cannot be assigned to " + type2str(l_type);
+            throw error_analyze_t{loc_set, params.program_str, error_msg};
+        }
+
+        static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
+                                            const location_t& loc_set, analyze_params_t& params) {
+            node_type_t* lvalue = a_lvalue.result.value;
+            node_type_t* rvalue = a_rvalue.result.value;
+
+            general_type_e l_type = lvalue->get_general_type();
+            general_type_e r_type = rvalue->get_general_type();
+
+            check_types_in_assign(l_type, r_type, loc_set, params);
+
+            if (l_type == general_type_e::ARRAY &&
+                r_type == general_type_e::ARRAY) {
+                int l_level = lvalue->level();
+                int r_level = rvalue->level();
                 if (l_level != r_level) {
                     std::string error_msg = "wrong levels of arrays in assign: "
                                             + std::to_string(r_level) + " levels of array nesting "
                                             + "cannot be assigned to "
                                             + std::to_string(l_level) + " levels of array nesting";
-                    throw error_analyze_t{assign_loc, params.program_str, error_msg};
+                    throw error_analyze_t{loc_set, params.program_str, error_msg};
                 }
-                return;
             }
-                
-            std::string error_msg =   "wrong types in assign: " + type2str(r_type)
-                                    + " cannot be assigned to " + type2str(l_type);
-            throw error_analyze_t{assign_loc, params.program_str, error_msg};
         }
 
         value_t& shift(const std::vector<value_t>& indexes, execute_params_t& params) {
@@ -1191,9 +1315,7 @@ namespace paracl {
                 return a_value_;
             
             value_t value = a_value_.result;
-            expect_types_ne(value.type, node_type_e::UNDEF,  node_loc_t::loc(), params);
-            expect_types_ne(value.type, node_type_e::INPUT,  node_loc_t::loc(), params);
-            expect_types_ne(value.type, node_type_e::NUMBER, node_loc_t::loc(), params);
+            expect_types_eq(value.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
             node_array_t* array = static_cast<node_array_t*>(value.value);
             return array->shift(indexes, params);
@@ -1208,26 +1330,40 @@ namespace paracl {
             return real_value;
         }
 
-        value_t set_value(node_indexes_t* indexes, value_t new_value,
-                          execute_params_t& params) {
-            assert(indexes);
-            value_t& real_value = shift(indexes->execute(params), params);
-            is_setted = true;
-            return real_value = new_value;
-        }
-
         analyze_t analyze(node_indexes_t* ext_indexes, analyze_params_t& params) {
             assert(ext_indexes);
             std::vector<analyze_t> indexes = ext_indexes->analyze(params);
             if (indexes.size() > 0 && !is_setted)
                 throw error_analyze_t{node_loc_t::loc(), params.program_str,
                                       "attempt to indexing by not init variable"};
-
             return shift_analyze(indexes, params);
         }
 
+        value_t set_value(value_t new_value, execute_params_t& params) {
+            is_setted = true;
+            return e_value_ = new_value;
+        }
+
+        analyze_t set_value_analyze(analyze_t new_value, analyze_params_t& params,
+                                    const location_t& loc_set) {
+            if (is_setted)
+                expect_types_assignable(a_value_, new_value, loc_set, params);
+
+            is_setted = true;
+            a_value_.result = new_value.result;
+            a_value_.is_constexpr &= new_value.is_constexpr;
+            return a_value_;
+        }
+
+        value_t set_value(node_indexes_t* indexes, value_t new_value, execute_params_t& params) {
+            assert(indexes);
+            value_t& real_value = shift(indexes->execute(params), params);
+            is_setted = true;
+            return real_value = new_value;
+        }
+
         analyze_t set_value_analyze(node_indexes_t* ext_indexes, analyze_t new_value,
-                                    analyze_params_t& params, const location_t& assign_loc) {
+                                    analyze_params_t& params, const location_t& loc_set) {
             assert(ext_indexes);
             std::vector<analyze_t> indexes = ext_indexes->analyze(params);
             if (indexes.size() > 0 && !is_setted)
@@ -1237,7 +1373,7 @@ namespace paracl {
             analyze_t& shift_result = shift_analyze(indexes, params);
 
             if (is_setted)
-                expect_types_assignable(shift_result, new_value, assign_loc, params);
+                expect_types_assignable(shift_result, new_value, loc_set, params);
 
             is_setted = true;
             shift_result.result = new_value.result;
@@ -1245,7 +1381,7 @@ namespace paracl {
             return shift_result;
         }
 
-        void set_unpredict() { a_value_.is_constexpr = false; }
+        void set_predict(bool value) { a_value_.is_constexpr = value; }
 
         virtual ~settable_value_t() = default;
     };
@@ -1258,8 +1394,10 @@ namespace paracl {
         node_variable_t(const location_t& loc, std::string_view id)
         : id_t(id), settable_value_t(loc) {}
 
+        using id_t::get_name;
+
         node_variable_t* copy(buffer_t* buf) const {
-            return buf->add_node<node_variable_t>(node_loc_t::loc(), id_t::get_name());
+            return buf->add_node<node_variable_t>(node_loc_t::loc(), get_name());
         }
 
         void set_loc(const location_t& loc) { node_loc_t::set_loc(loc); }
@@ -1281,20 +1419,19 @@ namespace paracl {
             return variable_->execute(indexes_, params);
         }
 
+        analyze_t analyze(analyze_params_t& params) override {
+            if (!variable_)
+                throw error_declaration_t{node_loc_t::loc(), params.program_str, "in lvalue"};
+            return variable_->analyze(indexes_, params);
+        }
+
         value_t set_value(value_t new_value, execute_params_t& params) {
             return variable_->set_value(indexes_, new_value, params);
         }
 
         analyze_t set_value_analyze(analyze_t new_value, analyze_params_t& params,
-                                    const location_t& assign_loc) {
-            return variable_->set_value_analyze(indexes_, new_value, params, assign_loc);
-        }
-
-        analyze_t analyze(analyze_params_t& params) override {
-            if (!variable_)
-                throw error_analyze_t{node_loc_t::loc(), params.program_str,
-                                      "declaration error: undeclared variable"};
-            return variable_->analyze(indexes_, params);
+                                    const location_t& loc_set) {
+            return variable_->set_value_analyze(indexes_, new_value, params, loc_set);
         }
 
         node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
@@ -1314,7 +1451,206 @@ namespace paracl {
             return buf->add_node<node_lvalue_t>(node_loc_t::loc(), var_node, indexes_->copy(buf, parent));
         }
 
-        void set_unpredict() override { if (variable_) variable_->set_unpredict(); }
+        std::string_view get_name() const { assert(variable_); return variable_->get_name(); }
+
+        void set_predict(bool value) override { if (variable_) variable_->set_predict(value); }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class function_decl_args_t final {
+        static const int DEFAULT_DUPLICATE_IDX = -1;
+
+        std::unordered_set<std::string_view> name_table;
+        int duplicate_idx_ = DEFAULT_DUPLICATE_IDX;
+        
+        std::vector<node_variable_t*> args_;
+
+    private:
+        template<typename FuncT, typename ParamsT>
+        void process_args(FuncT&& func, ParamsT& params) {
+            int i = 0;
+            auto values = params.stack.pop_values(args_.size());
+            for (auto arg : std::ranges::reverse_view(values))
+                std::forward<FuncT>(func)(args_[i++], arg, params);
+        }
+
+    public:
+        void add_arg(node_variable_t* arg) {
+            assert(arg);
+            std::string_view name = arg->get_name();
+
+            if (name_table.find(name) != name_table.end())
+                duplicate_idx_ = args_.size();
+
+            args_.push_back(arg);
+            name_table.insert(name);
+        }
+
+        void execute(execute_params_t& params) {
+            process_args([](auto* arg_ptr, auto& arg_value, auto& params) {
+                arg_ptr->set_value(arg_value, params);
+            }, params);
+        }
+
+        void analyze(analyze_params_t& params) {
+            if (duplicate_idx_ != DEFAULT_DUPLICATE_IDX)
+                throw error_analyze_t{args_[duplicate_idx_]->loc(), params.program_str,
+                                      "attempt to create function with 2 similar variable names"};
+
+            process_args([](auto* arg_ptr, auto& arg_value, auto& params) {
+                arg_ptr->set_value_analyze(arg_value, params, arg_value.result.value->loc());
+            }, params);
+        }
+
+        function_decl_args_t copy(buffer_t* buf) const {
+            function_decl_args_t copy;
+            std::ranges::for_each(args_, [&buf, &copy](auto arg) {
+                node_variable_t* var_copy = arg->copy(buf);
+                copy.add_arg(var_copy);
+                
+            });
+            return copy;
+        }
+
+        auto   begin() const noexcept { return args_.begin(); }
+        auto   end()   const noexcept { return args_.end  (); }
+        size_t size()  const noexcept { return args_.size (); }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class function_call_args_t final {
+        std::vector<node_expression_t*> args_;
+
+    public:
+        void add_arg(node_expression_t* arg) {
+            assert(arg);
+            args_.push_back(arg);
+        }
+
+        void execute(execute_params_t& params) {
+            std::ranges::for_each(args_, [&params](auto arg) {
+                params.stack.push_value(arg->execute(params));
+            });
+        }
+
+        void analyze(analyze_params_t& params) {
+            std::ranges::for_each(args_, [&params](auto arg) {
+                params.stack.push_value(arg->analyze(params));
+            });
+        }
+
+        void set_predict(bool value) {
+            std::ranges::for_each(args_, [value](auto arg) {
+                arg->set_predict(value);
+            });
+        }
+
+        function_call_args_t copy(buffer_t* buf, scope_base_t* parent) const {
+            function_call_args_t copy;
+            std::ranges::for_each(args_, [&](auto arg) {
+                copy.add_arg(arg->copy(buf, parent));
+            });
+            return copy;
+        }
+
+        size_t size() const noexcept { return args_.size(); }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_function_t final : public node_simple_type_t {
+        function_decl_args_t args_;
+        node_block_t*        block_;
+
+    public:
+        node_function_t(const location_t& loc, const function_decl_args_t& args, node_block_t* block)
+        : node_simple_type_t(loc), args_(args), block_(block) { assert(block_); }
+
+        value_t execute(execute_params_t& params) override {
+            return {node_type_e::FUNCTION, this};
+        }
+
+        analyze_t analyze(analyze_params_t& params) override {
+            return {node_type_e::FUNCTION, this};
+        }
+
+        value_t real_execute(execute_params_t& params) {
+            args_.execute(params);
+            return block_->execute(params);
+        }
+
+        analyze_t real_analyze(analyze_params_t& params) {
+            args_.analyze(params);
+            return block_->analyze(params);
+        }
+
+        void print(execute_params_t& params) override { *(params.os) << "function\n"; }
+
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
+            function_decl_args_t args_copy = args_.copy(buf);
+            node_block_t* block_copy = block_->copy_with_args(buf, args_copy.begin(), args_copy.end());
+            return buf->add_node<node_function_t>(node_loc_t::loc(), args_copy, block_copy);
+        }
+
+        size_t count_args() const { return args_.size(); }
+
+        general_type_e get_general_type() const noexcept override { return general_type_e::FUNCTION; }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_function_call_t final : public node_expression_t {
+        node_lvalue_t*       lvalue_;
+        function_call_args_t args_;
+
+    private:
+        void process_count_arguments(size_t cnt_args_decl, size_t cnt_args_call,
+                                     analyze_params_t& params) const {
+            if (cnt_args_decl == cnt_args_call)
+                return;
+
+            throw error_analyze_t{node_loc_t::loc(), params.program_str,
+                  "different count of declared arguments(" + std::to_string(cnt_args_decl)
+                + ") and count arguments for function call(" + std::to_string(cnt_args_call) + ")"
+            };
+        }
+
+    public:
+        node_function_call_t(const location_t& loc, node_lvalue_t* lvalue, const function_call_args_t& args)
+        : node_expression_t(loc), lvalue_(lvalue), args_(args) { assert(lvalue_); }
+
+        value_t execute(execute_params_t& params) override {
+            args_.execute(params);
+            value_t func_value = lvalue_->execute(params);
+
+            node_function_t* func = static_cast<node_function_t*>(func_value.value);
+            return func->real_execute(params);
+        }
+
+        analyze_t analyze(analyze_params_t& params) override {
+            args_.analyze(params);
+            analyze_t lvalue = lvalue_->analyze(params);
+
+            expect_types_eq(lvalue.result.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
+
+            node_function_t* func = static_cast<node_function_t*>(lvalue.result.value);
+            process_count_arguments(func->count_args(), args_.size(), params);
+
+            return func->real_analyze(params);
+        }
+
+        node_expression_t* copy(buffer_t* buf, scope_base_t* parent) const override {
+            return buf->add_node<node_function_call_t>(node_loc_t::loc(),
+                                                       static_cast<node_lvalue_t*>(lvalue_->copy(buf, parent)),
+                                                       args_.copy(buf, parent));
+        }
+
+        void set_predict(bool value) override {
+            lvalue_->set_predict(value);
+            args_.set_predict(value);
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -1344,7 +1680,7 @@ namespace paracl {
                                                 rvalue_->copy(buf, parent));
         }
 
-        void set_unpredict() override { lvalue_->set_unpredict(); }
+        void set_predict(bool value) override { lvalue_->set_predict(value); }
     };
 
     /* ----------------------------------------------------- */
@@ -1372,7 +1708,8 @@ namespace paracl {
         node_expression_t* right_;
 
     private:
-        int evaluate(node_number_t* l_result, node_number_t* r_result) {
+        template <typename ParamsT>
+        int evaluate(node_number_t* l_result, node_number_t* r_result, ParamsT& params) {
             assert(l_result);
             assert(r_result);
 
@@ -1394,7 +1731,8 @@ namespace paracl {
                 case binary_operators_e::MUL: return LHS * RHS;
                 case binary_operators_e::DIV: return LHS / RHS;
                 case binary_operators_e::MOD: return LHS % RHS;
-                default: throw error_t{"attempt to execute unknown binary operator"};
+                default: throw error_location_t{node_loc_t::loc(), params.program_str,
+                                                "attempt to use unknown binary operator"};
             }
         }
 
@@ -1416,8 +1754,8 @@ namespace paracl {
             
             node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
             node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
-            int result = evaluate(l_result_number, r_result_number);
-            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            int result = evaluate(l_result_number, r_result_number, params);
+            return {node_type_e::INTEGER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
         analyze_t analyze(analyze_params_t& params) override {
@@ -1440,9 +1778,9 @@ namespace paracl {
         
             node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
             node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
-            int result = evaluate(l_result_number, r_result_number);
+            int result = evaluate(l_result_number, r_result_number, params);
 
-            analyze_t a_result{node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            analyze_t a_result{node_type_e::INTEGER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
             a_result.is_constexpr = a_l_result.is_constexpr & a_r_result.is_constexpr;
             return a_result;
         }
@@ -1452,9 +1790,9 @@ namespace paracl {
                                                 left_->copy(buf, parent), right_->copy(buf, parent));
         }
 
-        void set_unpredict() override {
-            left_->set_unpredict();
-            right_->set_unpredict();
+        void set_predict(bool value) override {
+            left_->set_predict(value);
+            right_->set_predict(value);
         }
     };
 
@@ -1470,14 +1808,16 @@ namespace paracl {
         node_expression_t* node_;
 
     private:
-        int evaluate(node_number_t* result) const {
+        template <typename ParamsT>
+        int evaluate(node_number_t* result, ParamsT& params) const {
             assert(result);
             int value = result->get_value();
             switch (type_) {
                 case unary_operators_e::ADD: return  value;
                 case unary_operators_e::SUB: return -value;
                 case unary_operators_e::NOT: return !value;
-                default: throw error_t{"attempt to execute unknown unary operator"};
+                default: throw error_location_t{node_loc_t::loc(), params.program_str,
+                                                "attempt to use unknown unary operator"};
             }
         }
 
@@ -1491,8 +1831,8 @@ namespace paracl {
             if (res_exec.type == node_type_e::UNDEF)
                 return {node_type_e::UNDEF, params.buf->add_node<node_undef_t>(node_loc_t::loc())};
 
-            int result = evaluate(static_cast<node_number_t*>(res_exec.value));
-            return {node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            int result = evaluate(static_cast<node_number_t*>(res_exec.value), params);
+            return {node_type_e::INTEGER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
         }
 
         analyze_t analyze(analyze_params_t& params) override {
@@ -1505,8 +1845,8 @@ namespace paracl {
 
             expect_types_ne(res_exec.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
-            int result = evaluate(static_cast<node_number_t*>(res_exec.value));
-            analyze_t a_result{node_type_e::NUMBER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
+            int result = evaluate(static_cast<node_number_t*>(res_exec.value), params);
+            analyze_t a_result{node_type_e::INTEGER, params.buf->add_node<node_number_t>(node_loc_t::loc(), result)};
             a_result.is_constexpr = a_res_exec.is_constexpr;
             return a_result;
         }
@@ -1515,7 +1855,7 @@ namespace paracl {
             return buf->add_node<node_un_op_t>(node_loc_t::loc(), type_, node_->copy(buf, parent));
         }
 
-        void set_unpredict() override { node_->set_unpredict(); }
+        void set_predict(bool value) override { node_->set_predict(value); }
     };
 
     /* ----------------------------------------------------- */
@@ -1541,7 +1881,7 @@ namespace paracl {
             return buf->add_node<node_print_t>(node_loc_t::loc(), argument_->copy(buf, parent));
         }
 
-        void set_unpredict() override { argument_->set_unpredict(); }
+        void set_predict(bool value) override { argument_->set_predict(value); }
     };
 
     /* ----------------------------------------------------- */
@@ -1587,9 +1927,8 @@ namespace paracl {
 
         void analyze(analyze_params_t& params) override {
             check_condition(params);
-            body_->set_unpredict();
+            body_->set_predict(false);
             body_->analyze(params);
-            params.is_return = false;
         }
 
         node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
@@ -1597,8 +1936,8 @@ namespace paracl {
                                               static_cast<node_scope_t*>(body_->copy(buf, parent)));
         }
 
-        void set_unpredict() override {
-            body_->set_unpredict();
+        void set_predict(bool value) override {
+            body_->set_predict(value);
         };
     };
 
@@ -1634,13 +1973,11 @@ namespace paracl {
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);
 
-            body1_->set_unpredict();
-            body2_->set_unpredict();
+            body1_->set_predict(false);
+            body2_->set_predict(false);
 
             body1_->analyze(params);
             body2_->analyze(params);
-
-            params.is_return = false;
         }
 
         node_statement_t* copy(buffer_t* buf, scope_base_t* parent) const override {
@@ -1649,9 +1986,9 @@ namespace paracl {
                                               static_cast<node_scope_t*>(body2_->copy(buf, parent)));
         }
 
-        void set_unpredict() override {
-            body1_->set_unpredict();
-            body2_->set_unpredict();
+        void set_predict(bool value) override {
+            body1_->set_predict(value);
+            body2_->set_predict(value);
         };
     };
 }
