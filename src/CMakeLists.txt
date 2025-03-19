@@ -20,7 +20,8 @@ endif()
 bison_target(parser
     parser.y
     ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    COMPILE_FLAGS "-Wcounterexamples --defines=${BISON_PARSER_TAB_HH}"
+    COMPILE_FLAGS "-Wcounterexamples"
+    DEFINES_FILE ${BISON_PARSER_TAB_HH}
 )
 
 add_flex_bison_dependency(lexer parser)
