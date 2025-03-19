@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.11)
-project(unit)
-
 find_package(GTest REQUIRED)
 
 add_executable(unit_paracl paracl_unit_tests.cpp)

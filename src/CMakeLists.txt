@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.11)
-project(src)
-
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 find_package(FLEX  REQUIRED)
@@ -36,7 +33,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
 endif()
 
 add_executable(paracl
-    driver.cpp
+    paracl.cpp
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
@@ -53,7 +50,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
     include(GNUInstallDirs)
 
     add_library(ParaCL
-        driver.cpp
+        paracl.cpp
         ${BISON_parser_OUTPUTS}
         ${FLEX_lexer_OUTPUTS}
     )

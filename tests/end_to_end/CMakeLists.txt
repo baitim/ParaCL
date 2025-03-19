@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.11)
-project(end_to_end)
-
 set(PYTHON_SCRIPT_RUN_VALID "${CMAKE_SOURCE_DIR}/tests/end_to_end/valid/run_valid_tests.py")
 set(PYTHON_SCRIPT_RUN_ERROR "${CMAKE_SOURCE_DIR}/tests/end_to_end/error/run_error_tests.py")
 
