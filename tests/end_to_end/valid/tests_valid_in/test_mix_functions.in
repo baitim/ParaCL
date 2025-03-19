@@ -1,0 +1,44 @@
+count = 5;
+arr = array(5, 3, 8, 1, 7);
+
+sum = func(a, n) {
+    s = 0;
+    i = 0;
+    while (i < n) {
+        s = s + a[i];
+        i = i + 1;
+    }
+    s;
+};
+
+max = func(a, n) {
+    m = a[0];
+    i = 1;
+    while (i < n) {
+        if (a[i] > m) {
+            m = a[i];
+        }
+        i = i + 1;
+    }
+    m;
+};
+
+print_array = func(a, n) {
+    i = 0;
+    while (i < n) {
+        print a[i];
+        i = i + 1;
+    }
+    return 0;
+};
+
+funcs = array(sum, max);
+
+print arr;
+print_array(arr, count);
+
+s = funcs[0](arr, count);
+print s;
+
+m = funcs[1](arr, count);
+print m;
