@@ -26,7 +26,7 @@ add_flex_bison_dependency(lexer parser)
 if(DEFINED ENV{CONAN_PACKAGE})
     add_custom_target(copy_parser_tab ALL
         COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.hh
+        ${BISON_PARSER_TAB_HH}
         ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
         COMMENT "Copying parser.tab.hh from source directory to binary directory"
         DEPENDS ${BISON_parser_OUTPUTS}
