@@ -9,24 +9,26 @@ flex_target(lexer
 )
 
 if(DEFINED ENV{CONAN_PACKAGE})
-    set(BISON_PARSER_TAB_HH "parser.tab.hh")
+    bison_target(parser
+        parser.y
+        ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+        COMPILE_FLAGS "-Wcounterexamples --defines=parser.tab.hh"
+    )
 else()
-    set(BISON_PARSER_TAB_HH "${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh")
+    bison_target(parser
+        parser.y
+        ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
+        COMPILE_FLAGS "-Wcounterexamples"
+        DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
+    )
 endif()
-
-bison_target(parser
-    parser.y
-    ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
-    COMPILE_FLAGS "-Wcounterexamples"
-    DEFINES_FILE ${BISON_PARSER_TAB_HH}
-)
 
 add_flex_bison_dependency(lexer parser)
 
 if(DEFINED ENV{CONAN_PACKAGE})
     add_custom_target(copy_parser_tab ALL
         COMMAND ${CMAKE_COMMAND} -E copy
-        ${BISON_PARSER_TAB_HH}
+        ${CMAKE_CURRENT_SOURCE_DIR}/parser.tab.hh
         ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
         COMMENT "Copying parser.tab.hh from source directory to binary directory"
         DEPENDS ${BISON_parser_OUTPUTS}
