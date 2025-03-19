@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.11)
+project(src)
+
 set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 find_package(FLEX  REQUIRED)
@@ -14,6 +17,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
         ${CMAKE_CURRENT_BINARY_DIR}/parser.cpp
         COMPILE_FLAGS "-Wcounterexamples --defines=parser.tab.hh"
     )
+    add_flex_bison_dependency(lexer parser)
 else()
     bison_target(parser
         parser.y
@@ -21,9 +25,8 @@ else()
         COMPILE_FLAGS "-Wcounterexamples"
         DEFINES_FILE ${CMAKE_CURRENT_BINARY_DIR}/parser.tab.hh
     )
+    add_flex_bison_dependency(lexer parser)
 endif()
-
-add_flex_bison_dependency(lexer parser)
 
 if(DEFINED ENV{CONAN_PACKAGE})
     add_custom_target(copy_parser_tab ALL
@@ -36,7 +39,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
 endif()
 
 add_executable(paracl
-    paracl.cpp
+    driver.cpp
     ${BISON_parser_OUTPUTS}
     ${FLEX_lexer_OUTPUTS}
 )
@@ -53,7 +56,7 @@ if(DEFINED ENV{CONAN_PACKAGE})
     include(GNUInstallDirs)
 
     add_library(ParaCL
-        paracl.cpp
+        driver.cpp
         ${BISON_parser_OUTPUTS}
         ${FLEX_lexer_OUTPUTS}
     )
