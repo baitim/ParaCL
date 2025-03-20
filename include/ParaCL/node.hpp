@@ -583,13 +583,14 @@ namespace paracl {
         }
 
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            node_block_t* block = params.buf->add_node<node_block_t>(node_loc_t::loc(), nullptr);
+            node_block_t* block = params.buf->add_node<node_block_t>(node_loc_t::loc(), parent);
             return copy_impl<node_block_t, node_expression_t>(block, params);
         }
 
         template <typename IterT>
-        node_block_t* copy_with_args(copy_params_t& params, IterT args_begin, IterT args_end) const {
-            auto* block_copy = params.buf->add_node<node_block_t>(node_loc_t::loc(), nullptr);
+        node_block_t* copy_with_args(copy_params_t& params, scope_base_t* parent,
+                                     IterT args_begin, IterT args_end) const {
+            auto* block_copy = params.buf->add_node<node_block_t>(node_loc_t::loc(), parent);
             block_copy->add_variables(args_begin, args_end);
             return copy_impl<node_block_t, node_block_t>(block_copy, params);
         }
@@ -1670,7 +1671,9 @@ namespace paracl {
                 buf->add_node<node_function_t>(node_loc_t::loc(), args_copy, nullptr, get_name());
             params.global_scope.add_variable(function_copy);
 
-            node_block_t* block_copy = block_->copy_with_args(params, args_copy.begin(), args_copy.end());
+            node_block_t* block_copy = block_->copy_with_args(
+                params, parent, args_copy.begin(), args_copy.end()
+            );
             function_copy->bind_block(block_copy);
 
             return function_copy;
