@@ -16,7 +16,8 @@ Grammar:
     function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
 
-    statement    -> fork  | loop | expression_s
+    statement_nr -> fork | loop
+    statement    -> statement_nr | expression_s
     instruction  -> expression; | assignment_r
     expression   -> print | assignment | expression_lgc
     expression   -> print; | assignment_nr; | expression_lgc; | function | assignment_r
@@ -132,8 +133,6 @@ Grammar:
 %precedence THEN
 %precedence ELSE
 
-%precedence RETURN_BLOCK
-
 %token <int>                NUMBER
 %token <std::string>        ID
 
@@ -157,6 +156,7 @@ Grammar:
 %nterm                      rghost_scope
 
 %nterm <node_statement_t*>  statement
+%nterm <node_statement_t*>  statement_nr
 %nterm <node_expression_t*> expression
 %nterm <node_expression_t*> expression_s
 %nterm <node_block_t*>      block
@@ -258,10 +258,11 @@ statements_r: %empty    {
                             drill_down_to_scope($$);
                             $$->add_variables(func_args.begin(), func_args.end());
                         }
-          | statements_r statement { $$ = $1; $$->add_statement($2); }
-          | statements_r SCOLON    { $$ = $1; }
-          | statements_r scope     { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
-          | statements_r return    { $$ = $1; $$->add_return($2); }
+          | statements_r statement_nr { $$ = $1; $$->add_statement_build($2, driver->buf()); }
+          | statements_r expression_s { $$ = $1; $$->add_expression($2, driver->buf()); }
+          | statements_r SCOLON       { $$ = $1; }
+          | statements_r scope        { $$ = $1; $$->add_statement_build($2, driver->buf()); lift_up_from_scope(); }
+          | statements_r return       { $$ = $1; $$->add_return_build($2, driver->buf()); }
 ;
 
 statements_f: %empty    {
@@ -269,10 +270,11 @@ statements_f: %empty    {
                             drill_down_to_scope($$);
                             $$->add_variables(func_args.begin(), func_args.end());
                         }
-          | statements_f statement { $$ = $1; $$->add_statement($2); }
-          | statements_f SCOLON    { $$ = $1; }
-          | statements_f scope     { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
-          | statements_f return    { $$ = $1; $$->add_return($2); }
+          | statements_f statement_nr { $$ = $1; $$->add_statement_build($2, driver->buf()); }
+          | statements_f expression_s { $$ = $1; $$->add_expression($2, driver->buf()); }
+          | statements_f SCOLON       { $$ = $1; }
+          | statements_f scope        { $$ = $1; $$->add_statement_build($2, driver->buf()); lift_up_from_scope(); }
+          | statements_f return       { $$ = $1; $$->add_return_build($2, driver->buf()); }
 ;
 
 scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
@@ -287,11 +289,10 @@ function: function_decl function_body
             }
 ;
 
-function_body: LBRACKET_CURLY statements_f              RBRACKET_CURLY { $$ = $2; }
-             | LBRACKET_CURLY statements_f expression_s RBRACKET_CURLY %prec RETURN_BLOCK
+function_body: LBRACKET_CURLY statements_f RBRACKET_CURLY
                 {
                     $$ = $2;
-                    $$->add_return($3);
+                    $$->update_return();
                 }
 ;
 
@@ -330,7 +331,7 @@ function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
         }
 ;
 
-return: RETURN expression SCOLON { $$ = $2; }
+return: RETURN expression_s { $$ = $2; }
 ;
 
 function_args: %empty { $$ = function_args_t(); }
@@ -354,8 +355,11 @@ function_call_args: %empty { $$ = function_call_args_t(); }
                   | expression                          { $$.add_arg($1); }
 ;
 
-statement: fork          { $$ = $1; }
-         | loop          { $$ = $1; }
+statement_nr: fork  { $$ = $1; }
+            | loop  { $$ = $1; }
+;
+
+statement: statement_nr  { $$ = $1; }
          | expression_s  { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
@@ -371,11 +375,10 @@ expression_s: print          SCOLON { $$ = $1; }
             | assignment_r          { $$ = $1; }
 ;
 
-block: LBRACKET_CURLY statements_r              RBRACKET_CURLY { $$ = $2; }
-     | LBRACKET_CURLY statements_r expression_s RBRACKET_CURLY %prec RETURN_BLOCK
+block: LBRACKET_CURLY statements_r RBRACKET_CURLY
         {
             $$ = $2;
-            $$->add_return($3);
+            $$->update_return();
         }
 ;
 

@@ -81,5 +81,7 @@ namespace yy {
             bool res = parser.parse();
             return !res;
         }
+
+        buffer_t* buf() { return buf_; }
     };
 }

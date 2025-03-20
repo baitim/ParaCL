@@ -409,6 +409,30 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_instruction_t final : public node_statement_t {
+        node_expression_t* expr_;
+
+    public:
+        node_instruction_t(const location_t& loc, node_expression_t* expr)
+        : node_statement_t(loc), expr_(expr) { assert(expr_); }
+
+        void execute(execute_params_t& params) override {
+            expr_->execute(params);
+        }
+
+        void analyze(analyze_params_t& params) override {
+            expr_->analyze(params);
+        }
+
+        node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
+            return params.buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(params, parent));
+        }
+
+        void set_predict(bool value) override { expr_->set_predict(value); };
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_memory_t {
     public:
         virtual void clear() = 0;
@@ -441,6 +465,7 @@ namespace paracl {
     protected:
         std::vector<node_statement_t*> statements_;
         node_expression_t* return_expr_ = nullptr;
+        node_expression_t* last_expr_   = nullptr;
 
     protected:
         template <typename FuncT, typename ParamsT>
@@ -475,19 +500,59 @@ namespace paracl {
                 return_expr_->set_predict(value);
         }
 
+        void push_back_last_expr(buffer_t* buf) {
+            if (last_expr_) {
+                node_statement_t* last_stmt = buf->add_node<node_instruction_t>(last_expr_->loc(), last_expr_);
+                statements_.push_back(last_stmt);
+                last_expr_ = nullptr;
+            }
+        }
+
     public:
         scope_base_t(scope_base_t* parent) : parent_(parent) {} 
 
         void add_statement(node_statement_t* node) {
             assert(node);
-            if (!return_expr_)
-                statements_.push_back(node);
+            statements_.push_back(node);
+        }
+
+        void add_statement_build(node_statement_t* node, buffer_t* buf) {
+            assert(node);
+            if (return_expr_)
+                return;
+
+            push_back_last_expr(buf);
+            statements_.push_back(node);
+        }
+
+        void add_expression(node_expression_t* node, buffer_t* buf) {
+            assert(node);
+            if (return_expr_)
+                return;
+
+            push_back_last_expr(buf);
+            last_expr_ = node;
         }
 
         void add_return(node_expression_t* node) {
             assert(node);
-            if (!return_expr_)
-                return_expr_ = node;
+            return_expr_ = node;
+        }
+
+        void add_return_build(node_expression_t* node, buffer_t* buf) {
+            assert(node);
+            if (return_expr_)
+                return;
+
+            push_back_last_expr(buf);
+            return_expr_ = node;
+        }
+
+        void update_return() {
+            if (return_expr_)
+                return;
+
+            return_expr_ = last_expr_;
         }
 
         id_t* get_node(std::string_view name) const {
@@ -598,30 +663,6 @@ namespace paracl {
         void set_predict(bool value) override {
             set_predict_impl(value);
         }
-    };
-
-    /* ----------------------------------------------------- */
-
-    class node_instruction_t final : public node_statement_t {
-        node_expression_t* expr_;
-
-    public:
-        node_instruction_t(const location_t& loc, node_expression_t* expr)
-        : node_statement_t(loc), expr_(expr) { assert(expr_); }
-
-        void execute(execute_params_t& params) override {
-            expr_->execute(params);
-        }
-
-        void analyze(analyze_params_t& params) override {
-            expr_->analyze(params);
-        }
-
-        node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            return params.buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(params, parent));
-        }
-
-        void set_predict(bool value) override { expr_->set_predict(value); };
     };
 
     /* ----------------------------------------------------- */
