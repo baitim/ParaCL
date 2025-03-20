@@ -1,0 +1,16 @@
+num = {
+    foo = func(x, y) {
+        bar = func(a) : bar_ {
+            return a + ?;
+        };
+        array(1, 2, 3, 4, 5)[x];
+    };
+    foo(3, 2);
+};
+print num;
+
+func() : print_func {
+    print bar_(7);
+};
+
+print_func();

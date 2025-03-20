@@ -1,0 +1,8 @@
+foo = func() {
+    bar = func() : bar_ {
+        x = 1;
+        x = array(1, 2);
+    };
+};
+a = foo();
+b = a();

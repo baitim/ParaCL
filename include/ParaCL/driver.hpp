@@ -14,23 +14,24 @@ namespace yy {
 
     /* ----------------------------------------------------- */
 
+    inline location_t make_loc(const location& loc, int len) {
+        std::stringstream ss;
+        ss << loc;
+        std::string loc_str = ss.str();
+
+        size_t dot_location = loc_str.find('.');
+        int row = stoi(loc_str.substr(0, dot_location));
+        int col = stoi(loc_str.substr(dot_location + 1));
+        return {row - 1, col, len};
+    };
+
+    /* ----------------------------------------------------- */
+
     class driver_t final {
         lexer_t lexer_;
         std::string_view program_str_;
         buffer_t* buf_;
         std::string last_token_;
-
-    private:
-        static location_t make_loc(const location& loc, int len) {
-            std::stringstream ss;
-            ss << loc;
-            std::string loc_str = ss.str();
-
-            size_t dot_location = loc_str.find('.');
-            int row = stoi(loc_str.substr(0, dot_location));
-            int col = stoi(loc_str.substr(dot_location + 1));
-            return {row - 1, col, len};
-        };
 
     public:
         void report_syntax_error(const location& loc) const {
@@ -76,7 +77,7 @@ namespace yy {
             std::ifstream input_file(file_name);
             lexer_.switch_streams(input_file, std::cout);
 
-            parser parser(this, root);
+            parser parser(this, root, program_str);
             bool res = parser.parse();
             return !res;
         }

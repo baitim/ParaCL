@@ -21,6 +21,7 @@ COMMENTS "//".*
 {NS}            { update_new_line(); }
 
 "func"          { return yy::parser::token_type::FUNC;   }
+":"             { return yy::parser::token_type::COLON;  }
 "return"        { return yy::parser::token_type::RETURN; }
 "print"         { return yy::parser::token_type::PRINT;  }
 "?"             { return yy::parser::token_type::INPUT;  }

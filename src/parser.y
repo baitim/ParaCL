@@ -5,16 +5,18 @@ Grammar:
     statements_r -> statements_r statement | statements_r; | statements_r scope | statements_r return | empty
     scope        -> { statements }
     
-    function_decl -> foo ( function_decl_args ) block
+    function      -> function_decl block
+    function_decl -> foo ( function_args ) function_name
+    function_name -> COLON variable | empty
     function_call -> variable_shifted ( function_call_args )
     block         -> { statements_r } | { statements_r expression; }
     return        -> return expression;
 
-    function_decl_args -> function_decl_args, variable   | variable   | empty
+    function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
 
     statement    -> fork  | loop | instruction
-    instruction  -> expression;
+    instruction  -> expression; | function
     expression   -> print | assignment | expression_lgc
 
     fork         -> if condition body | if condition body else body
@@ -25,8 +27,9 @@ Grammar:
 
     print        -> print expression
 
-    rvalue       -> function_decl | block | expression | array_repeat
-    assignment   -> variable indexes = rvalue
+    rvalue_single -> function | block | expression
+    rvalue        -> rvalue_single | array_repeat
+    assignment    -> variable indexes = rvalue
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -39,9 +42,9 @@ Grammar:
 
     array          -> array ( array_values ) indexes
     array_repeat   -> repeat_values indexes
-    repeat_values  -> repeat ( expression, expression )
+    repeat_values  -> repeat ( rvalue_single, expression )
     list_values    -> array_values, array_value | array_value
-    array_value    -> expression | repeat_values
+    array_value    -> rvalue_single | repeat_values
     indexes        -> indexes index | empty
     index          -> [ expression ]
 */
@@ -63,6 +66,7 @@ Grammar:
 
 %param       { yy::driver_t* driver }
 %parse-param { node_scope_t*& root }
+%parse-param { std::string_view program_str }
 
 %code
 {
@@ -76,6 +80,7 @@ Grammar:
 
 %token
     FUNC
+    COLON
     RETURN
     PRINT
     INPUT
@@ -130,12 +135,14 @@ Grammar:
 %nterm <node_block_t*>      statements_r
 %nterm <node_scope_t*>      scope
 
+%nterm <node_function_t*>      function
 %nterm <node_function_t*>      function_decl
 %nterm <node_function_call_t*> function_call
+%nterm <std::pair<std::string, location_t>> function_name
 %nterm <node_block_t*>         block
 %nterm <node_expression_t*>    return
 
-%nterm <function_decl_args_t> function_decl_args
+%nterm <function_args_t>      function_args
 %nterm <function_call_args_t> function_call_args
 
 %nterm <node_scope_t*>      body
@@ -152,6 +159,7 @@ Grammar:
 
 %nterm <node_expression_t*> print
 
+%nterm <node_expression_t*> rvalue_single
 %nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> assignment
 
@@ -181,10 +189,14 @@ Grammar:
 
 %code
 {
-    std::vector<node_variable_t*> func_decl_args;
+    std::vector<node_variable_t*> func_args;
+
+    name_table_t global_scope_names;
 
     std::stack<scope_base_t*> scopes_stack;
     scope_base_t* current_scope = nullptr;
+
+    /* ----------------------------------------------- */
 
     void drill_down_to_scope(scope_base_t* scope) {
         scopes_stack.push(scope);
@@ -196,7 +208,14 @@ Grammar:
         current_scope = scopes_stack.top();
     }
 
-    node_variable_t* decl_var(std::string_view name, const yy::location& loc, yy::driver_t* driver) {
+    node_variable_t* decl_var(std::string_view name, std::string_view program_str,
+                              const yy::location& loc, yy::driver_t* driver) {
+        
+        if (global_scope_names.get_var_node(name))
+            throw error_declaration_t{make_loc(loc, name.length()), program_str,
+                                      "this name already declared in global scope \
+                                       and can only be used to call function"};
+
         node_variable_t* var = static_cast<node_variable_t*>(current_scope->get_node(name));
         if (!var) {
             var = driver->add_node<node_variable_t>(loc, name.length(), name);
@@ -226,7 +245,7 @@ statements: %empty                 {
 statements_r: %empty               {
                                         $$ = driver->add_node<node_block_t>(@$, 1, nullptr);
                                         drill_down_to_scope($$);
-                                        $$->add_variables(func_decl_args.begin(), func_decl_args.end());
+                                        $$->add_variables(func_args.begin(), func_args.end());
                                    }
           | statements_r statement { $$ = $1; $$->add_statement($2); }
           | statements_r SCOLON    { $$ = $1; }
@@ -237,17 +256,47 @@ statements_r: %empty               {
 scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
 ;
 
-function_decl: FUNC LBRACKET_ROUND function_decl_args RBRACKET_ROUND block
+function: function_decl block
             {
-                $$ = driver->add_node<node_function_t>(@1, 4, $3, $5);
+                $$ = $1;
+                $$->bind_block($2);
                 lift_up_from_scope();
-                func_decl_args = {};
+                func_args = {};
             }
 ;
 
-function_call: variable_shifted LBRACKET_ROUND function_call_args RBRACKET_ROUND
+function_decl: FUNC LBRACKET_ROUND function_args RBRACKET_ROUND function_name
+            {
+                std::string_view function_name = $5.first;
+                location_t       function_loc  = $5.second;
+                if (function_loc.len && global_scope_names.get_var_node(function_name)) {
+                    throw error_declaration_t{function_loc, program_str,
+                                              "this name already declared in global scope"};}
+
+                $$ = driver->add_node<node_function_t>(@1, 4, $3, nullptr, function_name);
+                global_scope_names.add_variable($$);
+            }
+;
+
+function_name: %empty          {}
+             | COLON variable  { $$ = {$2, make_loc(@2, $2.length())}; }
+;
+
+function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
         {
-            $$ = driver->add_node<node_function_call_t>(@1, $1->loc().len, $1, $3);
+            node_function_t* node_function =
+                          static_cast<node_function_t*>(global_scope_names.get_var_node($1));
+
+            if (node_function) {
+                if (!$2->empty())
+                    throw error_analyze_t{$2->loc(), program_str, "can't index by function"};
+
+                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), node_function, $4, true);
+            } else {
+                node_variable_t* var    = static_cast<node_variable_t*>(current_scope->get_node($1));
+                node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), lvalue, $4, false);
+            }
         }
 ;
 
@@ -258,19 +307,19 @@ block: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
 return: RETURN expression SCOLON { $$ = $2; }
 ;
 
-function_decl_args: %empty { $$ = function_decl_args_t(); }
-                  | function_decl_args COMMA variable
+function_args: %empty { $$ = function_args_t(); }
+               | function_args COMMA variable
                         {
                             $$ = std::move($1);
                             node_variable_t* var = driver->add_node<node_variable_t>(@3, $3.length(), $3);
                             $$.add_arg(var);
-                            func_decl_args.push_back(var);
+                            func_args.push_back(var);
                         }
-                  | variable
+               | variable
                         {
                             node_variable_t* var = driver->add_node<node_variable_t>(@1, $1.length(), $1);
                             $$.add_arg(var);
-                            func_decl_args.push_back(var);
+                            func_args.push_back(var);
                         }
 ;
 
@@ -285,6 +334,7 @@ statement: fork         { $$ = $1; }
 ;
 
 instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
+           | function          { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
 expression: print          { $$ = $1; }
@@ -317,15 +367,18 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-rvalue: function_decl { $$ = $1; }
-      | block         { $$ = $1; }
-      | expression    { $$ = $1; }
+rvalue_single: function    { $$ = $1; }
+             | block       { $$ = $1; }
+             | expression  { $$ = $1; }
+;
+
+rvalue: rvalue_single { $$ = $1; }
       | array_repeat  { $$ = $1; }
 ;
 
 assignment: variable indexes ASSIGN rvalue
         {
-            node_variable_t* var    = decl_var($1, @1, driver);
+            node_variable_t* var    = decl_var($1, program_str, @1, driver);
             node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
             $$ = driver->add_node<node_assign_t>(@3, 1, lvalue, $4);
         }
@@ -381,7 +434,7 @@ array_repeat: repeat_values indexes
         }
 ;
 
-repeat_values: REPEAT LBRACKET_ROUND expression COMMA expression RBRACKET_ROUND
+repeat_values: REPEAT LBRACKET_ROUND rvalue_single COMMA expression RBRACKET_ROUND
         { $$ = driver->add_node<node_repeat_values_t>(@1, 6, $3, $5); }
 ;
 
@@ -389,8 +442,8 @@ list_values: list_values COMMA array_value { $$ = $1; $$->add_value($3); }
            | array_value { $$ = driver->add_node<node_list_values_t>(@$, $1->loc().len); $$->add_value($1); }
 ;
 
-array_value: expression    { $$ = driver->add_node<node_expression_value_t>(@$, $1->loc().len, $1); }
-           | repeat_values { $$ = $1; }
+array_value: rvalue_single  { $$ = driver->add_node<node_expression_value_t>(@$, $1->loc().len, $1); }
+           | repeat_values  { $$ = $1; }
 ;
 
 indexes: %empty        { $$ = driver->add_node<node_indexes_t>(@$, 1); }

@@ -1,0 +1,2 @@
+foo = func(x, y, z) : foo_ { 0; };
+bar = func(x, y ) : foo_ { 0; };

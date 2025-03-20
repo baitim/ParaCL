@@ -19,9 +19,9 @@ int main(int argc, char* argv[]) try {
         ast.execute(env);
 
 } catch (const paracl::error_t& error) {
-    std::cerr << error.what() << '\n';
+    std::cout << error.what() << '\n';
     return 1;
 } catch (...) {
-    std::cerr << print_red("Unknown error\n");
+    std::cout << print_red("Unknown error\n");
     return 1;
 }

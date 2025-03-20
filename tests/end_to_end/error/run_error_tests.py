@@ -9,19 +9,19 @@ class bcolors:
     ENDC = '\033[0m'
 
 tests_dir = str(Path(__file__).parent)
-build_dir = str(Path.cwd())
+proj_dir  = str(Path.cwd())
 is_OK = True
 
 def run(program, input, exe_file):
     global is_OK
-    command = exe_file + " " + program + " < " + input
-    result = subprocess.run(command, shell=True, capture_output=True)
+    with open(input, 'r') as infile:
+        result = subprocess.run([exe_file, program], stdin=infile, capture_output=True)
     if result.returncode == 0:
         print(bcolors.FAIL + "result is valid: " + program + bcolors.ENDC)
         is_OK = False
     return result.returncode
 
-paracl_exe = build_dir + "/paracl"
+paracl_exe = proj_dir + "/../../src/paracl"
 program_files = list(map(str, glob.glob(tests_dir + "/tests_error_in/test_*.in")))
 program_files.sort()
 
@@ -34,7 +34,6 @@ if (len(input_data_files) != len(program_files)):
 
 for test_num in range(0, len(input_data_files)) :
     run(program_files[test_num], input_data_files[test_num], paracl_exe)
-    print("test",  test_num + 1, "processed")
 
 if not(is_OK):
     exit(1)

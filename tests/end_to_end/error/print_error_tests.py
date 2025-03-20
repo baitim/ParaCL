@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import ImageFont, ImageDraw, Image
 
 tests_dir = str(Path(__file__).parent)
-proj_dir = str(Path.cwd())
+proj_dir  = str(Path.cwd())
 
 class bcolors:
     INFO = "\033[93m"

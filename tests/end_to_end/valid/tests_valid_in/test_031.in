@@ -1,0 +1,17 @@
+foo_1 = func() { 0; };
+foo_2 = func() { 0; };
+foo_3 = func() { 0; };
+foo_4 = func() { 0; };
+
+print foo_1;
+print foo_2;
+print foo_3;
+print foo_4;
+
+arr_func = repeat(func() { 0; }, 5);
+print arr_func;
+
+foo = func() : foo_ { 0; };
+bar = func() : bar_ { 0; };
+print foo;
+print bar;
