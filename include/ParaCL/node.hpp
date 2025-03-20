@@ -525,7 +525,7 @@ namespace paracl {
             statements_.push_back(node);
         }
 
-        void add_expression(node_expression_t* node, buffer_t* buf) {
+        void push_expression(node_expression_t* node, buffer_t* buf) {
             assert(node);
             if (return_expr_)
                 return;
