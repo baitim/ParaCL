@@ -1,2 +1,2 @@
-foo = func(x) : foo_ { 0; };
+foo = func(x) : foo_ { 0; }
 foo_ = 1;

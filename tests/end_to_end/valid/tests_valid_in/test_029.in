@@ -14,7 +14,7 @@ num = {
             return i;
     }
     return exit_code = -1234567;
-};
+}
 print num;
 
 depth = {
@@ -22,9 +22,9 @@ depth = {
         {
             {
                 return 1;
-            }; return 0;
-        }; return 0;
-    }; return 0;
+            } return 0;
+        } return 0;
+    } return 0;
 };
 print depth;
 

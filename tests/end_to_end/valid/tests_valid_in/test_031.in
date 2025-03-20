@@ -1,7 +1,7 @@
-foo_1 = func() { 0; };
-foo_2 = func() { 0; };
-foo_3 = func() { 0; };
-foo_4 = func() { 0; };
+foo_1 = func() { 0; }
+foo_2 = func() { 0; }
+foo_3 = func() { 0; }
+foo_4 = func() { 0; }
 
 print foo_1;
 print foo_2;

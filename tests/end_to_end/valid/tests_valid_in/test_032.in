@@ -5,5 +5,5 @@ a = {
     if (1)
         print 3;
     x + y + ?;
-};
+}
 print a;

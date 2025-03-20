@@ -1,5 +1,5 @@
 foo = func() {
-    bar = func() { array(1, 2); };
-};
+    bar = func() { array(1, 2); }
+}
 x = 1;
 x = foo();

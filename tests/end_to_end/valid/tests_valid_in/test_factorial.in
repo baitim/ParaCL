@@ -3,7 +3,7 @@ factorial = func(n) : fact {
         return 1;
     };
     return n * fact(n - 1);
-};
+}
 
 i = 1;
 cnt = ?;
