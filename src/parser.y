@@ -10,16 +10,18 @@ Grammar:
     function_decl -> foo ( function_args ) function_name
     function_name -> COLON variable | empty
     function_call -> variable_shifted ( function_call_args )
-    function_body -> { statements_f } | { statements_f expression; }
+    function_body -> { statements_f } | { statements_f expression_s; }
     return        -> return expression;
 
     function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
 
-    statement    -> fork  | loop | instruction
-    instruction  -> expression; | function
+    statement    -> fork  | loop | expression_s
+    instruction  -> expression; | assignment_r
     expression   -> print | assignment | expression_lgc
-    block        -> { statements_r } | { statements_r expression; }
+    expression   -> print; | assignment_nr; | expression_lgc; | function | assignment_r
+
+    block        -> { statements_r } | { statements_r expression_s; }
 
     fork         -> if condition body | if condition body else body
     loop         -> while condition body
@@ -29,9 +31,12 @@ Grammar:
 
     print        -> print expression
 
-    rvalue_single -> function | block | expression
-    rvalue        -> rvalue_single | array_repeat
-    assignment    -> variable indexes = rvalue
+    rvalue_r      -> function   | block
+    rvalue_nr     -> expression | array_repeat
+    rvalue_single -> rvalue_r   | expression
+    assignment    -> assignment_r | assignment_nr
+    assignment_r  -> variable indexes = rvalue_r
+    assignment_nr -> variable indexes = rvalue_nr
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -127,8 +132,7 @@ Grammar:
 %precedence THEN
 %precedence ELSE
 
-%precedence SCOLON
-%precedence RBRACKET_CURLY
+%precedence RETURN_BLOCK
 
 %token <int>                NUMBER
 %token <std::string>        ID
@@ -153,8 +157,8 @@ Grammar:
 %nterm                      rghost_scope
 
 %nterm <node_statement_t*>  statement
-%nterm <node_statement_t*>  instruction
 %nterm <node_expression_t*> expression
+%nterm <node_expression_t*> expression_s
 %nterm <node_block_t*>      block
 
 %nterm <node_statement_t*>  fork
@@ -163,9 +167,12 @@ Grammar:
 
 %nterm <node_expression_t*> print
 
+%nterm <node_expression_t*> rvalue_r
+%nterm <node_expression_t*> rvalue_nr
 %nterm <node_expression_t*> rvalue_single
-%nterm <node_expression_t*> rvalue
 %nterm <node_expression_t*> assignment
+%nterm <node_expression_t*> assignment_r
+%nterm <node_expression_t*> assignment_nr
 
 %nterm <node_expression_t*> terminal
 %nterm <std::string>        variable
@@ -280,8 +287,12 @@ function: function_decl function_body
             }
 ;
 
-function_body: LBRACKET_CURLY statements_f                   RBRACKET_CURLY { $$ = $2; }
-             | LBRACKET_CURLY statements_f expression SCOLON RBRACKET_CURLY %prec SCOLON { $$ = $2; $$->add_return($3); }
+function_body: LBRACKET_CURLY statements_f              RBRACKET_CURLY { $$ = $2; }
+             | LBRACKET_CURLY statements_f expression_s RBRACKET_CURLY %prec RETURN_BLOCK
+                {
+                    $$ = $2;
+                    $$->add_return($3);
+                }
 ;
 
 function_decl: FUNC LBRACKET_ROUND function_args RBRACKET_ROUND function_name
@@ -343,13 +354,9 @@ function_call_args: %empty { $$ = function_call_args_t(); }
                   | expression                          { $$.add_arg($1); }
 ;
 
-statement: fork         { $$ = $1; }
-         | loop         { $$ = $1; }
-         | instruction  { $$ = $1; }
-;
-
-instruction: expression SCOLON { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
-           | function          { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
+statement: fork          { $$ = $1; }
+         | loop          { $$ = $1; }
+         | expression_s  { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
 expression: print          { $$ = $1; }
@@ -357,8 +364,19 @@ expression: print          { $$ = $1; }
           | expression_lgc { $$ = $1; }
 ;
 
-block: LBRACKET_CURLY statements_r                   RBRACKET_CURLY { $$ = $2; }
-     | LBRACKET_CURLY statements_r expression SCOLON RBRACKET_CURLY %prec SCOLON { $$ = $2; $$->add_return($3); }
+expression_s: print          SCOLON { $$ = $1; }
+            | assignment_nr  SCOLON { $$ = $1; }
+            | expression_lgc SCOLON { $$ = $1; }
+            | function              { $$ = $1; }
+            | assignment_r          { $$ = $1; }
+;
+
+block: LBRACKET_CURLY statements_r              RBRACKET_CURLY { $$ = $2; }
+     | LBRACKET_CURLY statements_r expression_s RBRACKET_CURLY %prec RETURN_BLOCK
+        {
+            $$ = $2;
+            $$->add_return($3);
+        }
 ;
 
 fork: IF condition body %prec THEN  { 
@@ -386,16 +404,31 @@ rghost_scope: %empty { lift_up_from_scope(); }
 print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
-rvalue_single: function    { $$ = $1; }
-             | block       { $$ = $1; }
+rvalue_r: function  { $$ = $1; }
+        | block     { $$ = $1; }
+;
+
+rvalue_nr: expression    { $$ = $1; }
+         | array_repeat  { $$ = $1; }
+;
+
+rvalue_single: rvalue_r    { $$ = $1; }
              | expression  { $$ = $1; }
 ;
 
-rvalue: rvalue_single { $$ = $1; }
-      | array_repeat  { $$ = $1; }
+assignment: assignment_r   { $$ = $1; }
+          | assignment_nr  { $$ = $1; }
 ;
 
-assignment: variable indexes ASSIGN rvalue
+assignment_r: variable indexes ASSIGN rvalue_r
+        {
+            node_variable_t* var    = decl_var($1, program_str, @1, driver);
+            node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
+            $$ = driver->add_node<node_assign_t>(@3, 1, lvalue, $4);
+        }
+;
+
+assignment_nr: variable indexes ASSIGN rvalue_nr
         {
             node_variable_t* var    = decl_var($1, program_str, @1, driver);
             node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
