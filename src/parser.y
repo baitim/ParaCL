@@ -247,10 +247,10 @@ statements: %empty      {
                             $$ = driver->add_node<node_scope_t>(@$, 1, current_scope);
                             drill_down_to_scope($$);
                         }
-          | statements statement   { $$ = $1; $$->add_statement($2); }
+          | statements statement   { $$ = $1; $$->push_statement($2); }
           | statements SCOLON      { $$ = $1; }
-          | statements scope       { $$ = $1; $$->add_statement($2); lift_up_from_scope(); }
-          | statements return      { $$ = $1; $$->add_return($2); }
+          | statements scope       { $$ = $1; $$->push_statement($2); lift_up_from_scope(); }
+          | statements return      { $$ = $1; $$->set_return($2); }
 ;
 
 statements_r: %empty    {
@@ -258,11 +258,11 @@ statements_r: %empty    {
                             drill_down_to_scope($$);
                             $$->add_variables(func_args.begin(), func_args.end());
                         }
-          | statements_r statement_nr { $$ = $1; $$->add_statement_build($2, driver->buf()); }
+          | statements_r statement_nr { $$ = $1; $$->push_statement_build($2, driver->buf()); }
           | statements_r expression_s { $$ = $1; $$->add_expression($2, driver->buf()); }
           | statements_r SCOLON       { $$ = $1; }
-          | statements_r scope        { $$ = $1; $$->add_statement_build($2, driver->buf()); lift_up_from_scope(); }
-          | statements_r return       { $$ = $1; $$->add_return_build($2, driver->buf()); }
+          | statements_r scope        { $$ = $1; $$->push_statement_build($2, driver->buf()); lift_up_from_scope(); }
+          | statements_r return       { $$ = $1; $$->add_return($2, driver->buf()); }
 ;
 
 statements_f: %empty    {
@@ -270,11 +270,11 @@ statements_f: %empty    {
                             drill_down_to_scope($$);
                             $$->add_variables(func_args.begin(), func_args.end());
                         }
-          | statements_f statement_nr { $$ = $1; $$->add_statement_build($2, driver->buf()); }
+          | statements_f statement_nr { $$ = $1; $$->push_statement_build($2, driver->buf()); }
           | statements_f expression_s { $$ = $1; $$->add_expression($2, driver->buf()); }
           | statements_f SCOLON       { $$ = $1; }
-          | statements_f scope        { $$ = $1; $$->add_statement_build($2, driver->buf()); lift_up_from_scope(); }
-          | statements_f return       { $$ = $1; $$->add_return_build($2, driver->buf()); }
+          | statements_f scope        { $$ = $1; $$->push_statement_build($2, driver->buf()); lift_up_from_scope(); }
+          | statements_f return       { $$ = $1; $$->add_return($2, driver->buf()); }
 ;
 
 scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
@@ -396,8 +396,8 @@ condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 ;
 
 body: scope   { $$ = $1; lift_up_from_scope(); }
-    | lghost_scope return    rghost_scope             { $1->add_return($2);    $$ = $1; }
-    | lghost_scope statement rghost_scope %prec THEN  { $1->add_statement($2); $$ = $1; }
+    | lghost_scope return    rghost_scope             { $1->set_return($2);    $$ = $1; }
+    | lghost_scope statement rghost_scope %prec THEN  { $1->push_statement($2); $$ = $1; }
     | SCOLON  { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); }
 ;
 

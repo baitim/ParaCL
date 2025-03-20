@@ -488,9 +488,9 @@ namespace paracl {
 
         template <typename ScopeT, typename ResT>
         ResT* copy_impl(ScopeT* scope, copy_params_t& params) const {
-            through_statements([&](auto statement) { scope->add_statement(statement->copy(params, scope)); });
+            through_statements([&](auto statement) { scope->push_statement(statement->copy(params, scope)); });
             if (return_expr_)
-                scope->add_return(return_expr_->copy(params, scope));
+                scope->set_return(return_expr_->copy(params, scope));
             return scope;
         }
 
@@ -511,12 +511,12 @@ namespace paracl {
     public:
         scope_base_t(scope_base_t* parent) : parent_(parent) {} 
 
-        void add_statement(node_statement_t* node) {
+        void push_statement(node_statement_t* node) {
             assert(node);
             statements_.push_back(node);
         }
 
-        void add_statement_build(node_statement_t* node, buffer_t* buf) {
+        void push_statement_build(node_statement_t* node, buffer_t* buf) {
             assert(node);
             if (return_expr_)
                 return;
@@ -534,12 +534,12 @@ namespace paracl {
             last_expr_ = node;
         }
 
-        void add_return(node_expression_t* node) {
+        void set_return(node_expression_t* node) {
             assert(node);
             return_expr_ = node;
         }
 
-        void add_return_build(node_expression_t* node, buffer_t* buf) {
+        void add_return(node_expression_t* node, buffer_t* buf) {
             assert(node);
             if (return_expr_)
                 return;
