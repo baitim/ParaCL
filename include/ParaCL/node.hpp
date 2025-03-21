@@ -1528,7 +1528,8 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class function_args_t final {
+    class node_function_args_t final : public node_t,
+                                       public node_loc_t {
         static const int DEFAULT_DUPLICATE_IDX = -1;
 
         std::unordered_set<std::string_view> name_table;
@@ -1546,6 +1547,8 @@ namespace paracl {
         }
 
     public:
+        node_function_args_t(const location_t& loc) : node_loc_t(loc) {}
+
         void add_arg(node_variable_t* arg) {
             assert(arg);
             std::string_view name = arg->get_name();
@@ -1573,11 +1576,13 @@ namespace paracl {
             }, params);
         }
 
-        function_args_t copy(copy_params_t& params) const {
-            function_args_t copy;
+        node_function_args_t* copy(copy_params_t& params) const {
+            node_function_args_t* copy =
+                params.buf->add_node<node_function_args_t>(node_loc_t::loc());;
+
             std::ranges::for_each(args_, [&params, &copy](auto arg) {
                 node_variable_t* var_copy = arg->copy(params);
-                copy.add_arg(var_copy);
+                copy->add_arg(var_copy);
                 
             });
             return copy;
@@ -1590,7 +1595,8 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class function_call_args_t final {
+    class node_function_call_args_t final : public node_t,
+                                            public node_loc_t {
         std::vector<node_expression_t*> args_;
 
     private:
@@ -1602,6 +1608,8 @@ namespace paracl {
         }
 
     public:
+        node_function_call_args_t(const location_t& loc) : node_loc_t(loc) {}
+
         void add_arg(node_expression_t* arg) {
             assert(arg);
             args_.push_back(arg);
@@ -1625,10 +1633,12 @@ namespace paracl {
             });
         }
 
-        function_call_args_t copy(copy_params_t& params, scope_base_t* parent) const {
-            function_call_args_t copy;
+        node_function_call_args_t* copy(copy_params_t& params, scope_base_t* parent) const {
+            node_function_call_args_t* copy =
+                params.buf->add_node<node_function_call_args_t>(node_loc_t::loc());
+
             std::ranges::for_each(args_, [&](auto arg) {
-                copy.add_arg(arg->copy(params, parent));
+                copy->add_arg(arg->copy(params, parent));
             });
             return copy;
         }
@@ -1640,8 +1650,8 @@ namespace paracl {
 
     class node_function_t final : public node_simple_type_t,
                                   public id_t {
-        function_args_t args_;
-        node_block_t*   block_;
+        node_function_args_t* args_;
+        node_block_t*         block_;
 
         analyze_t a_value_;
 
@@ -1653,7 +1663,7 @@ namespace paracl {
         template<typename ElemT, typename FuncT>
         ElemT process_real(FuncT&& func) {
             assert(block_);
-            std::forward<FuncT>(func)(&args_);
+            std::forward<FuncT>(func)(args_);
             return std::forward<FuncT>(func)(block_);
         }
 
@@ -1669,13 +1679,14 @@ namespace paracl {
         }
 
     public:
-        node_function_t(const location_t& loc, const function_args_t& args,
+        node_function_t(const location_t& loc, node_function_args_t* args,
                         node_block_t* block, std::string_view id)
         : node_simple_type_t(loc), id_t(get_function_name(id)), args_(args), block_(block) {}
 
         void bind_block(node_block_t* block) {
             block_ = block;
             assert(block_);
+            assert(args_);
         }
 
         value_t execute(execute_params_t& params) override {
@@ -1705,7 +1716,7 @@ namespace paracl {
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
             assert(block_);
 
-            function_args_t args_copy = args_.copy(params);
+            node_function_args_t* args_copy = args_->copy(params);
 
             auto& buf = params.buf;
             node_function_t* function_copy =
@@ -1713,14 +1724,14 @@ namespace paracl {
             params.global_scope.add_variable(function_copy);
 
             node_block_t* block_copy = block_->copy_with_args(
-                params, parent, args_copy.begin(), args_copy.end()
+                params, parent, args_copy->begin(), args_copy->end()
             );
             function_copy->bind_block(block_copy);
 
             return function_copy;
         }
 
-        size_t count_args() const { return args_.size(); }
+        size_t count_args() const { return args_->size(); }
 
         analyze_t a_value() const { return a_value_; }
 
@@ -1730,8 +1741,8 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     class node_function_call_t final : public node_expression_t {
-        node_expression_t*   function_;
-        function_call_args_t args_;
+        node_expression_t*         function_;
+        node_function_call_args_t* args_;
 
         bool is_call_by_name_;
 
@@ -1758,13 +1769,14 @@ namespace paracl {
 
     public:
         node_function_call_t(const location_t& loc, node_expression_t* function,
-                             const function_call_args_t& args, bool is_call_by_name)
+                             node_function_call_args_t* args, bool is_call_by_name)
         : node_expression_t(loc), function_(function), args_(args), is_call_by_name_(is_call_by_name) {
             assert(function_);
+            assert(args_);
         }
 
         value_t execute(execute_params_t& params) override {
-            args_.execute(params);
+            args_->execute(params);
             value_t func_value = function_->execute(params);
 
             node_function_t* func = static_cast<node_function_t*>(func_value.value);
@@ -1781,13 +1793,13 @@ namespace paracl {
                 }
             }
 
-            args_.analyze(params);
+            args_->analyze(params);
             analyze_t function = function_->analyze(params);
 
             expect_types_eq(function.result.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
 
             node_function_t* func = static_cast<node_function_t*>(function.result.value);
-            process_count_arguments(func->count_args(), args_.size(), params);
+            process_count_arguments(func->count_args(), args_->size(), params);
 
             return func->real_analyze(params);
         }
@@ -1804,13 +1816,13 @@ namespace paracl {
 
             return params.buf->add_node<node_function_call_t>(node_loc_t::loc(),
                                                               function_copy,
-                                                              args_.copy(params, parent),
+                                                              args_->copy(params, parent),
                                                               is_call_by_name_);
         }
 
         void set_predict(bool value) override {
             function_->set_predict(value);
-            args_.set_predict(value);
+            args_->set_predict(value);
         }
     };
 
