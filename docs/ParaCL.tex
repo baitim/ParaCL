@@ -1,0 +1,181 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{minted}
+\usepackage{tcolorbox}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage[hidelinks]{hyperref}
+
+
+\geometry{top=2cm,bottom=2cm,left=2.5cm,right=2.5cm}
+
+\definecolor{bg}{rgb}{0.95,0.95,0.95}
+\definecolor{frame}{rgb}{0.3,0.3,0.3}
+\setlength{\parskip}{0.7em}
+\setlength{\parindent}{0pt}
+
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+
+% Добавление стандартного заголовка LaTeX
+\title{Документация ParaCL}
+\date{}
+
+\begin{document}
+
+\maketitle % Вывод заголовка
+
+\tableofcontents
+\newpage
+
+\section{Введение}
+
+Язык \textbf{ParaCL} — это простой язык программирования с поддержкой арифметики, ввода, вывода, условий, циклов, массивов и функций.
+
+\section{Базовые конструкции}
+
+В ParaCL доступны стандартные арифметические операции, условные конструкции \texttt{if} и циклы \texttt{while}, аналогично языку программирования C.
+
+\section{Типы данных}
+ParaCL поддерживает следующие типы данных:
+\begin{itemize}
+    \item Целые числа
+    \item Массивы
+    \item Функции
+\end{itemize}
+
+\section{Массивами}
+
+Массив — структура данных для хранения однотипных элементов. Существует два вида массивов: статические и динамические.
+
+\subsection{Статические массивы}
+
+Если размер массива известен на этапе компиляции, он размещается на стеке:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Пример статического массива]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v0 = 42;
+v1 = repeat(v0, 5);  // Массив из 5 элементов со значением 42
+\end{minted}
+\end{tcolorbox}
+
+\textbf{Индексация} осуществляется через квадратные скобки:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Индексирование массива]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v3 = 3;
+v4 = v1[2] + v1[v3];
+v5 = repeat(v4, v3);  // Новый массив из 3 элементов
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Динамические массивы}
+
+Если размер массива неизвестен заранее, создаётся динамический массив (в куче). Он освобождается автоматически по выходу из области видимости:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Пример динамического массива]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v7 = ?;
+v8 = repeat(2, v7);  // Массив из v7 элементов со значением 2
+\end{minted}
+\end{tcolorbox}
+
+Для создания неинициализированного массива используется ключевое слово \texttt{undef}:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Неинициализированный массив]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v9 = repeat(undef, ?);  // Размер читается с stdin
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Массивы массивов и инициализация}
+
+Массивы могут содержать другие массивы:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Массив массивов]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v10 = repeat(v9, ?);
+\end{minted}
+\end{tcolorbox}
+
+Для явной инициализации применяется ключевое слово \texttt{array}:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Пример инициализации]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v11 = array(1, 2, 3, 4, 5);
+\end{minted}
+\end{tcolorbox}
+
+Частичная инициализация и вложенные \texttt{repeat} также поддерживаются:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Частичная инициализация с flatten]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+v12 = array(undef, 1, 2, 3, 4, 5, repeat(undef, 5));
+v13 = array(repeat(1, 5), repeat(2, 5));
+// Результат: [1,1,1,1,1,2,2,2,2,2] (одномерный)
+\end{minted}
+\end{tcolorbox}
+
+\section{Функции и области видимости}
+
+В ParaCL функции — полноценные объекты.
+
+\subsection{Объявление функции}
+Функции определяются с помощью ключевого слова \texttt{func}. 
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Возврат последнего выражения]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+bar = func() {
+  x = 5;
+  y = 10;
+  x + y;
+}; // точка с запятой здесь возможна но необязательна
+t = bar(); // t == 15
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Явный return}
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Возвращаемое значение с return]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+buz = func(x) {
+  if (x != 5)
+    return x;
+  y = 10;
+  x + y;
+}
+z = buz(6); // z == 6
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Значение блока}
+
+Любой блок может возвращать значение, также блок захватывает внешние переменные:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Блок как выражение]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+t = { x = 5; y = 10; x + y; } // t == 15
+\end{minted}
+\end{tcolorbox}
+
+\subsection{Именованные функции и рекурсия}
+
+У функции может быть имя, если оно нужно (например для рекурсии) тогда оно записывается через двоеточие:
+
+\begin{tcolorbox}[colback=bg, colframe=frame, title=Пример рекурсивной функции]
+\begin{minted}[fontsize=\small, bgcolor=bg]{text}
+fact = func(x) : factorial {
+  res = 1;
+  if (x > 0)
+    res = factorial(x - 1);
+  res;
+}
+\end{minted}
+\end{tcolorbox}
+
+\end{document}

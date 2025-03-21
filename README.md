@@ -2,7 +2,8 @@
 
 ## Description
 
- Implementation of the simple programming language, with flex and bison.
+ Implementation of the simple programming language, with flex and bison.<br>
+ #### [Documentation](https://github.com/baitim/ParaCL/tree/main/docs/ParaCL.pdf)
 
 ## How to integrate
  
@@ -40,14 +41,8 @@
     - error end to end <br>
         <code>python3 tests/end_to_end/error/print_error_tests.py</code>
 
-
 ## Errors
 #### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
-
-* ### Compile errors
-    * Unknown token
-    * Undeclared variable
-    * Wrong types
 
 ## Supported flags
 * print info <code>--help</code>
