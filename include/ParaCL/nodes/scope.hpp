@@ -31,7 +31,7 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     class scope_base_t : public name_table_t,
-                            public memory_table_t {
+                         public memory_table_t {
         scope_base_t* parent_;
 
     protected:
@@ -140,7 +140,7 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     class node_scope_t final : public node_statement_t,
-                                public scope_base_t {
+                               public scope_base_t {
 
     public:
         node_scope_t(const location_t& loc, scope_base_t* parent)
@@ -182,7 +182,7 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     class node_block_t final : public node_expression_t,
-                                public scope_base_t {
+                               public scope_base_t {
 
     public:
         node_block_t(const location_t& loc, scope_base_t* parent)
