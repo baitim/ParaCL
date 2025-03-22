@@ -31,6 +31,10 @@
 6. Run <br>
     <code>./build/Release/src/paracl \<program\></code>
 
+## Supported flags
+* print info <code>--help</code>
+* analization without execution <code>--analyze_only</code>
+
 ## How to test
 
 * Testing
@@ -41,12 +45,74 @@
     - error end to end <br>
         <code>python3 tests/end_to_end/error/print_error_tests.py</code>
 
-## Errors
+## Example of errors
 #### [Examples](https://github.com/baitim/ParaCL/tree/main/images/errors.png)
 
-## Supported flags
-* print info <code>--help</code>
-* analization without execution <code>--analyze_only</code>
+## Example of usage
+ParaCL example programs
+1) Array of functions
+    ```
+        count = 5;
+        arr = array(5, 3, 8, 1, 7);
+
+        sum = func(a, n) {
+            s = 0;
+            i = 0;
+            while (i < n) {
+                s = s + a[i];
+                i = i + 1;
+            }
+            s;
+        }
+
+        max = func(a, n) {
+            m = a[0];
+            i = 1;
+            while (i < n) {
+                if (a[i] > m) {
+                    m = a[i];
+                }
+                i = i + 1;
+            }
+            m;
+        }
+
+        funcs = array(sum, max);
+
+        s = funcs[0](arr, count);
+        print s;
+
+        m = funcs[1](arr, count);
+        print m;
+    ```
+    Output:
+    ```
+    120
+    function fact
+    5040
+    ```
+
+2) Factorial
+    ```
+        factorial = func(n) : fact {
+            if (n <= 1) {
+                return 1;
+            };
+            return n * fact(n - 1);
+        }
+
+        print fact(5);
+        print factorial;
+        print factorial(7);
+    ```
+    Output:
+    ```
+    [5, 3, 8, 1, 7]
+    function #default_function_name_001_#
+    24
+    function #default_function_name_002_#
+    8
+    ```
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
 
