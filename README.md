@@ -79,6 +79,8 @@ ParaCL example programs
 
         funcs = array(sum, max);
 
+        print arr;
+
         s = funcs[0](arr, count);
         print s;
 
@@ -87,9 +89,11 @@ ParaCL example programs
     ```
     Output:
     ```
-    120
-    function fact
-    5040
+        [5, 3, 8, 1, 7]
+        function #default_function_name_001_#
+        24
+        function #default_function_name_002_#
+        8
     ```
 
 2) Factorial
@@ -107,11 +111,9 @@ ParaCL example programs
     ```
     Output:
     ```
-    [5, 3, 8, 1, 7]
-    function #default_function_name_001_#
-    24
-    function #default_function_name_002_#
-    8
+        120
+        function fact
+        5040
     ```
 
 <p align="center"><img src="https://github.com/baitim/ParaCL/blob/main/images/cat.gif" width="50%"></p>
