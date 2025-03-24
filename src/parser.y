@@ -6,7 +6,7 @@ Grammar:
     statements_f -> statements_f statement | statements_f; | statements_f scope | statements_f return | empty
     scope        -> { statements }
     
-    function      -> function_decl block
+    function      -> function_decl function_body
     function_decl -> foo ( function_args ) function_name
     function_name -> COLON variable | empty
     function_call -> variable_shifted ( function_call_args )
