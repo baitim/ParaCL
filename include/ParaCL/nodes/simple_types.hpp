@@ -78,4 +78,16 @@ namespace paracl {
 
         general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
+
+    /* ----------------------------------------------------- */
+    
+    template <typename ParamsT>
+    value_t make_undef(ParamsT& params, const location_t& loc) {
+        return {node_type_e::UNDEF, params.buf()->template add_node<node_undef_t>(loc)};
+    }
+    
+    template <typename ParamsT>
+    value_t make_number(int value, ParamsT& params, const location_t& loc) {
+        return {node_type_e::INTEGER, params.buf()->template add_node<node_number_t>(loc, value)};
+    }
 }

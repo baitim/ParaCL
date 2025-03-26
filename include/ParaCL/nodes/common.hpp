@@ -283,7 +283,8 @@ namespace paracl {
         analyze_t() {}
         analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
         analyze_t(const value_t& value_) : result(value_) {}
-        analyze_t(node_type_e type_, node_type_t* value_) : result(type_, value_) { assert(value_); }
+        analyze_t(const value_t& value_, int is_constexpr_) : result(value_), is_constexpr(is_constexpr_) {}
+        analyze_t(node_type_e type_, node_type_t* value_)    : result(type_, value_) { assert(value_); }
     };
 
     /* ----------------------------------------------------- */

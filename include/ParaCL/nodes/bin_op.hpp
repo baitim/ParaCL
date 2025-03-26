@@ -27,6 +27,36 @@ namespace paracl {
 
     private:
         template <typename ParamsT>
+        std::tuple<bool, int> evaluate_by_left(node_number_t* result, ParamsT& params) {
+            assert(result);
+
+            int value = result->get_value();
+            switch (type_) {
+                case binary_operators_e::OR:  
+                    return  value ? std::make_tuple(true, value) : std::make_tuple(false, 0);
+
+                case binary_operators_e::AND:
+                    return !value ? std::make_tuple(true, value) : std::make_tuple(false, 0);
+
+                case binary_operators_e::EQ:
+                case binary_operators_e::NE:
+                case binary_operators_e::LE:
+                case binary_operators_e::GE:
+                case binary_operators_e::LT:
+                case binary_operators_e::GT:
+
+                case binary_operators_e::ADD:
+                case binary_operators_e::SUB:
+                case binary_operators_e::MUL:
+                case binary_operators_e::DIV:
+                case binary_operators_e::MOD: return {false, 0};
+
+                default: throw error_location_t{node_loc_t::loc(), params.program_str,
+                                                "attempt to use unknown binary operator"};
+            }
+        }
+
+        template <typename ParamsT>
         int evaluate(node_number_t* l_result, node_number_t* r_result, ParamsT& params) {
             assert(l_result);
             assert(r_result);
@@ -54,53 +84,61 @@ namespace paracl {
             }
         }
 
+        node_number_t* execute_node(node_expression_t* node, execute_params_t& params) {
+            value_t result = node->execute(params);
+            if (result.type == node_type_e::UNDEF)
+                return nullptr;
+            return static_cast<node_number_t*>(result.value);
+        }
+
+        std::pair<analyze_t, node_number_t*> analyze_node(node_expression_t* node, analyze_params_t& params) {
+            analyze_t a_result = node->analyze(params);
+            value_t result = a_result.result;
+
+            if (result.type == node_type_e::UNDEF || result.type == node_type_e::INPUT)
+                return {a_result, nullptr};
+
+            expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
+
+            return {a_result, static_cast<node_number_t*>(result.value)};
+        }
+
     public:
         node_bin_op_t(const location_t& loc, binary_operators_e type,
-                    node_expression_t* left, node_expression_t* right)
+                      node_expression_t* left, node_expression_t* right)
         : node_expression_t(loc), type_(type), left_(left), right_(right) {
             assert(left);
             assert(right);
         }
 
         value_t execute(execute_params_t& params) override {
-            value_t l_result = left_ ->execute(params);
-            value_t r_result = right_->execute(params);
+            node_number_t* l_value = execute_node(left_, params);
+            if (!l_value) return make_undef(params, node_loc_t::loc());
 
-            if (l_result.type == node_type_e::UNDEF ||
-                r_result.type == node_type_e::UNDEF)
-                return {node_type_e::UNDEF, params.buf()->add_node<node_undef_t>(node_loc_t::loc())};
-            
-            node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
-            node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
-            int result = evaluate(l_result_number, r_result_number, params);
-            return {node_type_e::INTEGER, params.buf()->add_node<node_number_t>(node_loc_t::loc(), result)};
+            auto [is_return, value_by_left] = evaluate_by_left(l_value, params);
+            if (is_return) return make_number(value_by_left, params, node_loc_t::loc());
+
+            node_number_t* r_value = execute_node(right_, params);
+            if (!r_value) return make_undef(params, node_loc_t::loc());
+
+            return make_number(evaluate(l_value, r_value, params), params, node_loc_t::loc());
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            analyze_t a_l_result = left_->analyze(params);
-            analyze_t a_r_result = right_->analyze(params);
+            auto [a_l_result, l_value] = analyze_node(left_, params);
+            if (!l_value) return a_l_result;
 
-            value_t l_result = a_l_result.result;
-            value_t r_result = a_r_result.result;
+            auto [is_return, value_by_left] = evaluate_by_left(l_value, params);
+            if (is_return)
+                return {make_number(value_by_left, params, node_loc_t::loc()), a_l_result.is_constexpr};
 
-            if (l_result.type == node_type_e::UNDEF ||
-                l_result.type == node_type_e::INPUT)
-                return a_l_result;
+            auto [a_r_result, r_value] = analyze_node(right_, params);
+            if (!r_value) return a_r_result;
 
-            if (r_result.type == node_type_e::UNDEF ||
-                r_result.type == node_type_e::INPUT)
-                return a_r_result;
-
-            expect_types_ne(l_result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
-            expect_types_ne(r_result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
-        
-            node_number_t* l_result_number = static_cast<node_number_t*>(l_result.value);
-            node_number_t* r_result_number = static_cast<node_number_t*>(r_result.value);
-            int result = evaluate(l_result_number, r_result_number, params);
-
-            analyze_t a_result{node_type_e::INTEGER, params.buf()->add_node<node_number_t>(node_loc_t::loc(), result)};
-            a_result.is_constexpr = a_l_result.is_constexpr & a_r_result.is_constexpr;
-            return a_result;
+            return {
+                make_number(evaluate(l_value, r_value, params), params, node_loc_t::loc()),
+                a_l_result.is_constexpr & a_r_result.is_constexpr
+            };
         }
 
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
