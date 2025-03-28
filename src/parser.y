@@ -223,8 +223,7 @@ Grammar:
         
         if (global_scope_names.get_var_node(name))
             throw error_declaration_t{make_loc(loc, name.length()), program_str,
-                                      "this name already declared in global scope \
-                                       and can only be used to call function"};
+                "this name already declared in global scope and can only be used to call function"};
 
         node_variable_t* var = static_cast<node_variable_t*>(current_scope->get_node(name));
         if (!var) {
