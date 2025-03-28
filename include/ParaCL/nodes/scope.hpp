@@ -3,6 +3,7 @@
 #include "ParaCL/nodes/common.hpp"
 
 #include <algorithm>
+#include <functional>
 
 namespace paracl {
     class node_memory_t {
@@ -44,7 +45,7 @@ namespace paracl {
         bool process_statements(FuncT&& func, ParamsT& params) const {
             size_t old_stack_size = params.stack.size();
             for (auto statement : statements_) {
-                std::forward<FuncT>(func)(statement, params);
+                std::invoke(func, statement, params);
                 if (old_stack_size != params.stack.size())
                     return true;
             }
@@ -54,7 +55,7 @@ namespace paracl {
         template <typename FuncT>
         void through_statements(FuncT&& func) const {
             std::ranges::for_each(statements_, [&func](auto statement) {
-                std::forward<FuncT>(func)(statement);
+                std::invoke(func, statement);
             });
         }
 

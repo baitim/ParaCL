@@ -15,7 +15,7 @@ namespace paracl {
             std::vector<ElemT> indexes(indexes_.size());
             std::transform(indexes_.begin(), indexes_.end(), indexes.begin(),
                 [&func, &params](const auto& index_) {
-                   return std::forward<FuncT>(func)(index_, params);
+                   return std::invoke(func, index_, params);
                 }
             );
             reverse(indexes.begin(), indexes.end());
@@ -105,7 +105,7 @@ namespace paracl {
     private:
         template <typename ElemT, typename FuncT, typename ParamsT>
         void process_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            values.push_back(std::forward<FuncT>(func)(value_, params));
+            values.push_back(std::invoke(func, value_, params));
         }
 
     public:
@@ -136,13 +136,13 @@ namespace paracl {
     private:
         template <typename ElemT, typename FuncT, typename ParamsT>
         void process_add_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            std::vector<ElemT> result = std::forward<FuncT>(func)(params).first;
+            std::vector<ElemT> result = std::invoke(func, params).first;
             values.insert(values.end(), result.begin(), result.end());
         }
 
         template <typename DataT, typename FuncT, typename ParamsT, typename EvalFuncT>
         DataT process_array(FuncT&& func, ParamsT& params, EvalFuncT&& eval_func) const {
-            auto  count = std::forward<EvalFuncT>(eval_func)(count_, params);
+            auto  count = std::invoke(eval_func, count_, params);
             auto& count_value = [&]() -> auto& {
                 if constexpr (std::is_same_v<DataT, array_execute_data_t>)
                     return count;
@@ -152,7 +152,7 @@ namespace paracl {
 
             if constexpr (std::is_same_v<DataT, array_analyze_data_t>) {
                 if (count_value.type == node_type_e::INPUT) {
-                    auto init_value = std::forward<EvalFuncT>(eval_func)(value_, params);
+                    auto init_value = std::invoke(eval_func, value_, params);
                     return {{init_value.result}, true};
                 }
                 expect_types_ne(count_value.type, node_type_e::UNDEF, count_->loc(), params);
@@ -164,8 +164,8 @@ namespace paracl {
 
             std::vector<typename DataT::first_type::value_type> values;
             values.reserve(real_count);
-            std::forward<FuncT>(func)(
-                values, real_count, params, std::forward<EvalFuncT>(eval_func)(value_, params)
+            std::invoke(func,
+                values, real_count, params, std::invoke(eval_func, value_, params)
             );
 
             return {values, count_value.type == node_type_e::INPUT};
@@ -247,7 +247,7 @@ namespace paracl {
         DataT process_values(FuncT&& func, ParamsT& params) const {
             std::vector<typename DataT::first_type::value_type> values;
             std::ranges::for_each(values_, [&](auto value) {
-                std::forward<FuncT>(func)(value, values, params);
+                std::invoke(func, value, values, params);
             });
             return {values, false};
         }
@@ -324,10 +324,10 @@ namespace paracl {
         void init(FuncT&& eval_func, ParamsT& params,
                   std::vector<typename DataT::first_type::value_type>& values,
                   std::vector<typename DataT::first_type::value_type>& indexes) {
-            auto values_res = std::forward<FuncT>(eval_func)(init_values_, params);
+            auto values_res = std::invoke(eval_func, init_values_, params);
             values          = values_res.first;
             is_in_heap_     = values_res.second;
-            indexes         = std::forward<FuncT>(eval_func)(init_indexes_, params);
+            indexes         = std::invoke(eval_func, init_indexes_, params);
             is_inited_      = true;
         }
 

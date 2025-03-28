@@ -21,7 +21,7 @@ namespace paracl {
             int i = 0;
             auto values = params.stack.pop_values(args_.size());
             for (auto arg : std::ranges::reverse_view(values))
-                std::forward<FuncT>(func)(args_[i++], arg, params);
+                std::invoke(func, args_[i++], arg, params);
         }
 
     public:
@@ -81,7 +81,7 @@ namespace paracl {
         template<typename FuncT, typename ParamsT>
         void process_args(FuncT&& func, ParamsT& params) {
             std::ranges::for_each(args_, [&params, &func](auto arg) {
-                params.stack.push_value(std::forward<FuncT>(func)(arg, params));
+                params.stack.push_value(std::invoke(func, arg, params));
             });
         }
 
@@ -141,8 +141,8 @@ namespace paracl {
         template<typename ElemT, typename FuncT>
         ElemT process_real(FuncT&& func) {
             assert(block_);
-            std::forward<FuncT>(func)(args_);
-            return std::forward<FuncT>(func)(block_);
+            std::invoke(func, args_);
+            return std::invoke(func, block_);
         }
 
         std::string get_function_name(std::string_view id) {
