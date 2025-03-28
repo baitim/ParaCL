@@ -24,8 +24,6 @@ namespace paracl {
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
             return params.buf->add_node<node_number_t>(node_loc_t::loc(), number_);
         }
-
-        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
@@ -47,8 +45,6 @@ namespace paracl {
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
             return params.buf->add_node<node_undef_t>(node_loc_t::loc());
         }
-
-        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
@@ -75,18 +71,19 @@ namespace paracl {
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
             return params.buf->add_node<node_input_t>(node_loc_t::loc());
         }
-
-        general_type_e get_general_type() const noexcept override { return general_type_e::INTEGER; }
     };
 
     /* ----------------------------------------------------- */
-    
-    template <typename ParamsT>
+
+    template <typename T>
+    concept existed_params = std::same_as<T, execute_params_t> || std::same_as<T, analyze_params_t>;
+
+    template <existed_params ParamsT>
     value_t make_undef(ParamsT& params, const location_t& loc) {
         return {node_type_e::UNDEF, params.buf()->template add_node<node_undef_t>(loc)};
     }
-    
-    template <typename ParamsT>
+
+    template <existed_params ParamsT>
     value_t make_number(int value, ParamsT& params, const location_t& loc) {
         return {node_type_e::INTEGER, params.buf()->template add_node<node_number_t>(loc, value)};
     }

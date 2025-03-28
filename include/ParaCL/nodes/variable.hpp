@@ -22,11 +22,14 @@ namespace paracl {
 
         static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
                                             const location_t& loc_set, analyze_params_t& params) {
-            node_type_t* lvalue = a_lvalue.result.value;
-            node_type_t* rvalue = a_rvalue.result.value;
+            value_t lresult = a_lvalue.result;
+            value_t rresult = a_rvalue.result;
 
-            general_type_e l_type = lvalue->get_general_type();
-            general_type_e r_type = rvalue->get_general_type();
+            node_type_t* lvalue = lresult.value;
+            node_type_t* rvalue = rresult.value;
+
+            general_type_e l_type = to_general_type(lresult.type);
+            general_type_e r_type = to_general_type(rresult.type);
 
             check_types_in_assign(l_type, r_type, loc_set, params);
 

@@ -585,6 +585,5 @@ namespace paracl {
         }
 
         int level() const override { return 1 + init_values_->get_level(); }
-        general_type_e get_general_type() const noexcept override { return general_type_e::ARRAY; }
     };
 }

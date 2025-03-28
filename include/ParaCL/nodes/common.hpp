@@ -185,7 +185,6 @@ namespace paracl {
         virtual void print(execute_params_t& params) = 0;
         virtual int  level() const = 0;
         void set_predict(bool value) override {}
-        virtual general_type_e get_general_type() const noexcept = 0;
     };
 
     /* ----------------------------------------------------- */
@@ -210,10 +209,21 @@ namespace paracl {
         switch (type) {
             case node_type_e::INTEGER:  return "integer";
             case node_type_e::UNDEF:    return "undef";
-            case node_type_e::ARRAY:    return "array";
             case node_type_e::INPUT:    return "number";
+            case node_type_e::ARRAY:    return "array";
             case node_type_e::FUNCTION: return "function";
             default:                    return "unknown type";
+        }
+    }
+
+    inline general_type_e to_general_type(node_type_e type) {
+        switch (type) {
+            case node_type_e::INTEGER:  return general_type_e::INTEGER;
+            case node_type_e::UNDEF:    return general_type_e::INTEGER;
+            case node_type_e::INPUT:    return general_type_e::INTEGER;
+            case node_type_e::ARRAY:    return general_type_e::ARRAY;
+            case node_type_e::FUNCTION: return general_type_e::FUNCTION;
+            default:                    throw error_t{str_red("failed to_general_type(): unknown type")};
         }
     }
 
@@ -391,15 +401,18 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    inline void expect_types_eq(node_type_e result,    node_type_e expected,
+    template <typename T>
+    concept existed_types = std::same_as<T, node_type_e> || std::same_as<T, general_type_e>;
+
+    template <existed_types TypeT>
+    inline void expect_types_eq(TypeT result, TypeT expected,
                                 const location_t& loc, analyze_params_t& params) {
         if (result != expected)
             throw error_analyze_t{loc, params.program_str, "wrong type: " + type2str(result)};
     }
 
-    /* ----------------------------------------------------- */
-
-    inline void expect_types_ne(node_type_e result,    node_type_e expected,
+    template <existed_types TypeT>
+    inline void expect_types_ne(TypeT result, TypeT expected,
                                 const location_t& loc, analyze_params_t& params) {
         if (result == expected)
             throw error_analyze_t{loc, params.program_str, "wrong type: " + type2str(result)};

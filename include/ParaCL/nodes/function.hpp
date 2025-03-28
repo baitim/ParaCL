@@ -101,7 +101,10 @@ namespace paracl {
 
         void analyze(analyze_params_t& params) {
             process_args([](auto arg, auto& params) {
-                return arg->analyze(params);
+                analyze_t arg_value = arg->analyze(params);
+                expect_types_eq(to_general_type(arg_value.result.type), general_type_e::INTEGER,
+                                arg->loc(), params);
+                return arg_value;
             }, params);
         }
 
@@ -212,8 +215,6 @@ namespace paracl {
         size_t count_args() const { return args_->size(); }
 
         analyze_t a_value() const { return a_value_; }
-
-        general_type_e get_general_type() const noexcept override { return general_type_e::FUNCTION; }
     };
 
     /* ----------------------------------------------------- */

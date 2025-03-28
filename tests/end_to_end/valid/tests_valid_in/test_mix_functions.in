@@ -1,44 +1,22 @@
 count = 5;
-arr = array(5, 3, 8, 1, 7);
+arr = array(10, 20, 30, 40, 50);
 
-sum = func(a, n) {
-    s = 0;
-    i = 0;
-    while (i < n) {
-        s = s + a[i];
-        i = i + 1;
-    }
-    s;
-};
+add_five = func(x) { x + 5; };
+square   = func(x) { x * x; };
+half     = func(x) { x / 2; };
+negate   = func(x) { -x; };
 
-max = func(a, n) {
-    m = a[0];
-    i = 1;
-    while (i < n) {
-        if (a[i] > m) {
-            m = a[i];
-        }
-        i = i + 1;
-    }
-    m;
-};
-
-print_array = func(a, n) {
-    i = 0;
-    while (i < n) {
-        print a[i];
-        i = i + 1;
-    }
-    return 0;
-};
-
-funcs = array(sum, max);
+funcs_size = 4;
+funcs = array(add_five, square, half, negate);
 
 print arr;
-print_array(arr, count);
 
-s = funcs[0](arr, count);
-print s;
-
-m = funcs[1](arr, count);
-print m;
+num_func = 0;
+while (num_func < funcs_size) {
+    i = 0;
+    while (i < count) {
+        print funcs[num_func](arr[i]);
+        i = i + 1;
+    }
+    num_func = num_func + 1;
+}
