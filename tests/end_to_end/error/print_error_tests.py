@@ -60,7 +60,7 @@ def create_image_from_colored_text(colored_text, file_name):
     font = ImageFont.truetype("DejaVuSansMono.ttf", font_size)
     max_width = 800
     line_height = font_size + 2
-    img_height = line_height * colored_text.count('\n') + line_height * 2
+    img_height = line_height * colored_text.count('\n') + line_height * 5
     img = Image.new('RGB', (max_width, img_height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
 
