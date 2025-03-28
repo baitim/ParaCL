@@ -52,48 +52,46 @@
 ParaCL example programs
 1) Array of functions
     ```
-        count = 5;
-        arr = array(5, 3, 8, 1, 7);
+        count = 3;
+        arr = array(10, 20, 30);
 
-        sum = func(a, n) {
-            s = 0;
-            i = 0;
-            while (i < n) {
-                s = s + a[i];
-                i = i + 1;
-            }
-            s;
-        }
+        add_five = func(x) { x + 5; }
+        square   = func(x) { x * x; }
+        half_    = func(x) : half { x / 2; }
 
-        max = func(a, n) {
-            m = a[0];
-            i = 1;
-            while (i < n) {
-                if (a[i] > m) {
-                    m = a[i];
-                }
-                i = i + 1;
-            }
-            m;
-        }
-
-        funcs = array(sum, max);
+        funcs_size = 3;
+        funcs = array(add_five, square, half_);
 
         print arr;
+        print add_five;
+        print square;
+        print half_;
 
-        s = funcs[0](arr, count);
-        print s;
-
-        m = funcs[1](arr, count);
-        print m;
+        num_func = 0;
+        while (num_func < funcs_size) {
+            i = 0;
+            while (i < count) {
+                print funcs[num_func](arr[i]);
+                i = i + 1;
+            }
+            num_func = num_func + 1;
+        }
     ```
     Output:
     ```
-        [5, 3, 8, 1, 7]
+        [10, 20, 30]
         function #default_function_name_001_#
-        24
         function #default_function_name_002_#
-        8
+        function half
+        15
+        25
+        35
+        100
+        400
+        900
+        5
+        10
+        15
     ```
 
 2) Factorial

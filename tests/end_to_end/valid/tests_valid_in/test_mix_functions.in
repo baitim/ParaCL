@@ -1,10 +1,10 @@
 count = 5;
 arr = array(10, 20, 30, 40, 50);
 
-add_five = func(x) { x + 5; };
-square   = func(x) { x * x; };
-half     = func(x) { x / 2; };
-negate   = func(x) { -x; };
+add_five = func(x) { x + 5; }
+square   = func(x) { x * x; }
+half     = func(x) { x / 2; }
+negate   = func(x) { -x; }
 
 funcs_size = 4;
 funcs = array(add_five, square, half, negate);
