@@ -3,15 +3,15 @@ Grammar:
     program      -> statements
     statements   -> statements   statement | statements;   | statements   scope | statements   return | empty
     statements_r -> statements_r statement | statements_r; | statements_r scope | statements_r return | empty
-    statements_f -> statements_f statement | statements_f; | statements_f scope | statements_f return | empty
+    return       -> return expression;
     scope        -> { statements }
+    block        -> { statements_r }
     
     function      -> function_decl function_body
     function_decl -> foo ( function_args ) function_name
     function_name -> COLON variable | empty
     function_call -> variable_shifted ( function_call_args )
-    function_body -> { statements_f }
-    return        -> return expression;
+    function_body -> block
 
     function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
@@ -20,8 +20,6 @@ Grammar:
     statement    -> statement_nr | expression_s
     expression   -> print | assignment | expression_lgc
     expression_s -> print; | assignment_nr; | expression_lgc; | function | assignment_r
-
-    block        -> { statements_r }
 
     fork         -> if condition body | if condition body else body
     loop         -> while condition body
@@ -137,7 +135,6 @@ Grammar:
 
 %nterm <node_scope_t*>      statements
 %nterm <node_block_t*>      statements_r
-%nterm <node_block_t*>      statements_f
 %nterm <node_scope_t*>      scope
 
 %nterm <node_function_t*>      function
@@ -263,19 +260,13 @@ statements_r: %empty    {
           | statements_r return       { $$ = $1; $$->add_return($2, driver->buf()); }
 ;
 
-statements_f: %empty    {
-                            $$ = driver->add_node<node_block_t>(@$, 1, nullptr);
-                            drill_down_to_scope($$);
-                            $$->add_variables(func_args.begin(), func_args.end());
-                        }
-          | statements_f statement_nr { $$ = $1; $$->push_statement_build($2, driver->buf()); }
-          | statements_f expression_s { $$ = $1; $$->push_expression($2, driver->buf()); }
-          | statements_f SCOLON       { $$ = $1; }
-          | statements_f scope        { $$ = $1; $$->push_statement_build($2, driver->buf()); lift_up_from_scope(); }
-          | statements_f return       { $$ = $1; $$->add_return($2, driver->buf()); }
+return: RETURN expression_s { $$ = $2; }
 ;
 
 scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; }
+;
+
+block: LBRACKET_CURLY statements_r RBRACKET_CURLY { $$ = $2; $$->update_return(); }
 ;
 
 function: function_decl function_body
@@ -285,9 +276,6 @@ function: function_decl function_body
                 lift_up_from_scope();
                 func_args = {};
             }
-;
-
-function_body: LBRACKET_CURLY statements_f RBRACKET_CURLY { $$ = $2; $$->update_return(); }
 ;
 
 function_decl: FUNC LBRACKET_ROUND function_args RBRACKET_ROUND function_name
@@ -325,7 +313,7 @@ function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
         }
 ;
 
-return: RETURN expression_s { $$ = $2; }
+function_body: block { $$ = $1; }
 ;
 
 function_args: %empty   { $$ = driver->add_node<node_function_args_t>(@$, 1); }
@@ -371,9 +359,6 @@ expression_s: print          SCOLON { $$ = $1; }
             | expression_lgc SCOLON { $$ = $1; }
             | function              { $$ = $1; }
             | assignment_r          { $$ = $1; }
-;
-
-block: LBRACKET_CURLY statements_r RBRACKET_CURLY { $$ = $2; $$->update_return(); }
 ;
 
 fork: IF condition body %prec THEN  { 
