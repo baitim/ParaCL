@@ -27,16 +27,16 @@ namespace paracl {
 
     private:
         template <typename ParamsT>
-        std::tuple<bool, int> evaluate_by_left(node_number_t* result, ParamsT& params) {
+        std::optional<int> evaluate_by_left(node_number_t* result, ParamsT& params) {
             assert(result);
 
             int value = result->get_value();
             switch (type_) {
                 case binary_operators_e::OR:  
-                    return  value ? std::make_tuple(true, value) : std::make_tuple(false, 0);
+                    return  value ? std::optional<int>{value} : std::nullopt;
 
                 case binary_operators_e::AND:
-                    return !value ? std::make_tuple(true, value) : std::make_tuple(false, 0);
+                    return !value ? std::optional<int>{value} : std::nullopt;
 
                 case binary_operators_e::EQ:
                 case binary_operators_e::NE:
@@ -49,7 +49,7 @@ namespace paracl {
                 case binary_operators_e::SUB:
                 case binary_operators_e::MUL:
                 case binary_operators_e::DIV:
-                case binary_operators_e::MOD: return {false, 0};
+                case binary_operators_e::MOD: return std::nullopt;
 
                 default: throw error_location_t{node_loc_t::loc(), params.program_str,
                                                 "attempt to use unknown binary operator"};
@@ -115,8 +115,8 @@ namespace paracl {
             node_number_t* l_value = execute_node(left_, params);
             if (!l_value) return make_undef(params, node_loc_t::loc());
 
-            auto [is_return, value_by_left] = evaluate_by_left(l_value, params);
-            if (is_return) return make_number(value_by_left, params, node_loc_t::loc());
+            if (auto value_by_left = evaluate_by_left(l_value, params))
+                return make_number(*value_by_left, params, node_loc_t::loc());
 
             node_number_t* r_value = execute_node(right_, params);
             if (!r_value) return make_undef(params, node_loc_t::loc());
@@ -128,9 +128,8 @@ namespace paracl {
             auto [a_l_result, l_value] = analyze_node(left_, params);
             if (!l_value) return a_l_result;
 
-            auto [is_return, value_by_left] = evaluate_by_left(l_value, params);
-            if (is_return)
-                return {make_number(value_by_left, params, node_loc_t::loc()), a_l_result.is_constexpr};
+            if (auto value_by_left = evaluate_by_left(l_value, params))
+                return {make_number(*value_by_left, params, node_loc_t::loc()), a_l_result.is_constexpr};
 
             auto [a_r_result, r_value] = analyze_node(right_, params);
             if (!r_value) return a_r_result;

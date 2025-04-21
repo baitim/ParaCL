@@ -81,7 +81,7 @@ namespace paracl {
         template<typename FuncT, typename ParamsT>
         void process_args(FuncT&& func, ParamsT& params) {
             std::ranges::for_each(args_, [&params, &func](auto arg) {
-                params.stack.push_value(std::invoke(func, arg, params));
+                params.stack.emplace(std::invoke(func, arg, params));
             });
         }
 
@@ -132,20 +132,18 @@ namespace paracl {
     class node_function_t final : public node_simple_type_t,
                                   public id_t {
         node_function_args_t* args_;
-        node_block_t*         block_;
+        node_function_body_t* body_;
 
-        analyze_t a_value_;
-
-        static inline const std::string default_function_name_prefix  = "#default_function_name_";
-        static inline const std::string default_function_name_postfix = "_#";
-        static inline int               default_function_name_index   = 1;
+        static constexpr std::string_view default_function_name_prefix  = "#default_function_name_";
+        static constexpr std::string_view default_function_name_postfix = "_#";
+        static inline int                 default_function_name_index   = 1;
 
     private:
         template<typename ElemT, typename FuncT>
         ElemT process_real(FuncT&& func) {
-            assert(block_);
+            assert(body_);
             std::invoke(func, args_);
-            return std::invoke(func, block_);
+            return std::invoke(func, body_);
         }
 
         std::string get_function_name(std::string_view id) {
@@ -161,12 +159,12 @@ namespace paracl {
 
     public:
         node_function_t(const location_t& loc, node_function_args_t* args,
-                        node_block_t* block, std::string_view id)
-        : node_simple_type_t(loc), id_t(get_function_name(id)), args_(args), block_(block) {}
+                        node_function_body_t* body, std::string_view id)
+        : node_simple_type_t(loc), id_t(get_function_name(id)), args_(args), body_(body) {}
 
-        void bind_block(node_block_t* block) {
-            block_ = block;
-            assert(block_);
+        void bind_body(node_function_body_t* body) {
+            body_ = body;
+            assert(body_);
             assert(args_);
         }
 
@@ -185,17 +183,15 @@ namespace paracl {
         }
 
         analyze_t real_analyze(analyze_params_t& params) {
-            a_value_ = process_real<analyze_t>([&params](auto arg) {
+            return process_real<analyze_t>([&params](auto arg) {
                 return arg->analyze(params);
             });
-            params.copy_params.global_scope.add_variable(this);
-            return a_value_;
         }
 
         void print(execute_params_t& params) override { *(params.os) << "function " << get_name() << "\n"; }
 
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            assert(block_);
+            assert(body_);
 
             node_function_args_t* args_copy = args_->copy(params);
 
@@ -204,17 +200,15 @@ namespace paracl {
                 buf->add_node<node_function_t>(node_loc_t::loc(), args_copy, nullptr, get_name());
             params.global_scope.add_variable(function_copy);
 
-            node_block_t* block_copy = block_->copy_with_args(
+            node_function_body_t* body_copy = body_->copy_with_args(
                 params, parent, args_copy->begin(), args_copy->end()
             );
-            function_copy->bind_block(block_copy);
+            function_copy->bind_body(body_copy);
 
             return function_copy;
         }
 
         size_t count_args() const { return args_->size(); }
-
-        analyze_t a_value() const { return a_value_; }
     };
 
     /* ----------------------------------------------------- */
@@ -222,6 +216,8 @@ namespace paracl {
     class node_function_call_t final : public node_expression_t {
         node_expression_t*         function_;
         node_function_call_args_t* args_;
+
+        static inline int default_analyze_return = 42;
 
         bool is_call_by_name_;
 
@@ -246,6 +242,40 @@ namespace paracl {
             return real_function;
         }
 
+        void visit_function(analyze_params_t& params) const {
+            if (!is_call_by_name_)
+                return;
+
+            id_t* function = static_cast<id_t*>(static_cast<node_function_t*>(function_));
+            params.names_of_called_functions.emplace(function->get_name(), function);
+            params.called_functions.emplace(function);
+        }
+
+        void unvisit_function(analyze_params_t& params) const {
+            if (!is_call_by_name_)
+                return;
+
+            auto& stack = params.called_functions;
+            auto& map = params.names_of_called_functions;
+            id_t* function = static_cast<id_t*>(stack.top());
+            map.erase(map.find(function->get_name()));
+            stack.pop();
+        }
+
+        std::optional<analyze_t> analyze_call_by_name(analyze_params_t& params) const {
+            if (!is_call_by_name_)
+                return std::nullopt;
+
+            id_t* function = static_cast<id_t*>(static_cast<node_function_t*>(function_));
+            std::string_view function_name = function->get_name();
+            auto& map = params.names_of_called_functions;
+
+            if (map.find(function_name) != map.end())
+                return analyze_t{make_number(default_analyze_return, params, node_loc_t::loc()), false};
+
+            return std::nullopt;
+        }
+
     public:
         node_function_call_t(const location_t& loc, node_expression_t* function,
                              node_function_call_args_t* args, bool is_call_by_name)
@@ -263,24 +293,21 @@ namespace paracl {
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            if (is_call_by_name_) {
-                node_function_t* function = get_function(params.copy_params.global_scope);
-                if (function) {
-                    analyze_t result = function->a_value();
-                    result.is_constexpr = false;
-                    return result;
-                }
-            }
+            if (auto result = analyze_call_by_name(params))
+                return *result;
 
+            visit_function(params);
             args_->analyze(params);
-            analyze_t function = function_->analyze(params);
 
-            expect_types_eq(function.result.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
+            analyze_t function_a = function_->analyze(params);
+            expect_types_eq(function_a.result.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
 
-            node_function_t* func = static_cast<node_function_t*>(function.result.value);
-            process_count_arguments(func->count_args(), args_->size(), params);
+            node_function_t* function = static_cast<node_function_t*>(function_a.result.value);
+            process_count_arguments(function->count_args(), args_->size(), params);
 
-            return func->real_analyze(params);
+            analyze_t result = function->real_analyze(params);
+            unvisit_function(params);
+            return result;
         }
 
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {

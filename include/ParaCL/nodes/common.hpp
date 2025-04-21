@@ -241,27 +241,18 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     template <typename ElemT>
-    class stack_t final {
-        std::stack<ElemT> stack;
-
+    class stack_t final : public std::stack<ElemT> {
     public:
-        void push_value(const ElemT& value) {
-            stack.push(value);
-        }
-
-        ElemT pop_value() {
-            if (stack.empty())
-                throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
-
-            ElemT value = stack.top();
-            stack.pop();
-            return value;
-        }
+        using std::stack<ElemT>::top;
+        using std::stack<ElemT>::pop;
+        using std::stack<ElemT>::emplace;
+        using std::stack<ElemT>::size;
+        using std::stack<ElemT>::empty;
 
         template <typename IterT>
         void push_values(IterT begin, IterT end) {
             for (auto it = begin; it != end; ++it)
-                stack.push(*it);
+                emplace(*it);
         }
 
         std::vector<ElemT> pop_values(size_t count) {
@@ -269,18 +260,14 @@ namespace paracl {
             result.reserve(count);
 
             while (count-- > 0) {
-                if (stack.empty())
+                if (empty())
                     throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
 
-                result.push_back(stack.top());
-                stack.pop();
+                result.push_back(top());
+                pop();
             }
 
             return result;
-        }
-
-        size_t size() const {
-            return stack.size();
         }
     };
 
@@ -290,11 +277,12 @@ namespace paracl {
         value_t result;
         bool    is_constexpr = true;
 
+    public:
         analyze_t() {}
         analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
         analyze_t(const value_t& value_) : result(value_) {}
         analyze_t(const value_t& value_, int is_constexpr_) : result(value_), is_constexpr(is_constexpr_) {}
-        analyze_t(node_type_e type_, node_type_t* value_)    : result(type_, value_) { assert(value_); }
+        analyze_t(node_type_e type_, node_type_t* value_)   : result(type_, value_) { assert(value_); }
     };
 
     /* ----------------------------------------------------- */
@@ -362,14 +350,22 @@ namespace paracl {
     
     class node_scope_t;
 
+    enum class stack_state_e {
+        PROCESS,
+        RETURN,
+        FUNCTION_CALL
+    };
+
     struct execute_params_t final {
         copy_params_t copy_params;
         stack_t<value_t> stack;
+        stack_state_e stack_state = stack_state_e::PROCESS;
 
         std::ostream* os = nullptr;
         std::istream* is = nullptr;
         std::string_view program_str = {};
 
+    public:
         execute_params_t(buffer_t* buf_, std::ostream* os_,
                          std::istream* is_, std::string_view program_str_)
         : os(os_), is(is_), program_str(program_str_) {
@@ -385,11 +381,16 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     struct analyze_params_t final {
-        copy_params_t copy_params;
-        stack_t<analyze_t> stack;
-
         std::string_view program_str = {};
 
+        copy_params_t copy_params;
+        stack_t<analyze_t> stack;
+        stack_state_e stack_state = stack_state_e::PROCESS;
+
+        std::unordered_map<std::string_view, id_t*> names_of_called_functions;
+        std::stack<id_t*> called_functions;
+
+    public:
         analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})
         : program_str(program_str_) {
             assert(buf_);
@@ -404,17 +405,28 @@ namespace paracl {
     template <typename T>
     concept existed_types = std::same_as<T, node_type_e> || std::same_as<T, general_type_e>;
 
-    template <existed_types TypeT>
-    inline void expect_types_eq(TypeT result, TypeT expected,
-                                const location_t& loc, analyze_params_t& params) {
-        if (result != expected)
+    template <typename T>
+    concept existed_params = std::same_as<T, execute_params_t> || std::same_as<T, analyze_params_t>;
+
+    template <existed_types TypeT, existed_params ParamsT>
+    inline void expect_types_eq(TypeT result, TypeT expected, const location_t& loc, ParamsT& params) {
+        if (result == expected)
+            return;
+
+        if constexpr (std::is_same_v<ParamsT, execute_params_t>)
+            throw error_execute_t{loc, params.program_str, "wrong type: " + type2str(result)};
+        else
             throw error_analyze_t{loc, params.program_str, "wrong type: " + type2str(result)};
     }
 
-    template <existed_types TypeT>
-    inline void expect_types_ne(TypeT result, TypeT expected,
-                                const location_t& loc, analyze_params_t& params) {
-        if (result == expected)
+    template <existed_types TypeT, existed_params ParamsT>
+    inline void expect_types_ne(TypeT result, TypeT expected, const location_t& loc, ParamsT& params) {
+        if (result != expected)
+            return;
+
+        if constexpr (std::is_same_v<ParamsT, execute_params_t>)
+            throw error_execute_t{loc, params.program_str, "wrong type: " + type2str(result)};
+        else
             throw error_analyze_t{loc, params.program_str, "wrong type: " + type2str(result)};
     }
 

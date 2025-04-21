@@ -75,9 +75,6 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    template <typename T>
-    concept existed_params = std::same_as<T, execute_params_t> || std::same_as<T, analyze_params_t>;
-
     template <existed_params ParamsT>
     value_t make_undef(ParamsT& params, const location_t& loc) {
         return {node_type_e::UNDEF, params.buf()->template add_node<node_undef_t>(loc)};

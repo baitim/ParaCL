@@ -21,6 +21,9 @@ int main(int argc, char* argv[]) try {
 } catch (const paracl::error_t& error) {
     std::cout << error.what() << '\n';
     return 1;
+} catch (const std::exception& error) {
+    std::cout << print_red(error.what()) << "\n";
+    return 1;
 } catch (...) {
     std::cout << print_red("Unknown error\n");
     return 1;

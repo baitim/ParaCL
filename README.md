@@ -22,8 +22,7 @@
     <code>conan profile detect --force</code>
 
 4. Init dependencies <br>
-    <code>conan install . --build=missing</code><br>
-    maybe you will need these flags for the conan <code>-s build_type=Debug</code>
+    <code>conan install . --build=missing -s build_type=Release</code>
 
 5. Build <br>
     <code>cmake --preset release; cmake --build build/Release</code>
