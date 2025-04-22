@@ -230,12 +230,6 @@ namespace paracl {
     struct execute_t final {
         node_type_e  type;
         node_type_t* value = nullptr;
-
-        void print() const {
-            assert(value);
-            std::cout << "value type : " << type2str(type) << '\n';
-            std::cout << "value value: " << value << '\n';
-        }
     };
 
     /* ----------------------------------------------------- */
@@ -274,15 +268,19 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     struct analyze_t final {
-        execute_t result;
-        bool      is_constexpr = true;
+        node_type_e  type;
+        node_type_t* value = nullptr;
+        bool         is_constexpr = true;
 
     public:
         analyze_t() {}
         analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
-        analyze_t(const execute_t& value_) : result(value_) {}
-        analyze_t(const execute_t& value_, int is_constexpr_) : result(value_), is_constexpr(is_constexpr_) {}
-        analyze_t(node_type_e type_, node_type_t* value_)     : result(type_, value_) { assert(value_); }
+        analyze_t(node_type_e type_, node_type_t* value_) : type(type_), value(value_) { assert(value); }
+        analyze_t(node_type_e type_, node_type_t* value_, int is_constexpr_)
+        : type(type_), value(value_), is_constexpr(is_constexpr_) { assert(value); }
+
+        explicit analyze_t(execute_t e_value, int is_constexpr_)
+        : type(e_value.type), value(e_value.value), is_constexpr(is_constexpr_) { assert(value); }
     };
 
     /* ----------------------------------------------------- */

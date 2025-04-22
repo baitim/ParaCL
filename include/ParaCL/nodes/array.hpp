@@ -50,8 +50,8 @@ namespace paracl {
             return process_indexes<analyze_t>(
                 [](auto index_, analyze_params_t& params) {
                     analyze_t result = index_->analyze(params);
-                    expect_types_ne(result.result.type, node_type_e::ARRAY, index_->loc(), params);
-                    expect_types_ne(result.result.type, node_type_e::UNDEF, index_->loc(), params);
+                    expect_types_ne(result.type, node_type_e::ARRAY, index_->loc(), params);
+                    expect_types_ne(result.type, node_type_e::UNDEF, index_->loc(), params);
                     return result;
                 },
                 params
@@ -142,24 +142,18 @@ namespace paracl {
 
         template <typename DataT, typename FuncT, typename ParamsT, typename EvalFuncT>
         DataT process_array(FuncT&& func, ParamsT& params, EvalFuncT&& eval_func) const {
-            auto  count = std::invoke(eval_func, count_, params);
-            auto& count_value = [&]() -> auto& {
-                if constexpr (std::is_same_v<DataT, array_execute_data_t>)
-                    return count;
-                else
-                    return count.result;
-            }();
+            auto count = std::invoke(eval_func, count_, params);
 
             if constexpr (std::is_same_v<DataT, array_analyze_data_t>) {
-                if (count_value.type == node_type_e::INPUT) {
-                    auto init_value = std::invoke(eval_func, value_, params);
-                    return {{init_value.result}, true};
+                if (count.type == node_type_e::INPUT) {
+                    analyze_t init_value = std::invoke(eval_func, value_, params);
+                    return {{init_value}, true};
                 }
-                expect_types_ne(count_value.type, node_type_e::UNDEF, count_->loc(), params);
-                expect_types_ne(count_value.type, node_type_e::ARRAY, count_->loc(), params);
+                expect_types_ne(count.type, node_type_e::UNDEF, count_->loc(), params);
+                expect_types_ne(count.type, node_type_e::ARRAY, count_->loc(), params);
             }
 
-            int real_count = static_cast<node_number_t*>(count_value.value)->get_value();
+            int real_count = static_cast<node_number_t*>(count.value)->get_value();
             check_size_out(real_count, params.program_str);
 
             std::vector<typename DataT::first_type::value_type> values;
@@ -168,7 +162,7 @@ namespace paracl {
                 values, real_count, params, std::invoke(eval_func, value_, params)
             );
 
-            return {values, count_value.type == node_type_e::INPUT};
+            return {values, count.type == node_type_e::INPUT};
         }
 
         void check_size_out(int size, std::string_view program_str) const {
@@ -195,12 +189,12 @@ namespace paracl {
 
         array_execute_data_t execute(execute_params_t& params) const override {
             return process_array<array_execute_data_t>(
-                [&](auto& values, int real_count, execute_params_t& params, execute_t value) {
+                [&](auto& values, int real_count, execute_params_t& params, execute_t init_value) {
                     std::generate_n(std::back_inserter(values), real_count, [&]() {
                         auto* copy_val = static_cast<node_type_t*>(
-                            value.value->copy(params.copy_params, nullptr)
+                            init_value.value->copy(params.copy_params, nullptr)
                         );
-                        return execute_t{value.type, copy_val};
+                        return execute_t{init_value.type, copy_val};
                     });
                 },
                 params,
@@ -211,8 +205,8 @@ namespace paracl {
         array_analyze_data_t analyze(analyze_params_t& params) override {
             return process_array<array_analyze_data_t>(
                 [&](auto& values, int real_count, analyze_params_t&, analyze_t init_value) {
-                    level_ = init_value.result.value->level();
-                    values.assign(real_count, init_value.result);
+                    level_ = init_value.value->level();
+                    values.assign(real_count, init_value);
                 },
                 params,
                 [](auto expr, auto& params) { return expr->analyze(params); }
@@ -255,7 +249,7 @@ namespace paracl {
         void level_analyze(const std::vector<analyze_t>& a_values, analyze_params_t& params) {
             bool is_setted = false;
             std::ranges::for_each(a_values, [&](auto a_value) {
-                node_type_t* value = a_value.result.value;
+                node_type_t* value = a_value.value;
                 int elem_level = value->level();
 
                 if (!is_setted) {
@@ -359,15 +353,15 @@ namespace paracl {
         location_t get_index_location(size_t depth, const std::vector<ElemT>& all_indexes) const {
             const auto& index = all_indexes[all_indexes.size() - depth - 1];
 
-            auto [indexes, value] = [&]() {
+            auto indexes = [&]() {
                 if constexpr (std::is_same_v<ElemT, execute_t>) 
-                    return std::make_tuple(e_indexes_, index.value);
+                    return e_indexes_;
                 else 
-                    return std::make_tuple(a_indexes_, index.result.value);
+                    return a_indexes_;
             }();
 
             if (depth >= indexes.size())
-                return value->loc();
+                return index.value->loc();
 
             return init_indexes_->get_index_loc(indexes.size() - depth - 1);
         }
@@ -412,16 +406,15 @@ namespace paracl {
         static analyze_t& shift_analyze_step(analyze_t& value, std::vector<analyze_t>& indexes,
                                              analyze_params_t& params,
                                              const std::vector<analyze_t>& all_indexes, int depth) {
-            execute_t result = value.result;
-            if (result.type == node_type_e::ARRAY) {
+            if (value.type == node_type_e::ARRAY) {
                 if (!indexes.empty())
-                    return static_cast<node_array_t*>(result.value)->shift_analyze_(indexes, params,
-                                                                                    all_indexes, depth);
+                    return static_cast<node_array_t*>(value.value)->shift_analyze_(indexes, params,
+                                                                                   all_indexes, depth);
                 else
                     return value;
             } else {
                 if (!indexes.empty())
-                    throw error_analyze_t{indexes[0].result.value->loc(), params.program_str,
+                    throw error_analyze_t{indexes[0].value->loc(), params.program_str,
                                           "indexing in depth has gone beyond boundary of array"};
                 return value;
             }
@@ -457,14 +450,13 @@ namespace paracl {
             if (is_in_heap_)
                 return shift_analyze_size_type_input(indexes, params, all_indexes, depth);
 
-            analyze_t a_index = indexes.back();
-            execute_t   index = a_index.result;
-            if (a_index.is_constexpr &&
+            analyze_t index = indexes.back();
+            if (index.is_constexpr &&
                 index.type == node_type_e::INTEGER) {
 
                 node_number_t* node_index = static_cast<node_number_t*>(index.value);
 
-                if (a_index.is_constexpr) {
+                if (index.is_constexpr) {
                     check_index_out<error_analyze_t>(
                         node_index->get_value(), depth, all_indexes, params
                     );
@@ -537,7 +529,7 @@ namespace paracl {
             all_indexes.insert(all_indexes.end(), indexes.begin(), indexes.end());
 
             if constexpr (is_array_analyze)
-                analyze_check_freed(all_indexes[0].result.value->loc(), params);
+                analyze_check_freed(all_indexes[0].value->loc(), params);
 
             if constexpr (is_array_execute)
                 return shift_(all_indexes, params, std::vector<execute_t>{all_indexes}, 0);

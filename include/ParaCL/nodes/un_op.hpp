@@ -41,18 +41,17 @@ namespace paracl {
         }
 
         analyze_t analyze(analyze_params_t& params) override {
-            analyze_t a_res_exec = node_->analyze(params);
-            execute_t   res_exec = a_res_exec.result;
+            analyze_t res_exec = node_->analyze(params);
 
             if (res_exec.type == node_type_e::UNDEF ||
                 res_exec.type == node_type_e::INPUT)
-                return a_res_exec;
+                return res_exec;
 
             expect_types_ne(res_exec.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
             int result = evaluate(static_cast<node_number_t*>(res_exec.value), params);
             analyze_t a_result{node_type_e::INTEGER, params.buf()->add_node<node_number_t>(node_loc_t::loc(), result)};
-            a_result.is_constexpr = a_res_exec.is_constexpr;
+            a_result.is_constexpr = res_exec.is_constexpr;
             return a_result;
         }
 

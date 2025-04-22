@@ -23,9 +23,7 @@ namespace paracl {
         }
 
         void check_condition(analyze_params_t& params) {
-            analyze_t a_result = condition_->analyze(params);
-            execute_t   result = a_result.result;
-
+            analyze_t result = condition_->analyze(params);
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);
         }

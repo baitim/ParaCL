@@ -50,7 +50,7 @@ namespace paracl {
                                       "attempt to create function with 2 similar variable names"};
 
             process_args([](auto* arg_ptr, auto& arg_value, auto& params) {
-                arg_ptr->set_value_analyze(arg_value, params, arg_value.result.value->loc());
+                arg_ptr->set_value_analyze(arg_value, params, arg_value.value->loc());
             }, params);
         }
 
@@ -102,7 +102,7 @@ namespace paracl {
         void analyze(analyze_params_t& params) {
             process_args([](auto arg, auto& params) {
                 analyze_t arg_value = arg->analyze(params);
-                expect_types_eq(to_general_type(arg_value.result.type), general_type_e::INTEGER,
+                expect_types_eq(to_general_type(arg_value.type), general_type_e::INTEGER,
                                 arg->loc(), params);
                 return arg_value;
             }, params);
@@ -300,9 +300,9 @@ namespace paracl {
             args_->analyze(params);
 
             analyze_t function_a = function_->analyze(params);
-            expect_types_eq(function_a.result.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
+            expect_types_eq(function_a.type, node_type_e::FUNCTION, node_loc_t::loc(), params);
 
-            node_function_t* function = static_cast<node_function_t*>(function_a.result.value);
+            node_function_t* function = static_cast<node_function_t*>(function_a.value);
             process_count_arguments(function->count_args(), args_->size(), params);
 
             analyze_t result = function->real_analyze(params);

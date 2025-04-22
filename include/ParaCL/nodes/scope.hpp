@@ -82,14 +82,8 @@ namespace paracl {
         template <typename ResultT, typename FuncT, typename ParamsT>
         ResultT eval_return(FuncT func, ParamsT& params) {
             ResultT result = std::invoke(func, return_expr_, params);
-
-            node_type_e type;
-            if constexpr (std::is_same_v<ResultT, execute_t>)
-                type = result.type;
-            else
-                type = result.result.type;
-
-            expect_types_eq(to_general_type(type), general_type_e::INTEGER, return_expr_->loc(), params);
+            expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
+                            return_expr_->loc(), params);
             return result;
         }
 

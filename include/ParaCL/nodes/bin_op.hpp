@@ -92,15 +92,14 @@ namespace paracl {
         }
 
         std::pair<analyze_t, node_number_t*> analyze_node(node_expression_t* node, analyze_params_t& params) {
-            analyze_t a_result = node->analyze(params);
-            execute_t result = a_result.result;
+            analyze_t result = node->analyze(params);
 
             if (result.type == node_type_e::UNDEF || result.type == node_type_e::INPUT)
-                return {a_result, nullptr};
+                return {result, nullptr};
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
-            return {a_result, static_cast<node_number_t*>(result.value)};
+            return {result, static_cast<node_number_t*>(result.value)};
         }
 
     public:
@@ -129,12 +128,12 @@ namespace paracl {
             if (!l_value) return a_l_result;
 
             if (auto value_by_left = evaluate_by_left(l_value, params))
-                return {make_number(*value_by_left, params, node_loc_t::loc()), a_l_result.is_constexpr};
+                return analyze_t{make_number(*value_by_left, params, node_loc_t::loc()), a_l_result.is_constexpr};
 
             auto [a_r_result, r_value] = analyze_node(right_, params);
             if (!r_value) return a_r_result;
 
-            return {
+            return analyze_t{
                 make_number(evaluate(l_value, r_value, params), params, node_loc_t::loc()),
                 a_l_result.is_constexpr & a_r_result.is_constexpr
             };

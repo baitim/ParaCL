@@ -28,7 +28,7 @@ namespace paracl {
         }
 
         void analyze(analyze_params_t& params) override {
-            execute_t result = condition_->analyze(params).result;
+            analyze_t result = condition_->analyze(params);
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);

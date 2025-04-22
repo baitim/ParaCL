@@ -22,21 +22,14 @@ namespace paracl {
 
         static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
                                             const location_t& loc_set, analyze_params_t& params) {
-            execute_t lresult = a_lvalue.result;
-            execute_t rresult = a_rvalue.result;
-
-            node_type_t* lvalue = lresult.value;
-            node_type_t* rvalue = rresult.value;
-
-            general_type_e l_type = to_general_type(lresult.type);
-            general_type_e r_type = to_general_type(rresult.type);
-
+            general_type_e l_type = to_general_type(a_lvalue.type);
+            general_type_e r_type = to_general_type(a_rvalue.type);
             check_types_in_assign(l_type, r_type, loc_set, params);
 
             if (l_type == general_type_e::ARRAY &&
                 r_type == general_type_e::ARRAY) {
-                int l_level = lvalue->level();
-                int r_level = rvalue->level();
+                int l_level = a_lvalue.value->level();
+                int r_level = a_rvalue.value->level();
                 if (l_level != r_level) {
                     std::string error_msg = "wrong levels of arrays in assign: "
                                             + std::to_string(r_level) + " levels of array nesting "
@@ -59,10 +52,8 @@ namespace paracl {
             if (indexes.size() == 0)
                 return a_value_;
             
-            execute_t value = a_value_.result;
-            expect_types_eq(value.type, node_type_e::ARRAY, node_loc_t::loc(), params);
-
-            node_array_t* array = static_cast<node_array_t*>(value.value);
+            expect_types_eq(a_value_.type, node_type_e::ARRAY, node_loc_t::loc(), params);
+            node_array_t* array = static_cast<node_array_t*>(a_value_.value);
             return array->shift(indexes, params);
         }
 
@@ -95,7 +86,8 @@ namespace paracl {
                 expect_types_assignable(a_value_, new_value, loc_set, params);
 
             is_setted = true;
-            a_value_.result = new_value.result;
+            a_value_.type  = new_value.type;
+            a_value_.value = new_value.value;
             a_value_.is_constexpr &= new_value.is_constexpr;
             return a_value_;
         }
@@ -121,7 +113,8 @@ namespace paracl {
                 expect_types_assignable(shift_result, new_value, loc_set, params);
 
             is_setted = true;
-            shift_result.result = new_value.result;
+            shift_result.type  = new_value.type;
+            shift_result.value = new_value.value;
             shift_result.is_constexpr &= new_value.is_constexpr;
             return shift_result;
         }
