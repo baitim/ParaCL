@@ -84,7 +84,7 @@ namespace paracl {
             ResultT result = std::invoke(func, return_expr_, params);
 
             node_type_e type;
-            if constexpr (std::is_same_v<ResultT, value_t>)
+            if constexpr (std::is_same_v<ResultT, execute_t>)
                 type = result.type;
             else
                 type = result.result.type;
@@ -172,7 +172,7 @@ namespace paracl {
         : node_statement_t(loc), scope_base_t(parent) {} 
 
         void execute(execute_params_t& params) override {
-            process<value_t>([](auto node, auto& params) { return node->execute(params); }, params);
+            process<execute_t>([](auto node, auto& params) { return node->execute(params); }, params);
         }
 
         void analyze(analyze_params_t& params) override {
@@ -244,8 +244,8 @@ namespace paracl {
         node_block_t(const location_t& loc, scope_base_t* parent)
         : node_scope_return_t(loc, parent) {}
 
-        value_t execute(execute_params_t& params) override {
-            return process<value_t>(
+        execute_t execute(execute_params_t& params) override {
+            return process<execute_t>(
                 [](auto node, auto& params) { node->execute(params); },
                 [](auto node, auto& params) { return node->execute(params); },
                 params
@@ -305,8 +305,8 @@ namespace paracl {
         node_function_body_t(const location_t& loc, scope_base_t* parent)
         : node_scope_return_t(loc, parent) {}
 
-        value_t execute(execute_params_t& params) override {
-            return process<value_t>(
+        execute_t execute(execute_params_t& params) override {
+            return process<execute_t>(
                 [](auto node, auto& params) { node->execute(params); },
                 [](auto node, auto& params) { return node->execute(params); },
                 params

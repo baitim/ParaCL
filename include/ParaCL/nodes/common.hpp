@@ -145,7 +145,7 @@ namespace paracl {
     };
     /* ----------------------------------------------------- */
 
-    class  value_t;
+    class  execute_t;
     class  analyze_t;
     class  scope_base_t;
     class  execute_params_t;
@@ -156,7 +156,7 @@ namespace paracl {
                               public node_loc_t {
     public:
         node_expression_t(const location_t& loc) : node_loc_t(loc) {}
-        virtual value_t   execute(execute_params_t& params) = 0;
+        virtual execute_t execute(execute_params_t& params) = 0;
         virtual analyze_t analyze(analyze_params_t& params) = 0;
         virtual void set_predict(bool value) = 0;
         virtual node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const = 0;
@@ -227,7 +227,7 @@ namespace paracl {
         }
     }
 
-    struct value_t final {
+    struct execute_t final {
         node_type_e  type;
         node_type_t* value = nullptr;
 
@@ -274,15 +274,15 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     struct analyze_t final {
-        value_t result;
-        bool    is_constexpr = true;
+        execute_t result;
+        bool      is_constexpr = true;
 
     public:
         analyze_t() {}
         analyze_t(bool is_constexpr_) : is_constexpr(is_constexpr_) {}
-        analyze_t(const value_t& value_) : result(value_) {}
-        analyze_t(const value_t& value_, int is_constexpr_) : result(value_), is_constexpr(is_constexpr_) {}
-        analyze_t(node_type_e type_, node_type_t* value_)   : result(type_, value_) { assert(value_); }
+        analyze_t(const execute_t& value_) : result(value_) {}
+        analyze_t(const execute_t& value_, int is_constexpr_) : result(value_), is_constexpr(is_constexpr_) {}
+        analyze_t(node_type_e type_, node_type_t* value_)     : result(type_, value_) { assert(value_); }
     };
 
     /* ----------------------------------------------------- */
@@ -358,7 +358,7 @@ namespace paracl {
 
     struct execute_params_t final {
         copy_params_t copy_params;
-        stack_t<value_t> stack;
+        stack_t<execute_t> stack;
         stack_state_e stack_state = stack_state_e::PROCESS;
 
         std::ostream* os = nullptr;

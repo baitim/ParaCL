@@ -6,7 +6,7 @@ namespace paracl {
     class settable_value_t : public node_t,
                              public node_loc_t {
         bool is_setted = false;
-        value_t   e_value_;
+        execute_t e_value_;
         analyze_t a_value_;
 
     private:
@@ -22,8 +22,8 @@ namespace paracl {
 
         static void expect_types_assignable(const analyze_t& a_lvalue, const analyze_t& a_rvalue,
                                             const location_t& loc_set, analyze_params_t& params) {
-            value_t lresult = a_lvalue.result;
-            value_t rresult = a_rvalue.result;
+            execute_t lresult = a_lvalue.result;
+            execute_t rresult = a_rvalue.result;
 
             node_type_t* lvalue = lresult.value;
             node_type_t* rvalue = rresult.value;
@@ -47,7 +47,7 @@ namespace paracl {
             }
         }
 
-        value_t& shift(const std::vector<value_t>& indexes, execute_params_t& params) {
+        execute_t& shift(const std::vector<execute_t>& indexes, execute_params_t& params) {
             if (indexes.size() == 0)
                 return e_value_;
 
@@ -59,7 +59,7 @@ namespace paracl {
             if (indexes.size() == 0)
                 return a_value_;
             
-            value_t value = a_value_.result;
+            execute_t value = a_value_.result;
             expect_types_eq(value.type, node_type_e::ARRAY, node_loc_t::loc(), params);
 
             node_array_t* array = static_cast<node_array_t*>(value.value);
@@ -69,9 +69,9 @@ namespace paracl {
     public:
         settable_value_t(const location_t& loc) : node_loc_t(loc) {}
 
-        value_t execute(node_indexes_t* indexes, execute_params_t& params) {
+        execute_t execute(node_indexes_t* indexes, execute_params_t& params) {
             assert(indexes);
-            value_t& real_value = shift(indexes->execute(params), params);
+            execute_t& real_value = shift(indexes->execute(params), params);
             return real_value;
         }
 
@@ -84,7 +84,7 @@ namespace paracl {
             return shift_analyze(indexes, params);
         }
 
-        value_t set_value(value_t new_value, execute_params_t& params) {
+        execute_t set_value(execute_t new_value, execute_params_t& params) {
             is_setted = true;
             return e_value_ = new_value;
         }
@@ -100,9 +100,9 @@ namespace paracl {
             return a_value_;
         }
 
-        value_t set_value(node_indexes_t* indexes, value_t new_value, execute_params_t& params) {
+        execute_t set_value(node_indexes_t* indexes, execute_t new_value, execute_params_t& params) {
             assert(indexes);
-            value_t& real_value = shift(indexes->execute(params), params);
+            execute_t& real_value = shift(indexes->execute(params), params);
             is_setted = true;
             return real_value = new_value;
         }

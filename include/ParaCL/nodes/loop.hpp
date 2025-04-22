@@ -15,7 +15,7 @@ namespace paracl {
         }
 
         int step(execute_params_t& params) {
-            value_t result = condition_->execute(params);
+            execute_t result = condition_->execute(params);
 
             check_step_type(result.type, params);
 
@@ -24,7 +24,7 @@ namespace paracl {
 
         void check_condition(analyze_params_t& params) {
             analyze_t a_result = condition_->analyze(params);
-            value_t     result = a_result.result;
+            execute_t   result = a_result.result;
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);

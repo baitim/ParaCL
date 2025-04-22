@@ -85,7 +85,7 @@ namespace paracl {
         }
 
         node_number_t* execute_node(node_expression_t* node, execute_params_t& params) {
-            value_t result = node->execute(params);
+            execute_t result = node->execute(params);
             if (result.type == node_type_e::UNDEF)
                 return nullptr;
             return static_cast<node_number_t*>(result.value);
@@ -93,7 +93,7 @@ namespace paracl {
 
         std::pair<analyze_t, node_number_t*> analyze_node(node_expression_t* node, analyze_params_t& params) {
             analyze_t a_result = node->analyze(params);
-            value_t result = a_result.result;
+            execute_t result = a_result.result;
 
             if (result.type == node_type_e::UNDEF || result.type == node_type_e::INPUT)
                 return {a_result, nullptr};
@@ -111,7 +111,7 @@ namespace paracl {
             assert(right);
         }
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             node_number_t* l_value = execute_node(left_, params);
             if (!l_value) return make_undef(params, node_loc_t::loc());
 

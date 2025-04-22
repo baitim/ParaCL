@@ -18,7 +18,7 @@ namespace paracl {
         }
 
         void execute(execute_params_t& params) override {
-            value_t result = condition_->execute(params);
+            execute_t result = condition_->execute(params);
 
             int value = static_cast<node_number_t*>(result.value)->get_value();
             if (value)
@@ -28,7 +28,7 @@ namespace paracl {
         }
 
         void analyze(analyze_params_t& params) override {
-            value_t result = condition_->analyze(params).result;
+            execute_t result = condition_->analyze(params).result;
 
             expect_types_ne(result.type, node_type_e::ARRAY, node_loc_t::loc(), params);
             expect_types_ne(result.type, node_type_e::UNDEF, node_loc_t::loc(), params);

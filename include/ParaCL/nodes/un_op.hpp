@@ -30,8 +30,8 @@ namespace paracl {
         node_un_op_t(const location_t& loc, unary_operators_e type, node_expression_t* node)
         : node_expression_t(loc), type_(type), node_(node) { assert(node_); }
 
-        value_t execute(execute_params_t& params) override {
-            value_t res_exec = node_->execute(params);
+        execute_t execute(execute_params_t& params) override {
+            execute_t res_exec = node_->execute(params);
 
             if (res_exec.type == node_type_e::UNDEF)
                 return {node_type_e::UNDEF, params.buf()->add_node<node_undef_t>(node_loc_t::loc())};
@@ -42,7 +42,7 @@ namespace paracl {
 
         analyze_t analyze(analyze_params_t& params) override {
             analyze_t a_res_exec = node_->analyze(params);
-            value_t     res_exec = a_res_exec.result;
+            execute_t   res_exec = a_res_exec.result;
 
             if (res_exec.type == node_type_e::UNDEF ||
                 res_exec.type == node_type_e::INPUT)

@@ -9,7 +9,7 @@ namespace paracl {
     public:
         node_number_t(const location_t& loc, int number) : node_simple_type_t(loc), number_(number) {}
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             return {node_type_e::INTEGER, this};
         }
 
@@ -32,7 +32,7 @@ namespace paracl {
     public:
         node_undef_t(const location_t& loc) : node_simple_type_t(loc) {}
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             return {node_type_e::UNDEF, this};
         }
 
@@ -53,7 +53,7 @@ namespace paracl {
     public:
         node_input_t(const location_t& loc) : node_simple_type_t(loc) {}
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             int value;
             *(params.is) >> value;
             if (!params.is->good())
@@ -76,12 +76,12 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     template <existed_params ParamsT>
-    value_t make_undef(ParamsT& params, const location_t& loc) {
+    execute_t make_undef(ParamsT& params, const location_t& loc) {
         return {node_type_e::UNDEF, params.buf()->template add_node<node_undef_t>(loc)};
     }
 
     template <existed_params ParamsT>
-    value_t make_number(int value, ParamsT& params, const location_t& loc) {
+    execute_t make_number(int value, ParamsT& params, const location_t& loc) {
         return {node_type_e::INTEGER, params.buf()->template add_node<node_number_t>(loc, value)};
     }
 }

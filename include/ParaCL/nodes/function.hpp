@@ -168,7 +168,7 @@ namespace paracl {
             assert(args_);
         }
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             return {node_type_e::FUNCTION, this};
         }
 
@@ -176,8 +176,8 @@ namespace paracl {
             return {node_type_e::FUNCTION, this};
         }
 
-        value_t real_execute(execute_params_t& params) {
-            return process_real<value_t>([&params](auto arg) {
+        execute_t real_execute(execute_params_t& params) {
+            return process_real<execute_t>([&params](auto arg) {
                 return arg->execute(params);
             });
         }
@@ -284,9 +284,9 @@ namespace paracl {
             assert(args_);
         }
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             args_->execute(params);
-            value_t func_value = function_->execute(params);
+            execute_t func_value = function_->execute(params);
 
             node_function_t* func = static_cast<node_function_t*>(func_value.value);
             return func->real_execute(params);

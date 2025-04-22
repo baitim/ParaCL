@@ -10,8 +10,8 @@ namespace paracl {
         node_print_t(const location_t& loc, node_expression_t* argument)
         : node_expression_t(loc), argument_(argument) { assert(argument_); }
 
-        value_t execute(execute_params_t& params) override {
-            value_t result = argument_->execute(params);
+        execute_t execute(execute_params_t& params) override {
+            execute_t result = argument_->execute(params);
             result.value->print(params);
             return result;
         }

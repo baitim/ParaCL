@@ -14,7 +14,7 @@ namespace paracl {
             assert(rvalue_);
         }
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             return lvalue_->set_value(rvalue_->execute(params), params);
         }
 

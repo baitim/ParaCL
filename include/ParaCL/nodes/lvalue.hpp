@@ -13,7 +13,7 @@ namespace paracl {
             assert(indexes_);
         }
 
-        value_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {
             return variable_->execute(indexes_, params);
         }
 
@@ -23,7 +23,7 @@ namespace paracl {
             return variable_->analyze(indexes_, params);
         }
 
-        value_t set_value(value_t new_value, execute_params_t& params) {
+        execute_t set_value(execute_t new_value, execute_params_t& params) {
             return variable_->set_value(indexes_, new_value, params);
         }
 
