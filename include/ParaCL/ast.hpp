@@ -23,6 +23,7 @@ namespace paracl {
                     params.unroll_to_scope_r();
                     break;
                 }
+                default: break;
             }
         }
     }

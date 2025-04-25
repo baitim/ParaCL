@@ -45,7 +45,7 @@ namespace paracl {
             bool is_visited = params.is_visited(this);
             params.visit(this);
 
-            execute_t result = node->execute(params);
+            execute_t result = return_expr_->execute(params);
             if (is_visited)
                 params.add_return(result);
             else if (params.is_executed())
@@ -111,7 +111,7 @@ namespace paracl {
         }
 
         node_return_t* make_return_node(copy_params_t& params) {
-            return params.buf->add_node<node_return_t>(loc, return_expr_);
+            return params.buf->add_node<node_return_t>(return_expr_->loc(), return_expr_);
         }
 
     public:
@@ -219,7 +219,7 @@ namespace paracl {
                                       public scope_base_t {
     private:
         template <typename ResultT>
-        ResultT get_return(stack_t& stack) {
+        ResultT get_return(stack_t<ResultT>& stack) {
             auto&& result = stack.top();
             stack.pop();
             return result;
@@ -230,7 +230,7 @@ namespace paracl {
 
         execute_t execute(execute_params_t& params) override {
             if (params.is_visited(this))
-                return get_return<execute_t>(params.scope);
+                return get_return<execute_t>(params.stack);
 
             params.visit(this);
             params.add_last_scope_r();

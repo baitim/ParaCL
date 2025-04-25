@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ParaCL/nodes/variable.hpp"
+#include "ParaCL/nodes/assign.hpp"
 
 #include <iomanip>
 #include <unordered_set>
@@ -32,16 +32,17 @@ namespace paracl {
             auto values = params.stack.pop_values(args_.size());
             int i = 0;
             std::vector<node_interpretable_t*> instructions;
+            buffer_t* buf = params.buf();
             std::ranges::for_each(args_, [&](auto arg) {
-                node_indexes_t* indexes = params.buf->add_node<node_indexes_t>(arg->loc());
-                node_lvalue_t*  lvalue  = params.buf->add_node<node_lvalue_t> (arg->loc(), arg, indexes);
-                node_rvalue_t*  rvalue  = values.value[i];
-                node_assign_t*  assign  = params.buf->add_node<node_assign_t>(arg->loc(), lvalue, rvalue);
-                node_instruction_t* instruction = params.buf->add_node<node_instruction_t>(assign->loc(), assign);
+                node_indexes_t* indexes = buf->add_node<node_indexes_t>(arg->loc());
+                node_lvalue_t*  lvalue  = buf->add_node<node_lvalue_t> (arg->loc(), arg, indexes);
+                node_expression_t* rvalue = values[i].value;
+                node_assign_t*  assign  = buf->add_node<node_assign_t>(arg->loc(), lvalue, rvalue);
+                node_instruction_t* instruction = buf->add_node<node_instruction_t>(assign->loc(), assign);
                 instructions.push_back(instruction);
                 i++;
             });
-            params.insert_statements(instructions.rbegin(), rend());
+            params.insert_statements(instructions.rbegin(), instructions.rend());
         }
 
         void analyze(analyze_params_t& params) {
@@ -52,7 +53,7 @@ namespace paracl {
             int i = 0;
             auto values = params.stack.pop_values(args_.size());
             for (auto arg : std::ranges::reverse_view(values))
-                args_[i++]->set_value_analyze(arg, params);
+                args_[i++]->set_value_analyze(arg, params, arg.value->loc());
         }
 
         node_function_args_t* copy(copy_params_t& params) const {
@@ -94,7 +95,7 @@ namespace paracl {
             params.stack.emplace(result);
             params.add_value(this, result);
         }
-    }
+    };
 
     /* ----------------------------------------------------- */
 
@@ -112,7 +113,7 @@ namespace paracl {
 
         void execute(execute_params_t& params) {
             std::ranges::for_each(args_, [&params](auto arg) {
-                node_stack_filler* stack_filler = params.buf->add_node<node_stack_filler>(arg->loc(), arg);
+                node_stack_filler* stack_filler = params.buf()->add_node<node_stack_filler>(arg->loc(), arg);
                 params.insert_statement(stack_filler);
             });
         }

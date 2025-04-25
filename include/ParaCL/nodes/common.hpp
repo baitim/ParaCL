@@ -9,6 +9,7 @@
 #include <sstream>
 #include <stack>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace paracl {
@@ -243,7 +244,7 @@ namespace paracl {
         using std::stack<ElemT>::size;
         using std::stack<ElemT>::empty;
 
-        template <std::output_iterator IterT>
+        template <std::input_iterator IterT>
         void push_values(IterT begin, IterT end) {
             for (auto it = begin; it != end; ++it)
                 emplace(*it);
@@ -296,7 +297,7 @@ namespace paracl {
 
     class node_statement_t : public node_interpretable_t {
     public:
-        node_statement_t(const location_t& loc) : node_loc_t(loc) {}
+        node_statement_t(const location_t& loc) : node_interpretable_t(loc) {}
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_predict(bool value) = 0;
         virtual node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const = 0;
@@ -373,8 +374,8 @@ namespace paracl {
         stack_t<execute_t> stack;
         stack_t<node_interpretable_t*> statements;
 
-        using values_container_t  = std::unordered_map<int, std::unordered_map<node_interpretable_t*, execute_t>>;
-        using visited_container_t = std::unordered_map<int, std::unordered_set<node_interpretable_t*>>;
+        using values_container_t  = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
+        using visited_container_t = std::unordered_map<int, std::unordered_set<node_t*>>;
         values_container_t  values;
         visited_container_t visits;
         std::vector<int> scope_rs; // steps
@@ -389,9 +390,9 @@ namespace paracl {
             copy_params.buf = buf_;
         }
 
-        bool is_executed() const noexcept { return state == execute_state_e::PROCESS; }
+        bool is_executed() const noexcept { return execute_state == execute_state_e::PROCESS; }
 
-        std::optional<execute_stept> get_evaluated(const node_interpretable_t* node) {
+        std::optional<execute_t> get_evaluated(node_t* node) {
             if (auto step_it = values.find(step); step_it != values.end())
                 if (auto loc_it = step_it->second.find(node); loc_it != step_it->second.end())
                     return loc_it->second;
@@ -399,36 +400,36 @@ namespace paracl {
         }
 
         template <typename... ArgsT>
-        execute_t add_value(node_interpretable_t* node, ArgsT&&... args) {
+        execute_t add_value(node_t* node, ArgsT&&... args) {
             auto result = values[step].emplace(node, std::forward<ArgsT>(args)...);
             return result.first->second;
         }
 
         void add_return(execute_t value) {
             stack.emplace(value);
-            state = execute_state_e::RETURN;
+            execute_state = execute_state_e::RETURN;
         }
 
-        void visit(node_interpretable_t* node) {
+        void visit(node_t* node) {
             visits[step].emplace(node);
         }
 
-        bool is_visited(node_interpretable_t* node) {
+        bool is_visited(node_t* node) {
             if (auto step_it = visits.find(step); step_it != visits.end())
                 if (step_it->second.find(node) != step_it->second.end())
                     return true;
             return false;
         }
 
-        template <std::output_iterator IterT>
+        template <std::input_iterator IterT>
         void insert_statements(IterT begin, IterT end) {
             stack.push_values(begin, end);
-            state = execute_state_e::ADDED_STATEMENTS;
+            execute_state = execute_state_e::ADDED_STATEMENTS;
         }
 
-        void insert_statement(node_interpretable_t* statement) {
+        void insert_statement(node_t* statement) {
             stack.emplace(statement);
-            state = execute_state_e::ADDED_STATEMENTS;
+            execute_state = execute_state_e::ADDED_STATEMENTS;
         }
 
         void erase_statement() {
