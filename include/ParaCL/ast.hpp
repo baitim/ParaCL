@@ -20,7 +20,7 @@ namespace paracl {
                     break;
                 }
                 case execute_state_e::RETURN: {
-                    params.unroll_to_scope_r();
+                    params.on_return();
                     break;
                 }
                 default: break;

@@ -13,4 +13,4 @@ is_even_ = func(n) : is_even {
 print is_even(7);
 print is_even(10);
 
-print is_even(77777);
+print is_even(777);

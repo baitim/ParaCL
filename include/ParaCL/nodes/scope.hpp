@@ -17,16 +17,30 @@ namespace paracl {
     class memory_table_t {
         std::vector<node_memory_t*> arrays_;
 
-    protected:
+    public:
+        void add_array(node_memory_t* node) { assert(node); arrays_.push_back(node); }
+
         void clear_memory() {
             std::ranges::for_each(arrays_, [](auto iter) {
                 iter->clear();
             });
         }
 
-    public:
-        void add_array(node_memory_t* node) { assert(node); arrays_.push_back(node); }
         virtual ~memory_table_t() = default;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_memory_cleaner_t : public node_interpretable_t {
+        memory_table_t* memory_table_;
+
+    public:
+        node_memory_cleaner_t(const location_t& loc, memory_table_t* memory_table)
+        : node_interpretable_t(loc), memory_table_(memory_table) { assert(memory_table_); }
+
+        void execute(execute_params_t& params) override {
+            memory_table_->clear_memory();
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -46,10 +60,12 @@ namespace paracl {
             params.visit(this);
 
             execute_t result = return_expr_->execute(params);
-            if (is_visited)
+            if (is_visited) {
                 params.add_return(result);
-            else if (params.is_executed())
+            } else if (params.is_executed()) {
+                params.add_return(result);
                 params.add_value(this, result);
+            }
         }
     };
 
@@ -108,6 +124,10 @@ namespace paracl {
             expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
                             return_expr_->loc(), params);
             return result;
+        }
+
+        node_memory_cleaner_t* make_memory_cleaner(const location_t& loc, copy_params_t& params) {
+            return params.buf->add_node<node_memory_cleaner_t>(loc, this);
         }
 
         node_return_t* make_return_node(copy_params_t& params) {
@@ -187,6 +207,7 @@ namespace paracl {
                 return;
 
             params.visit(this);
+            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
             if (return_expr_)
                 params.insert_statement(make_return_node(params.copy_params));
             params.insert_statements(statements_.rbegin(), statements_.rend());
@@ -217,23 +238,22 @@ namespace paracl {
 
     class node_scope_return_t final : public node_expression_t,
                                       public scope_base_t {
-    private:
-        template <typename ResultT>
-        ResultT get_return(stack_t<ResultT>& stack) {
-            auto&& result = stack.top();
-            stack.pop();
-            return result;
-        }
-
     public:
         node_scope_return_t(const location_t& loc, scope_base_t* parent) : node_expression_t(loc), scope_base_t(parent) {}
 
         execute_t execute(execute_params_t& params) override {
-            if (params.is_visited(this))
-                return get_return<execute_t>(params.stack);
+            if (auto result = params.get_evaluated(this))
+                return *result;
+
+            if (params.is_visited(this)) {
+                execute_t result = params.stack.pop_value();
+                params.add_value(this, result);
+                return result;
+            }
 
             params.visit(this);
-            params.add_last_scope_r();
+            params.add_return_receiver();
+            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
             params.insert_statement(make_return_node(params.copy_params));
             params.insert_statements(statements_.rbegin(), statements_.rend());
             return {};
@@ -251,7 +271,7 @@ namespace paracl {
 
             analyze_t result;
             if (params.analyze_state == analyze_state_e::RETURN)
-                result = get_return<analyze_t>(params.stack);
+                result = params.stack.pop_value();
             else
                 result = process_return<analyze_t>(analyze_funct, params);
 

@@ -250,13 +250,22 @@ namespace paracl {
                 emplace(*it);
         }
 
+        ElemT pop_value() {
+            if (empty())
+                    throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+
+            auto&& result = std::move(top());
+            pop();
+            return result;
+        }
+
         std::vector<ElemT> pop_values(size_t count) {
             std::vector<ElemT> result;
             result.reserve(count);
 
             while (count-- > 0) {
                 if (empty())
-                    throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+                    throw error_t{str_red("stack_t: pop_values() failed: stack is empty")};
 
                 result.push_back(top());
                 pop();
@@ -378,12 +387,14 @@ namespace paracl {
         using visited_container_t = std::unordered_map<int, std::unordered_set<node_t*>>;
         values_container_t  values;
         visited_container_t visits;
-        std::vector<int> scope_rs; // steps
+        std::vector<int> return_receivers;
         int step = 0;
 
     private:
         void update_step() {
             step = statements.size();
+            if (!return_receivers.empty() && return_receivers.back() == step)
+                return_receivers.pop_back();
         }
 
     public:
@@ -446,15 +457,14 @@ namespace paracl {
             update_step();
         }
 
-        void add_last_scope_r() {
-            scope_rs.push_back(step);
+        void add_return_receiver() {
+            return_receivers.push_back(step);
         }
 
-        void unroll_to_scope_r() {
-            int last_scope_r = scope_rs.back();
-            while (step > last_scope_r)
+        void on_return() {
+            int last_return_receiver = return_receivers.back();
+            while (step > last_return_receiver)
                 erase_statement();
-            scope_rs.pop_back();
         }
 
         buffer_t* buf() { return copy_params.buf; }
