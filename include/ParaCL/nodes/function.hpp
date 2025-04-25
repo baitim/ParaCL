@@ -6,8 +6,7 @@
 #include <unordered_set>
 
 namespace paracl {
-    class node_function_args_t final : public node_t,
-                                       public node_loc_t {
+    class node_function_args_t final : public node_interpretable_t {
         static const int DEFAULT_DUPLICATE_IDX = -1;
 
         std::unordered_set<std::string_view> name_table;
@@ -15,17 +14,8 @@ namespace paracl {
         
         std::vector<node_variable_t*> args_;
 
-    private:
-        template<typename FuncT, typename ParamsT>
-        void process_args(FuncT&& func, ParamsT& params) {
-            int i = 0;
-            auto values = params.stack.pop_values(args_.size());
-            for (auto arg : std::ranges::reverse_view(values))
-                std::invoke(func, args_[i++], arg, params);
-        }
-
     public:
-        node_function_args_t(const location_t& loc) : node_loc_t(loc) {}
+        node_function_args_t(const location_t& loc) : node_interpretable_t(loc) {}
 
         void add_arg(node_variable_t* arg) {
             assert(arg);
@@ -38,10 +28,20 @@ namespace paracl {
             name_table.insert(name);
         }
 
-        void execute(execute_params_t& params) {
-            process_args([](auto* arg_ptr, auto& arg_value, auto& params) {
-                arg_ptr->set_value(arg_value, params);
-            }, params);
+        void execute(execute_params_t& params) override {
+            auto values = params.stack.pop_values(args_.size());
+            int i = 0;
+            std::vector<node_interpretable_t*> instructions;
+            std::ranges::for_each(args_, [&](auto arg) {
+                node_indexes_t* indexes = params.buf->add_node<node_indexes_t>(arg->loc());
+                node_lvalue_t*  lvalue  = params.buf->add_node<node_lvalue_t> (arg->loc(), arg, indexes);
+                node_rvalue_t*  rvalue  = values.value[i];
+                node_assign_t*  assign  = params.buf->add_node<node_assign_t>(arg->loc(), lvalue, rvalue);
+                node_instruction_t* instruction = params.buf->add_node<node_instruction_t>(assign->loc(), assign);
+                instructions.push_back(instruction);
+                i++;
+            });
+            params.insert_statements(instructions.rbegin(), rend());
         }
 
         void analyze(analyze_params_t& params) {
@@ -49,9 +49,10 @@ namespace paracl {
                 throw error_analyze_t{args_[duplicate_idx_]->loc(), params.program_str,
                                       "attempt to create function with 2 similar variable names"};
 
-            process_args([](auto* arg_ptr, auto& arg_value, auto& params) {
-                arg_ptr->set_value_analyze(arg_value, params, arg_value.value->loc());
-            }, params);
+            int i = 0;
+            auto values = params.stack.pop_values(args_.size());
+            for (auto arg : std::ranges::reverse_view(values))
+                args_[i++]->set_value_analyze(arg, params);
         }
 
         node_function_args_t* copy(copy_params_t& params) const {
@@ -73,17 +74,33 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_stack_filler : public node_interpretable_t {
+        node_expression_t* expr_;
+
+    public:
+        node_stack_filler(const location_t& loc, node_expression_t* expr)
+        : node_interpretable_t(loc), expr_(expr) { assert(expr_); }
+
+        void execute(execute_params_t& params) override {
+            if (auto result = params.get_evaluated(this)) {
+                params.stack.emplace(*result);
+                return;
+            }
+
+            execute_t result = expr_->execute(params);
+            if (!params.is_executed())
+                return;
+
+            params.stack.emplace(result);
+            params.add_value(this, result);
+        }
+    }
+
+    /* ----------------------------------------------------- */
+
     class node_function_call_args_t final : public node_t,
                                             public node_loc_t {
         std::vector<node_expression_t*> args_;
-
-    private:
-        template<typename FuncT, typename ParamsT>
-        void process_args(FuncT&& func, ParamsT& params) {
-            std::ranges::for_each(args_, [&params, &func](auto arg) {
-                params.stack.emplace(std::invoke(func, arg, params));
-            });
-        }
 
     public:
         node_function_call_args_t(const location_t& loc) : node_loc_t(loc) {}
@@ -94,18 +111,19 @@ namespace paracl {
         }
 
         void execute(execute_params_t& params) {
-            process_args([](auto arg, auto& params) {
-                return arg->execute(params);
-            }, params);
+            std::ranges::for_each(args_, [&params](auto arg) {
+                node_stack_filler* stack_filler = params.buf->add_node<node_stack_filler>(arg->loc(), arg);
+                params.insert_statement(stack_filler);
+            });
         }
 
         void analyze(analyze_params_t& params) {
-            process_args([](auto arg, auto& params) {
+            std::ranges::for_each(args_, [&params](auto arg) {
                 analyze_t arg_value = arg->analyze(params);
                 expect_types_eq(to_general_type(arg_value.type), general_type_e::INTEGER,
                                 arg->loc(), params);
-                return arg_value;
-            }, params);
+                params.stack.emplace(arg_value);
+            });
         }
 
         void set_predict(bool value) {
@@ -132,7 +150,7 @@ namespace paracl {
     class node_function_t final : public node_simple_type_t,
                                   public id_t {
         node_function_args_t* args_;
-        node_function_body_t* body_;
+        node_scope_return_t*  body_;
 
         static constexpr std::string_view default_function_name_prefix  = "#default_function_name_";
         static constexpr std::string_view default_function_name_postfix = "_#";
@@ -159,10 +177,10 @@ namespace paracl {
 
     public:
         node_function_t(const location_t& loc, node_function_args_t* args,
-                        node_function_body_t* body, std::string_view id)
+                        node_scope_return_t* body, std::string_view id)
         : node_simple_type_t(loc), id_t(get_function_name(id)), args_(args), body_(body) {}
 
-        void bind_body(node_function_body_t* body) {
+        void bind_body(node_scope_return_t* body) {
             body_ = body;
             assert(body_);
             assert(args_);
@@ -177,15 +195,17 @@ namespace paracl {
         }
 
         execute_t real_execute(execute_params_t& params) {
-            return process_real<execute_t>([&params](auto arg) {
-                return arg->execute(params);
-            });
+            assert(body_);
+            execute_t result = body_->execute(params);
+            if (!params.is_executed())
+                args_->execute(params);
+            return result;
         }
 
         analyze_t real_analyze(analyze_params_t& params) {
-            return process_real<analyze_t>([&params](auto arg) {
-                return arg->analyze(params);
-            });
+            assert(body_);
+            args_->analyze(params);
+            return body_->analyze(params);
         }
 
         void print(execute_params_t& params) override { *(params.os) << "function " << get_name() << "\n"; }
@@ -200,7 +220,7 @@ namespace paracl {
                 buf->add_node<node_function_t>(node_loc_t::loc(), args_copy, nullptr, get_name());
             params.global_scope.add_variable(function_copy);
 
-            node_function_body_t* body_copy = body_->copy_with_args(
+            node_scope_return_t* body_copy = body_->copy_with_args(
                 params, parent, args_copy->begin(), args_copy->end()
             );
             function_copy->bind_body(body_copy);
@@ -285,11 +305,19 @@ namespace paracl {
         }
 
         execute_t execute(execute_params_t& params) override {
-            args_->execute(params);
-            execute_t func_value = function_->execute(params);
+            if (auto result = params.get_evaluated(this))
+                return *result;
 
+            execute_t func_value = function_->execute(params);
             node_function_t* func = static_cast<node_function_t*>(func_value.value);
-            return func->real_execute(params);
+
+            execute_t result = func->real_execute(params);
+            if (!params.is_executed())
+                args_->execute(params);
+            else
+                params.add_value(this, result);
+
+            return result;
         }
 
         analyze_t analyze(analyze_params_t& params) override {

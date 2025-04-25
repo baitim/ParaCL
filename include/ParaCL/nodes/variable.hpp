@@ -62,7 +62,7 @@ namespace paracl {
 
         execute_t execute(node_indexes_t* indexes, execute_params_t& params) {
             assert(indexes);
-            execute_t& real_value = shift(indexes->execute(params), params);
+            execute_t real_value = shift(indexes->execute(params), params);
             return real_value;
         }
 
@@ -95,6 +95,9 @@ namespace paracl {
         execute_t set_value(node_indexes_t* indexes, execute_t new_value, execute_params_t& params) {
             assert(indexes);
             execute_t& real_value = shift(indexes->execute(params), params);
+            if (!params.is_executed())
+                return {};
+
             is_setted = true;
             return real_value = new_value;
         }

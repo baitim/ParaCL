@@ -32,6 +32,8 @@ namespace paracl {
 
         execute_t execute(execute_params_t& params) override {
             execute_t res_exec = node_->execute(params);
+            if (!params.is_executed())
+                return {};
 
             if (res_exec.type == node_type_e::UNDEF)
                 return {node_type_e::UNDEF, params.buf()->add_node<node_undef_t>(node_loc_t::loc())};

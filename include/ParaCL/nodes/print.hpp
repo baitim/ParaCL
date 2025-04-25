@@ -11,9 +11,15 @@ namespace paracl {
         : node_expression_t(loc), argument_(argument) { assert(argument_); }
 
         execute_t execute(execute_params_t& params) override {
+            if (auto value = params.get_evaluated(this))
+                return *value;
+
             execute_t result = argument_->execute(params);
-            result.value->print(params);
-            return result;
+            if (params.is_executed()) {
+                result.value->print(params);
+                return params.add_value(this, result);
+            }
+            return {};
         }
 
         analyze_t analyze(analyze_params_t& params) override {

@@ -243,7 +243,7 @@ namespace paracl {
         using std::stack<ElemT>::size;
         using std::stack<ElemT>::empty;
 
-        template <typename IterT>
+        template <std::output_iterator IterT>
         void push_values(IterT begin, IterT end) {
             for (auto it = begin; it != end; ++it)
                 emplace(*it);
@@ -285,11 +285,18 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_statement_t : public node_t,
-                             public node_loc_t {
+    class node_interpretable_t : public node_t,
+                                 public node_loc_t {
+    public:
+        node_interpretable_t(const location_t& loc) : node_loc_t(loc) {}
+        virtual void execute(execute_params_t& params) = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_statement_t : public node_interpretable_t {
     public:
         node_statement_t(const location_t& loc) : node_loc_t(loc) {}
-        virtual void execute(execute_params_t& params) = 0;
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_predict(bool value) = 0;
         virtual node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const = 0;
@@ -345,27 +352,36 @@ namespace paracl {
     };
 
     /* ----------------------------------------------------- */
-    
+
     class node_scope_t;
 
-    enum class stack_state_e {
+    enum class execute_state_e {
         PROCESS,
         RETURN,
-        FUNCTION_CALL
+        ADDED_STATEMENTS
     };
 
     struct execute_params_t final {
-        copy_params_t copy_params;
-        stack_t<execute_t> stack;
-        stack_state_e stack_state = stack_state_e::PROCESS;
-
         std::ostream* os = nullptr;
         std::istream* is = nullptr;
         std::string_view program_str = {};
 
+        copy_params_t copy_params;
+
+        execute_state_e execute_state = execute_state_e::PROCESS;
+
+        stack_t<execute_t> stack;
+        stack_t<node_interpretable_t*> statements;
+
+        using values_container_t  = std::unordered_map<int, std::unordered_map<node_interpretable_t*, execute_t>>;
+        using visited_container_t = std::unordered_map<int, std::unordered_set<node_interpretable_t*>>;
+        values_container_t  values;
+        visited_container_t visits;
+        std::vector<int> scope_rs; // steps
+        int step = 0;
+
     public:
-        execute_params_t(buffer_t* buf_, std::ostream* os_,
-                         std::istream* is_, std::string_view program_str_)
+        execute_params_t(buffer_t* buf_, std::ostream* os_, std::istream* is_, std::string_view program_str_)
         : os(os_), is(is_), program_str(program_str_) {
             assert(buf_);
             assert(os);
@@ -373,18 +389,84 @@ namespace paracl {
             copy_params.buf = buf_;
         }
 
+        bool is_executed() const noexcept { return state == execute_state_e::PROCESS; }
+
+        std::optional<execute_stept> get_evaluated(const node_interpretable_t* node) {
+            if (auto step_it = values.find(step); step_it != values.end())
+                if (auto loc_it = step_it->second.find(node); loc_it != step_it->second.end())
+                    return loc_it->second;
+            return std::nullopt;
+        }
+
+        template <typename... ArgsT>
+        execute_t add_value(node_interpretable_t* node, ArgsT&&... args) {
+            auto result = values[step].emplace(node, std::forward<ArgsT>(args)...);
+            return result.first->second;
+        }
+
+        void add_return(execute_t value) {
+            stack.emplace(value);
+            state = execute_state_e::RETURN;
+        }
+
+        void visit(node_interpretable_t* node) {
+            visits[step].emplace(node);
+        }
+
+        bool is_visited(node_interpretable_t* node) {
+            if (auto step_it = visits.find(step); step_it != visits.end())
+                if (step_it->second.find(node) != step_it->second.end())
+                    return true;
+            return false;
+        }
+
+        template <std::output_iterator IterT>
+        void insert_statements(IterT begin, IterT end) {
+            stack.push_values(begin, end);
+            state = execute_state_e::ADDED_STATEMENTS;
+        }
+
+        void insert_statement(node_interpretable_t* statement) {
+            stack.emplace(statement);
+            state = execute_state_e::ADDED_STATEMENTS;
+        }
+
+        void erase_statement() {
+            statements.pop();
+            values.erase(step);
+            visits.erase(step);
+            step--;
+        }
+
+        void add_last_scope_r() {
+            scope_rs.push_back(step);
+        }
+
+        void unroll_to_scope_r() {
+            int last_scope_r = scope_rs.back();
+            while (step > last_scope_r)
+                erase_statement();
+            scope_rs.pop_back();
+        }
+
         buffer_t* buf() { return copy_params.buf; }
     };
 
     /* ----------------------------------------------------- */
 
+    enum class analyze_state_e {
+        PROCESS,
+        RETURN
+    };
+
     struct analyze_params_t final {
         std::string_view program_str = {};
 
         copy_params_t copy_params;
-        stack_t<analyze_t> stack;
-        stack_state_e stack_state = stack_state_e::PROCESS;
+        
+        analyze_state_e analyze_state = analyze_state_e::PROCESS;
 
+        stack_t<analyze_t> stack;
         std::unordered_map<std::string_view, id_t*> names_of_called_functions;
         std::stack<id_t*> called_functions;
 
