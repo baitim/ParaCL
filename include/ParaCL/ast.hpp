@@ -7,7 +7,7 @@ namespace paracl {
         auto& statements = params.statements;
         auto& state      = params.execute_state;
 
-        statements.emplace(root);
+        params.insert_statement(root);
 
         while (!statements.empty()) {
             state = execute_state_e::PROCESS;

@@ -381,6 +381,11 @@ namespace paracl {
         std::vector<int> scope_rs; // steps
         int step = 0;
 
+    private:
+        void update_step() {
+            step = statements.size();
+        }
+
     public:
         execute_params_t(buffer_t* buf_, std::ostream* os_, std::istream* is_, std::string_view program_str_)
         : os(os_), is(is_), program_str(program_str_) {
@@ -401,7 +406,7 @@ namespace paracl {
 
         template <typename... ArgsT>
         execute_t add_value(node_t* node, ArgsT&&... args) {
-            auto result = values[step].emplace(node, std::forward<ArgsT>(args)...);
+            auto result = values[step].emplace(node, execute_t(std::forward<ArgsT>(args)...));
             return result.first->second;
         }
 
@@ -423,20 +428,22 @@ namespace paracl {
 
         template <std::input_iterator IterT>
         void insert_statements(IterT begin, IterT end) {
-            stack.push_values(begin, end);
+            statements.push_values(begin, end);
             execute_state = execute_state_e::ADDED_STATEMENTS;
+            update_step();
         }
 
-        void insert_statement(node_t* statement) {
-            stack.emplace(statement);
+        void insert_statement(node_interpretable_t* statement) {
+            statements.emplace(statement);
             execute_state = execute_state_e::ADDED_STATEMENTS;
+            update_step();
         }
 
         void erase_statement() {
             statements.pop();
             values.erase(step);
             visits.erase(step);
-            step--;
+            update_step();
         }
 
         void add_last_scope_r() {
