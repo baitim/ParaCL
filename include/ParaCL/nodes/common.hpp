@@ -539,7 +539,6 @@ namespace paracl {
         }
 
         void on_return() {
-            std::cerr << "step" << step << "\n";
             assert(!return_receivers.empty());
             int last_return_receiver = return_receivers.back();
             while (step > last_return_receiver)

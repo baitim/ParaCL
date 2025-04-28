@@ -325,6 +325,7 @@ namespace paracl {
             execute_t func_value = function_->execute(params);
             node_function_t* func = static_cast<node_function_t*>(func_value.value);
 
+            int number_of_visit = params.number_of_visit(this);
             bool is_prev_upload = params.is_name_visited(func);
 
             if (!params.is_visited(this)) {
@@ -335,27 +336,25 @@ namespace paracl {
                 args_->execute(params);
                 return {};
             }
+            params.visit(this);
+            params.visit_name(function_to_id(func), params.get_step());
 
             if (!is_prev_upload)
                 func->upload_state(params);
 
-            if (is_prev_upload && params.number_of_visit(this) == 1) {
+            bool is_uploaded = false;
+            if (is_prev_upload && number_of_visit == 1) {
                 params.insert_statement(
                     params.buf()->add_node<node_function_state_loader_t>(node_loc_t::loc(), func)
                 );
+                is_uploaded = true;
             }
 
-            params.visit(this);
-            params.visit_name(function_to_id(func), params.get_step());
-
-            params.is_visiting_prev = true;
-            params.execute_state = execute_state_e::PROCESS;
+            params.is_visiting_prev = is_uploaded;
             execute_t result = func->body_execute(params);
-            if (params.is_executed())
-                params.erase_statement();
             params.is_visiting_prev = false;
 
-            if (params.number_of_visit(this) == 3)
+            if (number_of_visit == 2)
                 params.unvisit_name(function_to_id(func), params.get_step());
             return result;
         }
