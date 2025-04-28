@@ -150,7 +150,11 @@ Grammar:
 %nterm <std::pair<std::string, location_t>> function_name
 
 %nterm <node_function_args_t*>      function_args
+%nterm <node_function_args_t*>      function_args_empty
+%nterm <node_function_args_t*>      function_args_filled
 %nterm <node_function_call_args_t*> function_call_args
+%nterm <node_function_call_args_t*> function_call_args_empty
+%nterm <node_function_call_args_t*> function_call_args_filled
 
 %nterm <node_scope_t*>      body
 %nterm <node_scope_t*>      lghost_scope
@@ -322,15 +326,20 @@ function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
 function_body: scope_r { $$ = $1; }
 ;
 
-function_args: %empty   { $$ = driver->add_node<node_function_args_t>(@$, 1); }
-               | function_args COMMA variable
+function_args: function_args_empty  { $$ = $1; }
+             | function_args_filled { $$ = $1; }
+
+function_args_empty: %empty { $$ = driver->add_node<node_function_args_t>(@$, 1); }
+;
+
+function_args_filled: function_args COMMA variable
                         {
                             $$ = $1;
                             node_variable_t* var = driver->add_node<node_variable_t>(@3, $3.length(), $3);
                             $$->add_arg(var);
                             func_args.push_back(var);
                         }
-               | variable
+                    | variable
                         {
                             $$ = driver->add_node<node_function_args_t>(@$, 1);
                             node_variable_t* var = driver->add_node<node_variable_t>(@1, $1.length(), $1);
@@ -339,8 +348,15 @@ function_args: %empty   { $$ = driver->add_node<node_function_args_t>(@$, 1); }
                         }
 ;
 
-function_call_args: %empty      { $$ = driver->add_node<node_function_call_args_t>(@$, 1); }
-                  | function_call_args COMMA expression { $$ = $1; $$->add_arg($3); }
+function_call_args: function_call_args_empty  { $$ = $1; }
+                  | function_call_args_filled { $$ = $1; }
+;
+
+function_call_args_empty: %empty { $$ = driver->add_node<node_function_call_args_t>(@$, 1); }
+;
+
+function_call_args_filled:
+                    function_call_args COMMA expression { $$ = $1; $$->add_arg($3); }
                   | expression  {
                                     $$ = driver->add_node<node_function_call_args_t>(@$, 1);
                                     $$->add_arg($1);

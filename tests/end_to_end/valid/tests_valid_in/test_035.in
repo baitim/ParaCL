@@ -14,3 +14,13 @@ print is_even(7);
 print is_even(10);
 
 print is_even(777);
+
+
+
+foo = func(n) : foo_ {
+    if (1)
+        return -1;
+    return n * foo_(n - 1);
+}
+
+print foo(5);

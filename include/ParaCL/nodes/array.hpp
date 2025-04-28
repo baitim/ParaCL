@@ -2,8 +2,6 @@
 
 #include "ParaCL/nodes/common.hpp"
 
-#include <algorithm>
-
 namespace paracl {
     class node_indexes_t final : public node_t,
                                  public node_loc_t {

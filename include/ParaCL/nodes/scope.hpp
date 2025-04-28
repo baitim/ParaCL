@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ParaCL/nodes/common.hpp"
+#include "ParaCL/nodes/simple_types.hpp"
 
-#include <algorithm>
 #include <functional>
 
 namespace paracl {
@@ -53,19 +52,9 @@ namespace paracl {
         : node_interpretable_t(loc), return_expr_(return_expr) { assert(return_expr_); }
 
         void execute(execute_params_t& params) override {
-            if (auto result = params.get_evaluated(this))
-                params.add_return(*result);
-
-            bool is_visited = params.is_visited(this);
-            params.visit(this);
-
             execute_t result = return_expr_->execute(params);
-            if (is_visited) {
+            if (params.is_executed())
                 params.add_return(result);
-            } else if (params.is_executed()) {
-                params.add_return(result);
-                params.add_value(this, result);
-            }
         }
     };
 
@@ -118,11 +107,11 @@ namespace paracl {
             }
         }
 
-        template <typename ResultT, typename FuncT, typename ParamsT>
-        ResultT process_return(FuncT&& func, ParamsT& params) {
-            ResultT result = std::invoke(func, return_expr_, params);
-            expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
-                            return_expr_->loc(), params);
+        analyze_t analyze_return(analyze_params_t& params) {
+            analyze_t result = return_expr_->analyze(params);
+            if (result.value != nullptr)
+                expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
+                                return_expr_->loc(), params);
             return result;
         }
 
@@ -218,7 +207,7 @@ namespace paracl {
             process_statements(analyze_funct, params);
 
             if (params.analyze_state == analyze_state_e::PROCESS && return_expr_) {
-                params.stack.emplace(process_return<analyze_t>(analyze_funct, params));
+                params.stack.emplace(analyze_return(params));
                 params.analyze_state = analyze_state_e::RETURN;
             }
             memory_table_t::clear_memory();
@@ -239,21 +228,16 @@ namespace paracl {
     class node_scope_return_t final : public node_expression_t,
                                       public scope_base_t {
     public:
-        node_scope_return_t(const location_t& loc, scope_base_t* parent) : node_expression_t(loc), scope_base_t(parent) {}
+        node_scope_return_t(const location_t& loc, scope_base_t* parent)
+        : node_expression_t(loc), scope_base_t(parent) {}
 
         execute_t execute(execute_params_t& params) override {
-            if (auto result = params.get_evaluated(this))
-                return *result;
-
-            if (params.is_visited(this)) {
-                execute_t result = params.stack.pop_value();
-                params.add_value(this, result);
-                return result;
-            }
-
+            if (params.is_visited(this))
+                return params.stack.pop_value();
             params.visit(this);
-            params.add_return_receiver();
+
             params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
+            params.add_return_receiver();
             params.insert_statement(make_return_node(params.copy_params));
             params.insert_statements(statements_.rbegin(), statements_.rend());
             return {};
@@ -264,18 +248,22 @@ namespace paracl {
                 throw error_type_deduction_t{node_loc_t::loc(), params.program_str,
                                                 "missing required return statement"};
 
-            analyze_state_e old_analyze_state = params.analyze_state;
+            analyze_state_e& state = params.analyze_state;
+            analyze_state_e old_analyze_state = state;
 
             auto&& analyze_funct = [](auto node, auto& params) { return node->analyze(params); };
             process_statements(analyze_funct, params);
 
             analyze_t result;
-            if (params.analyze_state == analyze_state_e::RETURN)
+            if (state == analyze_state_e::RETURN) {
                 result = params.stack.pop_value();
-            else
-                result = process_return<analyze_t>(analyze_funct, params);
+                state = analyze_state_e::PROCESS;
+                analyze_return(params);
+            } else {
+                result = analyze_return(params);
+            }
 
-            params.analyze_state = old_analyze_state;
+            state = old_analyze_state;
             memory_table_t::clear_memory();
             return result;
         }

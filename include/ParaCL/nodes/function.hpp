@@ -6,7 +6,7 @@
 #include <unordered_set>
 
 namespace paracl {
-    class node_function_args_initializator_t : public node_interpretable_t {
+    class node_function_args_initializator_t final : public node_interpretable_t {
         std::vector<node_variable_t*> args_;
 
     private:
@@ -62,8 +62,9 @@ namespace paracl {
         }
 
         void execute(execute_params_t& params) {
-            auto* node =  params.buf()->add_node<node_function_args_initializator_t>(node_loc_t::loc(), args_);
-            params.insert_statement(node);
+            params.insert_statement(
+                params.buf()->add_node<node_function_args_initializator_t>(node_loc_t::loc(), args_)
+            );
         }
 
         void analyze(analyze_params_t& params) {
@@ -84,7 +85,6 @@ namespace paracl {
             std::ranges::for_each(args_, [&params, &copy](auto arg) {
                 node_variable_t* var_copy = arg->copy(params);
                 copy->add_arg(var_copy);
-                
             });
             return copy;
         }
@@ -96,11 +96,11 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_stack_filler : public node_interpretable_t {
+    class node_stack_filler_t final : public node_interpretable_t {
         node_expression_t* expr_;
 
     public:
-        node_stack_filler(const location_t& loc, node_expression_t* expr)
+        node_stack_filler_t(const location_t& loc, node_expression_t* expr)
         : node_interpretable_t(loc), expr_(expr) { assert(expr_); }
 
         void execute(execute_params_t& params) override {
@@ -134,7 +134,7 @@ namespace paracl {
 
         void execute(execute_params_t& params) {
             std::ranges::for_each(args_, [&params](auto arg) {
-                node_stack_filler* stack_filler = params.buf()->add_node<node_stack_filler>(arg->loc(), arg);
+                node_stack_filler_t* stack_filler = params.buf()->add_node<node_stack_filler_t>(arg->loc(), arg);
                 params.insert_statement(stack_filler);
             });
         }
@@ -209,12 +209,20 @@ namespace paracl {
             return {node_type_e::FUNCTION, this};
         }
 
-        execute_t real_execute(execute_params_t& params) {
-            assert(body_);
-            execute_t result = body_->execute(params);
-            if (!params.is_executed())
-                args_->execute(params);
-            return result;
+        void upload_state(execute_params_t& params) {
+            params.upload_variables(args_->begin(), args_->end());
+        }
+
+        void load_state(execute_params_t& params) {
+            params.load_variables(args_->begin(), args_->end());
+        }
+
+        void args_execute(execute_params_t& params) {
+            args_->execute(params);
+        }
+
+        execute_t body_execute(execute_params_t& params) {
+            return body_->execute(params);
         }
 
         analyze_t real_analyze(analyze_params_t& params) {
@@ -248,6 +256,20 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_function_state_loader_t final : public node_interpretable_t {
+        node_function_t* func_;
+
+    public:
+        node_function_state_loader_t(const location_t& loc, node_function_t* func)
+        : node_interpretable_t(loc), func_(func) { assert(func_); }
+
+        void execute(execute_params_t& params) override {
+            func_->load_state(params);
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_function_call_t final : public node_expression_t {
         node_expression_t*         function_;
         node_function_call_args_t* args_;
@@ -277,35 +299,15 @@ namespace paracl {
             return real_function;
         }
 
-        void visit_function(analyze_params_t& params) const {
-            if (!is_call_by_name_)
-                return;
-
-            id_t* function = static_cast<id_t*>(static_cast<node_function_t*>(function_));
-            params.names_of_called_functions.emplace(function->get_name(), function);
-            params.called_functions.emplace(function);
-        }
-
-        void unvisit_function(analyze_params_t& params) const {
-            if (!is_call_by_name_)
-                return;
-
-            auto& stack = params.called_functions;
-            auto& map = params.names_of_called_functions;
-            id_t* function = static_cast<id_t*>(stack.top());
-            map.erase(map.find(function->get_name()));
-            stack.pop();
+        static id_t* function_to_id(node_expression_t* function) {
+            return static_cast<id_t*>(static_cast<node_function_t*>(function));
         }
 
         std::optional<analyze_t> analyze_call_by_name(analyze_params_t& params) const {
             if (!is_call_by_name_)
                 return std::nullopt;
 
-            id_t* function = static_cast<id_t*>(static_cast<node_function_t*>(function_));
-            std::string_view function_name = function->get_name();
-            auto& map = params.names_of_called_functions;
-
-            if (map.find(function_name) != map.end())
+            if (params.is_name_visited(function_to_id(function_)))
                 return analyze_t{make_number(default_analyze_return, params, node_loc_t::loc()), false};
 
             return std::nullopt;
@@ -323,10 +325,38 @@ namespace paracl {
             execute_t func_value = function_->execute(params);
             node_function_t* func = static_cast<node_function_t*>(func_value.value);
 
-            execute_t result = func->real_execute(params);
-            if (!params.is_executed())
-                args_->execute(params);
+            bool is_prev_upload = params.is_name_visited(func);
 
+            if (!params.is_visited(this)) {
+                params.visit(this);
+                if (is_prev_upload)
+                    func->upload_state(params);
+                func->args_execute(params);
+                args_->execute(params);
+                return {};
+            }
+
+            if (!is_prev_upload)
+                func->upload_state(params);
+
+            if (is_prev_upload && params.number_of_visit(this) == 1) {
+                params.insert_statement(
+                    params.buf()->add_node<node_function_state_loader_t>(node_loc_t::loc(), func)
+                );
+            }
+
+            params.visit(this);
+            params.visit_name(function_to_id(func), params.get_step());
+
+            params.is_visiting_prev = true;
+            params.execute_state = execute_state_e::PROCESS;
+            execute_t result = func->body_execute(params);
+            if (params.is_executed())
+                params.erase_statement();
+            params.is_visiting_prev = false;
+
+            if (params.number_of_visit(this) == 3)
+                params.unvisit_name(function_to_id(func), params.get_step());
             return result;
         }
 
@@ -334,7 +364,9 @@ namespace paracl {
             if (auto result = analyze_call_by_name(params))
                 return *result;
 
-            visit_function(params);
+            if (is_call_by_name_)
+                params.visit_name(function_to_id(function_));
+
             args_->analyze(params);
 
             analyze_t function_a = function_->analyze(params);
@@ -344,7 +376,8 @@ namespace paracl {
             process_count_arguments(function->count_args(), args_->size(), params);
 
             analyze_t result = function->real_analyze(params);
-            unvisit_function(params);
+            if (is_call_by_name_)
+                params.unvisit_name(function_to_id(function_));
             return result;
         }
 

@@ -4,7 +4,8 @@
 
 namespace paracl {
     class settable_value_t : public node_t,
-                             public node_loc_t {
+                             public node_loc_t,
+                             public node_settable_t {
         bool is_setted = false;
         execute_t e_value_;
         analyze_t a_value_;
@@ -60,6 +61,10 @@ namespace paracl {
     public:
         settable_value_t(const location_t& loc) : node_loc_t(loc) {}
 
+        execute_t execute(execute_params_t& params) override {
+            return e_value_;
+        }
+
         execute_t execute(node_indexes_t* indexes, execute_params_t& params) {
             assert(indexes);
             execute_t real_value = shift(indexes->execute(params), params);
@@ -75,7 +80,7 @@ namespace paracl {
             return shift_analyze(indexes, params);
         }
 
-        execute_t set_value(execute_t new_value, execute_params_t& params) {
+        execute_t set_value(execute_t new_value, execute_params_t& params) override {
             is_setted = true;
             return e_value_ = new_value;
         }

@@ -3,6 +3,7 @@
 #include "ParaCL/common.hpp"
 #include "ParaCL/environments.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <ranges>
@@ -31,12 +32,14 @@ namespace paracl {
 
     inline std::pair<std::string_view, int> get_current_line(const location_t& loc,
                                                              std::string_view program_str) {
-        int line = 0;
+        int line = -1;
         for ([[maybe_unused]]int _ : std::views::iota(0, loc.row))
             line = program_str.find('\n', line + 1);
 
         if (line > 0)
             line++;
+        else
+            line = 0;
 
         int end_of_line = program_str.find('\n', line);
         if (end_of_line == -1)
@@ -314,6 +317,15 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_settable_t {
+    public:
+        virtual execute_t execute(execute_params_t& params) = 0;
+        virtual execute_t set_value(execute_t new_value, execute_params_t& params) = 0;
+        virtual ~node_settable_t() = default;
+    };
+
+    /* ----------------------------------------------------- */
+
     class id_t {
         std::string id_;
 
@@ -363,6 +375,31 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class names_visitor_t {
+        static constexpr const int default_key_value = -1;
+        std::unordered_map<std::string_view, std::pair<id_t*, int>> names;
+
+    public:
+        bool is_name_visited(id_t* id) const {
+            return (names.find(id->get_name()) != names.end());
+        }
+
+        void visit_name(id_t* id, int key = default_key_value) {
+            names.emplace(id->get_name(), std::make_pair(id, key));
+        }
+
+        void unvisit_name(id_t* id, int key = default_key_value) {
+            auto iter = names.find(id->get_name());
+            assert(iter != names.end());
+            if (iter->second.second == key)
+                names.erase(iter);
+        }
+
+        virtual ~names_visitor_t() = default;
+    };
+
+    /* ----------------------------------------------------- */
+
     class node_scope_t;
 
     enum class execute_state_e {
@@ -371,7 +408,18 @@ namespace paracl {
         ADDED_STATEMENTS
     };
 
-    struct execute_params_t final {
+    class execute_params_t final : public names_visitor_t {
+        using    values_container_t = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
+        using   visited_container_t = std::unordered_map<int, std::unordered_map<node_t*, int>>;
+        using variables_container_t = std::unordered_map<int, std::unordered_map<node_settable_t*, execute_t>>;
+           values_container_t values;
+          visited_container_t visits;
+        variables_container_t variables;
+        std::vector<int> return_receivers;
+
+        int step = 0;
+
+    public:
         std::ostream* os = nullptr;
         std::istream* is = nullptr;
         std::string_view program_str = {};
@@ -383,16 +431,12 @@ namespace paracl {
         stack_t<execute_t> stack;
         stack_t<node_interpretable_t*> statements;
 
-        using values_container_t  = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
-        using visited_container_t = std::unordered_map<int, std::unordered_set<node_t*>>;
-        values_container_t  values;
-        visited_container_t visits;
-        std::vector<int> return_receivers;
-        int step = 0;
+        bool is_visiting_prev = false;
 
     private:
         void update_step() {
             step = statements.size();
+
             if (!return_receivers.empty() && return_receivers.back() == step)
                 return_receivers.pop_back();
         }
@@ -406,9 +450,28 @@ namespace paracl {
             copy_params.buf = buf_;
         }
 
+        int get_step() const noexcept { return step; }
+
         bool is_executed() const noexcept { return execute_state == execute_state_e::PROCESS; }
 
-        std::optional<execute_t> get_evaluated(node_t* node) {
+        template <typename IterT>
+        void upload_variables(IterT begin, IterT end) {
+            auto& step_iter = variables[step];
+            std::ranges::for_each(begin, end, [&](auto arg) {
+                step_iter.emplace(arg, arg->execute(*this));
+            });
+        }
+
+        template <typename IterT>
+        void load_variables(IterT begin, IterT end) {
+            auto& step_iter = variables[step - 1];
+            std::ranges::for_each(begin, end, [&](auto arg) {
+                auto variable_iter = step_iter.find(arg);
+                arg->set_value(variable_iter->second, *this);
+            });
+        }
+
+        std::optional<execute_t> get_evaluated(node_t* node) const {
             if (auto step_it = values.find(step); step_it != values.end())
                 if (auto loc_it = step_it->second.find(node); loc_it != step_it->second.end())
                     return loc_it->second;
@@ -427,14 +490,27 @@ namespace paracl {
         }
 
         void visit(node_t* node) {
-            visits[step].emplace(node);
+            auto& step_map = visits[step - is_visiting_prev];
+            auto [it, inserted] = step_map.emplace(node, 1);
+            if (!inserted)
+                it->second++;
         }
 
-        bool is_visited(node_t* node) {
-            if (auto step_it = visits.find(step); step_it != visits.end())
+        bool is_visited(node_t* node) const {
+            if (auto step_it = visits.find(step - is_visiting_prev); step_it != visits.end())
                 if (step_it->second.find(node) != step_it->second.end())
                     return true;
             return false;
+        }
+
+        int number_of_visit(node_t* node) const {
+            auto step_it = visits.find(step);
+            if (step_it != visits.end()) {
+                auto var_it = step_it->second.find(node);
+                if (var_it != step_it->second.end())
+                    return var_it->second;
+            }
+            return 0;
         }
 
         template <std::input_iterator IterT>
@@ -454,6 +530,7 @@ namespace paracl {
             statements.pop();
             values.erase(step);
             visits.erase(step);
+            variables.erase(step);
             update_step();
         }
 
@@ -462,6 +539,8 @@ namespace paracl {
         }
 
         void on_return() {
+            std::cerr << "step" << step << "\n";
+            assert(!return_receivers.empty());
             int last_return_receiver = return_receivers.back();
             while (step > last_return_receiver)
                 erase_statement();
@@ -477,16 +556,14 @@ namespace paracl {
         RETURN
     };
 
-    struct analyze_params_t final {
+    struct analyze_params_t final : public names_visitor_t {
         std::string_view program_str = {};
 
         copy_params_t copy_params;
-        
+
         analyze_state_e analyze_state = analyze_state_e::PROCESS;
 
         stack_t<analyze_t> stack;
-        std::unordered_map<std::string_view, id_t*> names_of_called_functions;
-        std::stack<id_t*> called_functions;
 
     public:
         analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})

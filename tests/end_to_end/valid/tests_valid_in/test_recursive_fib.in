@@ -11,4 +11,4 @@ while (i < count) {
     i = i + 1;
 }
 
-print fib(100000);
+print fib(10000);
