@@ -15,7 +15,11 @@ namespace paracl {
         }
 
         execute_t execute(execute_params_t& params) override {
-            return lvalue_->set_value(rvalue_->execute(params), params);
+            execute_t rvalue_result = rvalue_->execute(params);
+            if (!params.is_executed())
+                return {};
+            
+            return lvalue_->set_value(rvalue_result, params);
         }
 
         analyze_t analyze(analyze_params_t& params) override {

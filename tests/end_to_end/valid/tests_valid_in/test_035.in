@@ -1,0 +1,26 @@
+is_even_ = func(n) : is_even {
+    is_odd = func(x) {
+        if (x == 0)
+            return 0;
+        return is_even(x - 1);
+    }
+
+    if (n == 0)
+        return 1;
+    return is_odd(n - 1);
+}
+
+print is_even(7);
+print is_even(10);
+
+print is_even(77);
+
+
+
+foo = func(n) : foo_ {
+    if (n <= 1)
+        return -1;
+    return n * foo_(n - 1);
+}
+
+print foo(5);

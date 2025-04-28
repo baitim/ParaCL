@@ -54,12 +54,19 @@ namespace paracl {
         node_input_t(const location_t& loc) : node_simple_type_t(loc) {}
 
         execute_t execute(execute_params_t& params) override {
+            if (auto value = params.get_evaluated(this))
+                return *value;
+
             int value;
             *(params.is) >> value;
             if (!params.is->good())
                 throw error_execute_t{node_loc_t::loc(), params.program_str, "invalid input: need integer"};
             
-            return {node_type_e::INTEGER, params.buf()->add_node<node_number_t>(node_loc_t::loc(), value)};
+            return params.add_value(
+                this,
+                node_type_e::INTEGER,
+                params.buf()->add_node<node_number_t>(node_loc_t::loc(), value)
+            );
         }
 
         analyze_t analyze(analyze_params_t& params) override {
@@ -76,12 +83,17 @@ namespace paracl {
     /* ----------------------------------------------------- */
 
     template <existed_params ParamsT>
-    execute_t make_undef(ParamsT& params, const location_t& loc) {
+    inline execute_t make_undef(ParamsT& params, const location_t& loc) {
         return {node_type_e::UNDEF, params.buf()->template add_node<node_undef_t>(loc)};
     }
 
     template <existed_params ParamsT>
-    execute_t make_number(int value, ParamsT& params, const location_t& loc) {
+    inline execute_t make_number(int value, ParamsT& params, const location_t& loc) {
         return {node_type_e::INTEGER, params.buf()->template add_node<node_number_t>(loc, value)};
+    }
+
+    inline node_statement_t* make_empty_instruction(const location_t& loc, copy_params_t& params) {
+        node_expression_t* expr = params.buf->add_node<node_undef_t>(loc);
+        return params.buf->add_node<node_instruction_t>(loc, expr);
     }
 }

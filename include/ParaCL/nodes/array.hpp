@@ -2,8 +2,6 @@
 
 #include "ParaCL/nodes/common.hpp"
 
-#include <algorithm>
-
 namespace paracl {
     class node_indexes_t final : public node_t,
                                  public node_loc_t {
@@ -13,11 +11,12 @@ namespace paracl {
         template <typename ElemT, typename FuncT, typename ParamsT>
         std::vector<ElemT> process_indexes(FuncT&& func, ParamsT& params) const {
             std::vector<ElemT> indexes(indexes_.size());
-            std::transform(indexes_.begin(), indexes_.end(), indexes.begin(),
-                [&func, &params](const auto& index_) {
-                   return std::invoke(func, index_, params);
-                }
-            );
+            for (size_t i = 0, end = indexes_.size(); i < end; ++i) {
+                ElemT result = std::invoke(func, indexes_[i], params);
+                if (!params.is_executed())
+                    return {};
+                indexes[i] = result;
+            }
             reverse(indexes.begin(), indexes.end());
             return indexes;
         }
@@ -29,8 +28,8 @@ namespace paracl {
 
         std::vector<execute_t> execute(execute_params_t& params) const {
             return process_indexes<execute_t>(
-                [](auto index_, execute_params_t& params) {
-                    return index_->execute(params);
+                [](auto index, execute_params_t& params) {
+                    return index->execute(params);
                 },
                 params
             );
@@ -38,24 +37,28 @@ namespace paracl {
 
         std::vector<int> execute2ints(execute_params_t& params) const {
             return process_indexes<int>(
-                [](auto index_, execute_params_t& params) {
-                    execute_t index = index_->execute(params);
-                    return static_cast<node_number_t*>(index.value)->get_value();
+                [](auto index, execute_params_t& params) {
+                    execute_t result = index->execute(params);
+                    if (!params.is_executed())
+                        return 0;
+                    return static_cast<node_number_t*>(result.value)->get_value();
                 },
                 params
             );
         }
 
         std::vector<analyze_t> analyze(analyze_params_t& params) const {
-            return process_indexes<analyze_t>(
-                [](auto index_, analyze_params_t& params) {
-                    analyze_t result = index_->analyze(params);
-                    expect_types_ne(result.type, node_type_e::ARRAY, index_->loc(), params);
-                    expect_types_ne(result.type, node_type_e::UNDEF, index_->loc(), params);
+            std::vector<analyze_t> indexes(indexes_.size());
+            std::transform(indexes_.begin(), indexes_.end(), indexes.begin(),
+                [&params](auto index) {
+                    analyze_t result = index->analyze(params);
+                    expect_types_ne(result.type, node_type_e::ARRAY, index->loc(), params);
+                    expect_types_ne(result.type, node_type_e::UNDEF, index->loc(), params);
                     return result;
-                },
-                params
+                }
             );
+            std::reverse(indexes.begin(), indexes.end());
+            return indexes;
         }
 
         node_indexes_t* copy(copy_params_t& params, scope_base_t* parent) const {
@@ -102,22 +105,20 @@ namespace paracl {
     class node_expression_value_t : public node_array_value_t {
         node_expression_t* value_;
 
-    private:
-        template <typename ElemT, typename FuncT, typename ParamsT>
-        void process_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            values.push_back(std::invoke(func, value_, params));
-        }
-
     public:
         node_expression_value_t(const location_t& loc, node_expression_t* value)
         : node_array_value_t(loc), value_(value) { assert(value_); }
 
         void add_value_execute(std::vector<execute_t>& values, execute_params_t& params) const override {
-            process_value(values, [](auto value, auto& params) { return value->execute(params); }, params);
+            execute_t result = value_->execute(params);
+            if (!params.is_executed())
+                return;
+
+            values.push_back(result);
         }
 
         void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
-            process_value(values, [](auto value, auto& params) { return value->analyze(params); }, params);
+            values.push_back(value_->analyze(params));
         }
 
         node_array_value_t* copy_val(copy_params_t& params, scope_base_t* parent) const override {
@@ -134,12 +135,6 @@ namespace paracl {
         int level_ = 0;
 
     private:
-        template <typename ElemT, typename FuncT, typename ParamsT>
-        void process_add_value(std::vector<ElemT>& values, FuncT&& func, ParamsT& params) const {
-            std::vector<ElemT> result = std::invoke(func, params).first;
-            values.insert(values.end(), result.begin(), result.end());
-        }
-
         template <typename DataT, typename FuncT, typename ParamsT, typename EvalFuncT>
         DataT process_array(FuncT&& func, ParamsT& params, EvalFuncT&& eval_func) const {
             auto count = std::invoke(eval_func, count_, params);
@@ -180,11 +175,16 @@ namespace paracl {
         }
 
         void add_value_execute(std::vector<execute_t>& values, execute_params_t& params) const override {
-            process_add_value(values, [&](auto& params) { return execute(params); }, params);
+            std::vector<execute_t> result = execute(params).first;
+            if (!params.is_executed())
+                return;
+
+            values.insert(values.end(), result.begin(), result.end());
         }
 
         void add_value_analyze(std::vector<analyze_t>& values, analyze_params_t& params) override {
-            process_add_value(values, [&](auto& params) { return analyze(params); }, params);
+            std::vector<analyze_t> result = analyze(params).first;
+            values.insert(values.end(), result.begin(), result.end());
         }
 
         array_execute_data_t execute(execute_params_t& params) const override {
@@ -388,6 +388,9 @@ namespace paracl {
         execute_t& shift_(std::vector<execute_t>& indexes, execute_params_t& params,
                           const std::vector<execute_t>& all_indexes, int depth) {
             execute_t index_value = indexes.back().value->execute(params);
+            if (!params.is_executed())
+                return e_values_[0];
+
             node_number_t* node_index = static_cast<node_number_t*>(index_value.value);
             int index = node_index->get_value();
             indexes.pop_back();
@@ -477,9 +480,9 @@ namespace paracl {
                 analyze_check_freed(node_loc_t::loc(), params);
 
             auto [values, indexes] = [&]() {
-                if constexpr (is_array_execute) 
+                if constexpr (is_array_execute)
                     return std::make_tuple(std::ref(e_values_), std::ref(e_indexes_));
-                else 
+                else
                     return std::make_tuple(std::ref(a_values_), std::ref(a_indexes_));
             }();
 
@@ -539,10 +542,13 @@ namespace paracl {
 
         void print(execute_params_t& params) override {
             if (!e_indexes_.empty()) {
-                shift(std::vector<execute_t>{}, params).value->print(params);
+                execute_t& value = shift(std::vector<execute_t>{}, params);
+                if (!params.is_executed()) return;
+                value.value->print(params);
                 return;
             }
             execute(params);
+            if (!params.is_executed()) return;
 
             std::stringstream print_stream;
             execute_params_t print_params = params;

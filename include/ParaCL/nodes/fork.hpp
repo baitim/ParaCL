@@ -19,12 +19,18 @@ namespace paracl {
 
         void execute(execute_params_t& params) override {
             execute_t result = condition_->execute(params);
+            if (!params.is_executed())
+                return;
+
+            if (params.is_visited(this))
+                return;
+            params.visit(this);
 
             int value = static_cast<node_number_t*>(result.value)->get_value();
             if (value)
-                body1_->execute(params);
+                params.insert_statement(body1_);
             else
-                body2_->execute(params);
+                params.insert_statement(body2_);
         }
 
         void analyze(analyze_params_t& params) override {

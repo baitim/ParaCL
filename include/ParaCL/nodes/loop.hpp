@@ -14,8 +14,11 @@ namespace paracl {
                                       "wrong type: undef, excpected int"};
         }
 
-        int step(execute_params_t& params) {
+        std::optional<int> step(execute_params_t& params) {
             execute_t result = condition_->execute(params);
+
+            if (!params.is_executed())
+                return std::nullopt;
 
             check_step_type(result.type, params);
 
@@ -36,8 +39,8 @@ namespace paracl {
         }
 
         void execute(execute_params_t& params) override {
-            while (step(params))
-                body_->execute(params);
+            if (auto condition_value = step(params); *condition_value)
+                params.insert_statement(body_);
         }
 
         void analyze(analyze_params_t& params) override {

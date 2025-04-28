@@ -7,14 +7,14 @@ Grammar:
                   | statements_r expression_s | statements_r return | empty
     
     return       -> return expression;
-    scope        -> { scope_create statements }
-    block        -> { block_create statements_r }
+    scope        -> { statements }
+    scope_r      -> { statements_r }
 
     function      -> function_decl function_body
     function_decl -> foo ( function_args ) function_name
     function_name -> COLON variable | empty
     function_call -> variable_shifted ( function_call_args )
-    function_body -> { function_body_create statements_r }
+    function_body -> scope_r
 
     function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
@@ -32,7 +32,7 @@ Grammar:
 
     print        -> print expression
 
-    rvalue_r      -> function   | block
+    rvalue_r      -> function   | scope_r
     rvalue_nr     -> expression | array_repeat
     rvalue_single -> rvalue_r   | expression
     assignment    -> assignment_r | assignment_nr
@@ -141,19 +141,20 @@ Grammar:
 %nterm <node_scope_return_t*> statements_r
 %nterm <node_expression_t*> return
 %nterm <node_scope_t*>      scope
-%nterm <node_scope_t*>      scope_create
-%nterm <node_block_t*>      block
-%nterm <node_block_t*>      block_create
+%nterm <node_scope_return_t*> scope_r
 
 %nterm <node_function_t*>      function
 %nterm <node_function_t*>      function_decl
-%nterm <node_function_call_t*> function_call
-%nterm <node_function_body_t*> function_body
-%nterm <node_function_body_t*> function_body_create
+%nterm <node_function_call_wrapper_t*> function_call
+%nterm <node_scope_return_t*>  function_body
 %nterm <std::pair<std::string, location_t>> function_name
 
 %nterm <node_function_args_t*>      function_args
+%nterm <node_function_args_t*>      function_args_empty
+%nterm <node_function_args_t*>      function_args_filled
 %nterm <node_function_call_args_t*> function_call_args
+%nterm <node_function_call_args_t*> function_call_args_empty
+%nterm <node_function_call_args_t*> function_call_args_filled
 
 %nterm <node_scope_t*>      body
 %nterm <node_scope_t*>      lghost_scope
@@ -245,44 +246,38 @@ Grammar:
 program: global_scope { root = $1; }
 ;
 
-global_scope: %empty                    {
-                                            $$ = driver->add_node<node_scope_t>(@$, 1, current_scope);
-                                            drill_down_to_scope($$);
-                                        }
+global_scope: %empty                    { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
             | global_scope statement    { $$ = $1; $$->push_statement($2); }
             | global_scope scope        { $$ = $1; $$->push_statement($2); }
             | global_scope SCOLON       { $$ = $1; }
 ;
 
-statements: %empty                 { $$ = static_cast<node_scope_t*>(current_scope); }
+statements: %empty                 { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
           | statements statement   { $$ = $1; $$->push_statement($2); }
           | statements scope       { $$ = $1; $$->push_statement($2); }
           | statements SCOLON      { $$ = $1; }
           | statements return      { $$ = $1; $$->set_return($2); }
 ;
 
-statements_r: %empty                  { $$ = static_cast<node_scope_return_t*>(current_scope); }
-          | statements_r statement_nr { $$ = $1; $$->push_statement_build($2, driver->buf()); }
-          | statements_r scope        { $$ = $1; $$->push_statement_build($2, driver->buf()); }
-          | statements_r SCOLON       { $$ = $1; }
-          | statements_r expression_s { $$ = $1; $$->push_expression($2, driver->buf()); }
-          | statements_r return       { $$ = $1; $$->add_return($2, driver->buf()); }
+statements_r: %empty                    {
+                                            $$ = driver->add_node<node_scope_return_t>(@$, 1, current_scope);
+                                            drill_down_to_scope($$);
+                                            $$->add_variables(func_args.begin(), func_args.end());
+                                        }
+          | statements_r statement_nr   { $$ = $1; $$->push_statement_build($2, driver->buf()); }
+          | statements_r scope          { $$ = $1; $$->push_statement_build($2, driver->buf()); }
+          | statements_r SCOLON         { $$ = $1; }
+          | statements_r expression_s   { $$ = $1; $$->push_expression($2, driver->buf()); }
+          | statements_r return         { $$ = $1; $$->add_return($2, driver->buf()); }
 ;
 
 return: RETURN expression_s { $$ = $2; }
 ;
 
-scope: LBRACKET_CURLY scope_create statements RBRACKET_CURLY { $$ = $3; lift_up_from_scope(); }
+scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; lift_up_from_scope(); }
 ;
 
-scope_create: %empty { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
-;
-
-block: LBRACKET_CURLY block_create statements_r RBRACKET_CURLY
-         { $$ = static_cast<node_block_t*>($3); $$->update_return(); lift_up_from_scope(); }
-;
-
-block_create: %empty { $$ = driver->add_node<node_block_t>(@$, 1, current_scope); drill_down_to_scope($$); }
+scope_r: LBRACKET_CURLY statements_r RBRACKET_CURLY { $$ = $2; $$->finish_return(); lift_up_from_scope(); }
 ;
 
 function: function_decl function_body
@@ -319,35 +314,32 @@ function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
                 if (!$2->empty())
                     throw error_analyze_t{$2->loc(), program_str, "can't index by function"};
 
-                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), node_function, $4, true);
+                $$ = driver->add_node<node_function_call_wrapper_t>(@1, $1.length(), node_function, $4, true);
             } else {
                 node_variable_t* var    = static_cast<node_variable_t*>(current_scope->get_node($1));
                 node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
-                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), lvalue, $4, false);
+                $$ = driver->add_node<node_function_call_wrapper_t>(@1, $1.length(), lvalue, $4, false);
             }
         }
 ;
 
-function_body: LBRACKET_CURLY function_body_create statements_r RBRACKET_CURLY
-                    { $$ = static_cast<node_function_body_t*>($3); $$->update_return(); lift_up_from_scope(); }
+function_body: scope_r { $$ = $1; }
 ;
 
-function_body_create: %empty  {
-                                $$ = driver->add_node<node_function_body_t>(@$, 1, current_scope);
-                                drill_down_to_scope($$);
-                                $$->add_variables(func_args.begin(), func_args.end());
-                              }
+function_args: function_args_empty  { $$ = $1; }
+             | function_args_filled { $$ = $1; }
+
+function_args_empty: %empty { $$ = driver->add_node<node_function_args_t>(@$, 1); }
 ;
 
-function_args: %empty   { $$ = driver->add_node<node_function_args_t>(@$, 1); }
-               | function_args COMMA variable
+function_args_filled: function_args COMMA variable
                         {
                             $$ = $1;
                             node_variable_t* var = driver->add_node<node_variable_t>(@3, $3.length(), $3);
                             $$->add_arg(var);
                             func_args.push_back(var);
                         }
-               | variable
+                    | variable
                         {
                             $$ = driver->add_node<node_function_args_t>(@$, 1);
                             node_variable_t* var = driver->add_node<node_variable_t>(@1, $1.length(), $1);
@@ -356,8 +348,15 @@ function_args: %empty   { $$ = driver->add_node<node_function_args_t>(@$, 1); }
                         }
 ;
 
-function_call_args: %empty      { $$ = driver->add_node<node_function_call_args_t>(@$, 1); }
-                  | function_call_args COMMA expression { $$ = $1; $$->add_arg($3); }
+function_call_args: function_call_args_empty  { $$ = $1; }
+                  | function_call_args_filled { $$ = $1; }
+;
+
+function_call_args_empty: %empty { $$ = driver->add_node<node_function_call_args_t>(@$, 1); }
+;
+
+function_call_args_filled:
+                    function_call_args COMMA expression { $$ = $1; $$->add_arg($3); }
                   | expression  {
                                     $$ = driver->add_node<node_function_call_args_t>(@$, 1);
                                     $$->add_arg($1);
@@ -398,7 +397,7 @@ condition: LBRACKET_ROUND expression RBRACKET_ROUND { $$ = $2; }
 ;
 
 body: scope   { $$ = $1; }
-    | lghost_scope return    rghost_scope             { $1->set_return($2);    $$ = $1; }
+    | lghost_scope return    rghost_scope             { $1->set_return($2);     $$ = $1; }
     | lghost_scope statement rghost_scope %prec THEN  { $1->push_statement($2); $$ = $1; }
     | SCOLON  { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); }
 ;
@@ -410,7 +409,7 @@ print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
 ;
 
 rvalue_r: function  { $$ = $1; }
-        | block     { $$ = $1; }
+        | scope_r   { $$ = $1; }
 ;
 
 rvalue_nr: expression    { $$ = $1; }

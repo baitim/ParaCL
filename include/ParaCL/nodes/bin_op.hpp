@@ -86,7 +86,7 @@ namespace paracl {
 
         node_number_t* execute_node(node_expression_t* node, execute_params_t& params) {
             execute_t result = node->execute(params);
-            if (result.type == node_type_e::UNDEF)
+            if (result.type == node_type_e::UNDEF || !params.is_executed())
                 return nullptr;
             return static_cast<node_number_t*>(result.value);
         }

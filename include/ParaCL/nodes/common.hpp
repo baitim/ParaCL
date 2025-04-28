@@ -3,12 +3,14 @@
 #include "ParaCL/common.hpp"
 #include "ParaCL/environments.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <ranges>
 #include <sstream>
 #include <stack>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace paracl {
@@ -30,12 +32,14 @@ namespace paracl {
 
     inline std::pair<std::string_view, int> get_current_line(const location_t& loc,
                                                              std::string_view program_str) {
-        int line = 0;
+        int line = -1;
         for ([[maybe_unused]]int _ : std::views::iota(0, loc.row))
             line = program_str.find('\n', line + 1);
 
         if (line > 0)
             line++;
+        else
+            line = 0;
 
         int end_of_line = program_str.find('\n', line);
         if (end_of_line == -1)
@@ -243,10 +247,19 @@ namespace paracl {
         using std::stack<ElemT>::size;
         using std::stack<ElemT>::empty;
 
-        template <typename IterT>
+        template <std::input_iterator IterT>
         void push_values(IterT begin, IterT end) {
             for (auto it = begin; it != end; ++it)
                 emplace(*it);
+        }
+
+        ElemT pop_value() {
+            if (empty())
+                    throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+
+            auto&& result = std::move(top());
+            pop();
+            return result;
         }
 
         std::vector<ElemT> pop_values(size_t count) {
@@ -255,7 +268,7 @@ namespace paracl {
 
             while (count-- > 0) {
                 if (empty())
-                    throw error_t{str_red("stack_t: pop_value() failed: stack is empty")};
+                    throw error_t{str_red("stack_t: pop_values() failed: stack is empty")};
 
                 result.push_back(top());
                 pop();
@@ -285,14 +298,30 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_statement_t : public node_t,
-                             public node_loc_t {
+    class node_interpretable_t : public node_t,
+                                 public node_loc_t {
     public:
-        node_statement_t(const location_t& loc) : node_loc_t(loc) {}
+        node_interpretable_t(const location_t& loc) : node_loc_t(loc) {}
         virtual void execute(execute_params_t& params) = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_statement_t : public node_interpretable_t {
+    public:
+        node_statement_t(const location_t& loc) : node_interpretable_t(loc) {}
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_predict(bool value) = 0;
         virtual node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const = 0;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_settable_t {
+    public:
+        virtual execute_t execute(execute_params_t& params) = 0;
+        virtual execute_t set_value(execute_t new_value, execute_params_t& params) = 0;
+        virtual ~node_settable_t() = default;
     };
 
     /* ----------------------------------------------------- */
@@ -345,27 +374,74 @@ namespace paracl {
     };
 
     /* ----------------------------------------------------- */
-    
-    class node_scope_t;
 
-    enum class stack_state_e {
-        PROCESS,
-        RETURN,
-        FUNCTION_CALL
+    class names_visitor_t {
+        static constexpr const int default_key_value = -1;
+        std::unordered_map<std::string_view, std::pair<id_t*, int>> names;
+
+    public:
+        bool is_name_visited(id_t* id) const {
+            return (names.find(id->get_name()) != names.end());
+        }
+
+        void visit_name(id_t* id, int key = default_key_value) {
+            names.emplace(id->get_name(), std::make_pair(id, key));
+        }
+
+        void unvisit_name(id_t* id, int key = default_key_value) {
+            auto iter = names.find(id->get_name());
+            assert(iter != names.end());
+            if (iter->second.second == key)
+                names.erase(iter);
+        }
+
+        virtual ~names_visitor_t() = default;
     };
 
-    struct execute_params_t final {
-        copy_params_t copy_params;
-        stack_t<execute_t> stack;
-        stack_state_e stack_state = stack_state_e::PROCESS;
+    /* ----------------------------------------------------- */
 
+    class node_scope_t;
+
+    enum class execute_state_e {
+        PROCESS,
+        RETURN,
+        ADDED_STATEMENTS
+    };
+
+    class execute_params_t final : public names_visitor_t {
+        using     values_container_t = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
+        using    visited_container_t = std::unordered_map<int, std::unordered_map<node_t*, int>>;
+        using  variables_container_t = std::unordered_map<int, std::unordered_map<node_settable_t*, execute_t>>;
+            values_container_t values;
+           visited_container_t visits;
+         variables_container_t variables;
+        std::vector<int> return_receivers;
+        int step = 0;
+
+    public:
         std::ostream* os = nullptr;
         std::istream* is = nullptr;
         std::string_view program_str = {};
 
+        copy_params_t copy_params;
+
+        execute_state_e execute_state = execute_state_e::PROCESS;
+
+        stack_t<execute_t> stack;
+        stack_t<node_interpretable_t*> statements;
+
+        bool is_visiting_prev = false;
+
+    private:
+        void update_step() {
+            step = statements.size();
+
+            if (!return_receivers.empty() && return_receivers.back() == step)
+                return_receivers.pop_back();
+        }
+
     public:
-        execute_params_t(buffer_t* buf_, std::ostream* os_,
-                         std::istream* is_, std::string_view program_str_)
+        execute_params_t(buffer_t* buf_, std::ostream* os_, std::istream* is_, std::string_view program_str_)
         : os(os_), is(is_), program_str(program_str_) {
             assert(buf_);
             assert(os);
@@ -373,20 +449,165 @@ namespace paracl {
             copy_params.buf = buf_;
         }
 
+        int get_step() const noexcept { return step; }
+
+        bool is_executed() const noexcept { return execute_state == execute_state_e::PROCESS; }
+
+        template <typename IterT>
+        void upload_variables(IterT begin, IterT end) {
+            auto& step_iter = variables[step];
+            std::ranges::for_each(begin, end, [&](auto arg) {
+                step_iter.emplace(arg, arg->execute(*this));
+            });
+        }
+
+        template <typename IterT>
+        void load_variables(IterT begin, IterT end) {
+            auto& step_iter = variables[step - 1];
+            std::ranges::for_each(begin, end, [&](auto arg) {
+                auto variable_iter = step_iter.find(arg);
+                arg->set_value(variable_iter->second, *this);
+            });
+        }
+
+        std::optional<execute_t> get_evaluated(node_t* node) const {
+            if (auto step_it = values.find(step); step_it != values.end())
+                if (auto loc_it = step_it->second.find(node); loc_it != step_it->second.end())
+                    return loc_it->second;
+            return std::nullopt;
+        }
+
+        template <typename... ArgsT>
+        execute_t add_value(node_t* node, ArgsT&&... args) {
+            auto result = values[step].emplace(node, execute_t(std::forward<ArgsT>(args)...));
+            return result.first->second;
+        }
+
+        void add_return(execute_t value) {
+            stack.emplace(value);
+            execute_state = execute_state_e::RETURN;
+        }
+
+        void visit(node_t* node) {
+            auto& step_map = visits[step - is_visiting_prev];
+            auto [it, inserted] = step_map.emplace(node, 1);
+            if (!inserted)
+                it->second++;
+        }
+
+        bool is_visited(node_t* node) const {
+            if (auto step_it = visits.find(step - is_visiting_prev); step_it != visits.end())
+                if (step_it->second.find(node) != step_it->second.end())
+                    return true;
+            return false;
+        }     
+
+        int number_of_visit(node_t* node) const {
+            auto step_it = visits.find(step);
+            if (step_it != visits.end()) {
+                auto var_it = step_it->second.find(node);
+                if (var_it != step_it->second.end())
+                    return var_it->second;
+            }
+            return 0;
+        }
+
+        template <std::input_iterator IterT>
+        void insert_statements(IterT begin, IterT end) {
+            statements.push_values(begin, end);
+            execute_state = execute_state_e::ADDED_STATEMENTS;
+            update_step();
+        }
+
+        void insert_statement(node_interpretable_t* statement) {
+            statements.emplace(statement);
+            execute_state = execute_state_e::ADDED_STATEMENTS;
+            update_step();
+        }     
+
+        void erase_statement() {
+            statements.pop();
+            values.erase(step);
+            visits.erase(step);
+            variables.erase(step);
+            update_step();
+        }
+
+        template <typename MapT>
+        void shift_step(MapT& map, int old_step, int new_step) {
+            if (auto it = map.find(old_step); it != map.end()) {
+                map[new_step] = std::move(it->second);
+                map.erase(it);
+            }
+        }
+
+        void insert_statement_before(node_interpretable_t* statement) {
+            auto* last_statement = statements.pop_value();
+            statements.emplace(statement);
+            statements.emplace(last_statement);
+            int old_step = step;
+            update_step();
+            int new_step = step;
+
+            shift_step(values,    old_step, new_step);
+            shift_step(variables, old_step, new_step);
+
+            if (!return_receivers.empty())
+                if (auto& last = return_receivers.back(); last == old_step)
+                    last = new_step;
+
+            execute_state = execute_state_e::ADDED_STATEMENTS;
+        }
+
+        void erase_statement_before() {
+            auto* last_statement = statements.pop_value();
+            statements.pop();
+            statements.emplace(last_statement);
+            int old_step = step;
+            update_step();
+            int new_step = step;
+            values.erase(new_step);
+            visits.erase(new_step);
+            variables.erase(new_step);
+
+            shift_step(values,    old_step, new_step);
+            shift_step(visits,    old_step, new_step);
+            shift_step(variables, old_step, new_step);
+
+            if (!return_receivers.empty())
+                if (auto& last = return_receivers.back(); last == old_step)
+                    last = new_step;
+        }
+
+        void add_return_receiver() {
+            return_receivers.push_back(step);
+        }
+
+        void on_return() {
+            assert(!return_receivers.empty());
+            int last_return_receiver = return_receivers.back();
+            while (step > last_return_receiver)
+                erase_statement();
+        }
+
         buffer_t* buf() { return copy_params.buf; }
     };
 
     /* ----------------------------------------------------- */
 
-    struct analyze_params_t final {
+    enum class analyze_state_e {
+        PROCESS,
+        RETURN
+    };
+
+    struct analyze_params_t final : public names_visitor_t {
         std::string_view program_str = {};
 
         copy_params_t copy_params;
-        stack_t<analyze_t> stack;
-        stack_state_e stack_state = stack_state_e::PROCESS;
 
-        std::unordered_map<std::string_view, id_t*> names_of_called_functions;
-        std::stack<id_t*> called_functions;
+        analyze_state_e analyze_state = analyze_state_e::PROCESS;
+
+        stack_t<analyze_t> stack;
 
     public:
         analyze_params_t(buffer_t* buf_, std::string_view program_str_ = {})

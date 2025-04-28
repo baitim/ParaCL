@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ParaCL/nodes/common.hpp"
+#include "ParaCL/nodes/simple_types.hpp"
 
-#include <algorithm>
 #include <functional>
 
 namespace paracl {
@@ -17,26 +16,55 @@ namespace paracl {
     class memory_table_t {
         std::vector<node_memory_t*> arrays_;
 
-    protected:
+    public:
+        void add_array(node_memory_t* node) { assert(node); arrays_.push_back(node); }
+
         void clear_memory() {
             std::ranges::for_each(arrays_, [](auto iter) {
                 iter->clear();
             });
         }
 
-    public:
-        void add_array(node_memory_t* node) { assert(node); arrays_.push_back(node); }
         virtual ~memory_table_t() = default;
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_memory_cleaner_t : public node_interpretable_t {
+        memory_table_t* memory_table_;
+
+    public:
+        node_memory_cleaner_t(const location_t& loc, memory_table_t* memory_table)
+        : node_interpretable_t(loc), memory_table_(memory_table) { assert(memory_table_); }
+
+        void execute(execute_params_t& params) override {
+            memory_table_->clear_memory();
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_return_t : public node_interpretable_t {
+        node_expression_t* return_expr_ = nullptr;
+
+    public:
+        node_return_t(const location_t& loc, node_expression_t* return_expr)
+        : node_interpretable_t(loc), return_expr_(return_expr) { assert(return_expr_); }
+
+        void execute(execute_params_t& params) override {
+            execute_t result = return_expr_->execute(params);
+            if (params.is_executed())
+                params.add_return(result);
+        }
     };
 
     /* ----------------------------------------------------- */
 
     class scope_base_t : public name_table_t,
                          public memory_table_t {
-        scope_base_t* parent_;
-        node_expression_t* last_expr_ = nullptr;
-
     protected:
+        node_expression_t* last_expr_ = nullptr;
+        scope_base_t* parent_;
         std::vector<node_statement_t*> statements_;
         node_expression_t* return_expr_ = nullptr;
 
@@ -45,7 +73,7 @@ namespace paracl {
         void process_statements(FuncT&& func, ParamsT& params) const {
             for (auto statement : statements_) {
                 std::invoke(func, statement, params);
-                if (params.stack_state != stack_state_e::PROCESS)
+                if (params.analyze_state != analyze_state_e::PROCESS)
                     return;
             }
         }
@@ -79,12 +107,20 @@ namespace paracl {
             }
         }
 
-        template <typename ResultT, typename FuncT, typename ParamsT>
-        ResultT eval_return(FuncT func, ParamsT& params) {
-            ResultT result = std::invoke(func, return_expr_, params);
-            expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
-                            return_expr_->loc(), params);
+        analyze_t analyze_return(analyze_params_t& params) {
+            analyze_t result = return_expr_->analyze(params);
+            if (result.value != nullptr)
+                expect_types_eq(to_general_type(result.type), general_type_e::INTEGER,
+                                return_expr_->loc(), params);
             return result;
+        }
+
+        node_memory_cleaner_t* make_memory_cleaner(const location_t& loc, copy_params_t& params) {
+            return params.buf->add_node<node_memory_cleaner_t>(loc, this);
+        }
+
+        node_return_t* make_return_node(copy_params_t& params) {
+            return params.buf->add_node<node_return_t>(return_expr_->loc(), return_expr_);
         }
 
     public:
@@ -115,6 +151,9 @@ namespace paracl {
 
         void set_return(node_expression_t* node) {
             assert(node);
+            if (return_expr_)
+                return;
+
             return_expr_ = node;
         }
 
@@ -127,7 +166,7 @@ namespace paracl {
             return_expr_ = node;
         }
 
-        void update_return() {
+        void finish_return() {
             if (return_expr_)
                 return;
 
@@ -148,29 +187,30 @@ namespace paracl {
 
     class node_scope_t final : public node_statement_t,
                                public scope_base_t {
-
-    private:
-        template<typename ResultT, typename FuncT, typename ParamsT>
-        void process(FuncT func, ParamsT& params) {
-            process_statements(func, params);
-
-            if (params.stack_state == stack_state_e::PROCESS && return_expr_) {
-                params.stack.emplace(eval_return<ResultT>(func, params));
-                params.stack_state = stack_state_e::RETURN;
-            }
-            memory_table_t::clear_memory();
-        }
-
     public:
         node_scope_t(const location_t& loc, scope_base_t* parent)
-        : node_statement_t(loc), scope_base_t(parent) {} 
+        : node_statement_t(loc), scope_base_t(parent) {}
 
         void execute(execute_params_t& params) override {
-            process<execute_t>([](auto node, auto& params) { return node->execute(params); }, params);
+            if (params.is_visited(this))
+                return;
+
+            params.visit(this);
+            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
+            if (return_expr_)
+                params.insert_statement(make_return_node(params.copy_params));
+            params.insert_statements(statements_.rbegin(), statements_.rend());
         }
 
         void analyze(analyze_params_t& params) override {
-            process<analyze_t>([](auto node, auto& params) { return node->analyze(params); }, params);
+            auto&& analyze_funct = [](auto node, auto& params) { return node->analyze(params); };
+            process_statements(analyze_funct, params);
+
+            if (params.analyze_state == analyze_state_e::PROCESS && return_expr_) {
+                params.stack.emplace(analyze_return(params));
+                params.analyze_state = analyze_state_e::RETURN;
+            }
+            memory_table_t::clear_memory();
         }
 
         node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
@@ -185,65 +225,22 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_return_t : public node_expression_t,
-                                public scope_base_t {
-    protected:
-        template <typename ElemT, typename ParamsT>
-        ElemT get_return(ParamsT& params) {
-            auto& stack = params.stack;
-            assert(!stack.empty());
-            auto&& result = stack.top();
-            stack.pop();
-            return result;
-        }
-
+    class node_scope_return_t final : public node_expression_t,
+                                      public scope_base_t {
     public:
         node_scope_return_t(const location_t& loc, scope_base_t* parent)
         : node_expression_t(loc), scope_base_t(parent) {}
 
-        void set_predict(bool value) override {
-            set_predict_impl(value);
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
-    class node_block_t final : public node_scope_return_t {
-    private:
-        template <typename ResultT, typename StatementFuncT, typename ReturnFuncT, typename ParamsT>
-        ResultT process(StatementFuncT statement_func, ReturnFuncT return_func, ParamsT& params) {
-            stack_state_e old_stack_state = params.stack_state;
-            process_statements(statement_func, params);
-
-            ResultT result;
-            if (params.stack_state == stack_state_e::RETURN)
-                result = get_return<ResultT>(params);
-            else
-                result = eval_return<ResultT>(return_func, params);
-
-            params.stack_state = old_stack_state;
-            memory_table_t::clear_memory();
-            return result;
-        }
-
-        template <typename ElemT, typename ParamsT>
-        ElemT get_return(ParamsT& params) {
-            auto& stack = params.stack;
-            auto&& result = stack.top();
-            stack.pop();
-            return result;
-        }
-
-    public:
-        node_block_t(const location_t& loc, scope_base_t* parent)
-        : node_scope_return_t(loc, parent) {}
-
         execute_t execute(execute_params_t& params) override {
-            return process<execute_t>(
-                [](auto node, auto& params) { node->execute(params); },
-                [](auto node, auto& params) { return node->execute(params); },
-                params
-            );
+            if (params.is_visited(this))
+                return params.stack.pop_value();
+            params.visit(this);
+
+            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
+            params.add_return_receiver();
+            params.insert_statement(make_return_node(params.copy_params));
+            params.insert_statements(statements_.rbegin(), statements_.rend());
+            return {};
         }
 
         analyze_t analyze(analyze_params_t& params) override {
@@ -251,85 +248,41 @@ namespace paracl {
                 throw error_type_deduction_t{node_loc_t::loc(), params.program_str,
                                                 "missing required return statement"};
 
-            return process<analyze_t>(
-                [](auto node, auto& params) { node->analyze(params); },
-                [](auto node, auto& params) { return node->analyze(params); },
-                params
-            );
+            analyze_state_e& state = params.analyze_state;
+            analyze_state_e old_analyze_state = state;
+
+            auto&& analyze_funct = [](auto node, auto& params) { return node->analyze(params); };
+            process_statements(analyze_funct, params);
+
+            analyze_t result;
+            if (state == analyze_state_e::RETURN) {
+                result = params.stack.pop_value();
+                state = analyze_state_e::PROCESS;
+                analyze_return(params);
+            } else {
+                result = analyze_return(params);
+            }
+
+            state = old_analyze_state;
+            memory_table_t::clear_memory();
+            return result;
         }
 
         node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            node_block_t* block = params.buf->add_node<node_block_t>(node_loc_t::loc(), parent);
-            return copy_impl<node_block_t>(block, params);
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
-    class node_function_body_t final : public node_scope_return_t {
-    private:
-    template <typename ResultT, typename StatementFuncT, typename ReturnFuncT, typename ParamsT>
-    ResultT process(StatementFuncT statement_func, ReturnFuncT return_func, ParamsT& params) {
-        stack_state_e old_stack_state = params.stack_state;
-        process_statements(statement_func, params);
-
-        ResultT result;
-        switch (params.stack_state) {
-            case stack_state_e::FUNCTION_CALL:
-                return result;
-
-            case stack_state_e::RETURN:
-                result = get_return<ResultT>(params);
-                break;
-
-            case stack_state_e::PROCESS:
-                result = eval_return<ResultT>(return_func, params);
-                break;
-
-            default: throw error_location_t{node_loc_t::loc(), params.program_str,
-                                            "attempt to use unknown stack state"};
-        }
-
-        params.stack_state = old_stack_state;
-        memory_table_t::clear_memory();
-        return result;
-    }
-
-    public:
-        node_function_body_t(const location_t& loc, scope_base_t* parent)
-        : node_scope_return_t(loc, parent) {}
-
-        execute_t execute(execute_params_t& params) override {
-            return process<execute_t>(
-                [](auto node, auto& params) { node->execute(params); },
-                [](auto node, auto& params) { return node->execute(params); },
-                params
-            );
-        }
-
-        analyze_t analyze(analyze_params_t& params) override {
-            if (!return_expr_)
-                throw error_type_deduction_t{node_loc_t::loc(), params.program_str,
-                                             "missing required return statement"};
-
-            return process<analyze_t>(
-                [](auto node, auto& params) { node->analyze(params); },
-                [](auto node, auto& params) { return node->analyze(params); },
-                params
-            );
-        }
-
-        node_expression_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            node_function_body_t* body = params.buf->add_node<node_function_body_t>(node_loc_t::loc(), parent);
-            return copy_impl<node_function_body_t>(body, params);
+            node_scope_return_t* scope_r = params.buf->add_node<node_scope_return_t>(node_loc_t::loc(), parent);
+            return copy_impl<node_scope_return_t>(scope_r, params);
         }
 
         template <typename IterT>
-        node_function_body_t* copy_with_args(copy_params_t& params, scope_base_t* parent,
-                                                IterT args_begin, IterT args_end) const {
-            auto* body_copy = params.buf->add_node<node_function_body_t>(node_loc_t::loc(), parent);
-            body_copy->add_variables(args_begin, args_end);
-            return copy_impl<node_function_body_t>(body_copy, params);
+        node_scope_return_t* copy_with_args(copy_params_t& params, scope_base_t* parent,
+                                          IterT args_begin, IterT args_end) const {
+            node_scope_return_t* scope_r = params.buf->add_node<node_scope_return_t>(node_loc_t::loc(), parent);
+            scope_r->add_variables(args_begin, args_end);
+            return copy_impl<node_scope_return_t>(scope_r, params);
+        }
+
+        void set_predict(bool value) override {
+            set_predict_impl(value);
         }
     };
 }
