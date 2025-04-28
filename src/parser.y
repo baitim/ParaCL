@@ -145,7 +145,7 @@ Grammar:
 
 %nterm <node_function_t*>      function
 %nterm <node_function_t*>      function_decl
-%nterm <node_function_call_t*> function_call
+%nterm <node_function_call_wrapper_t*> function_call
 %nterm <node_scope_return_t*>  function_body
 %nterm <std::pair<std::string, location_t>> function_name
 
@@ -314,11 +314,11 @@ function_call: variable indexes LBRACKET_ROUND function_call_args RBRACKET_ROUND
                 if (!$2->empty())
                     throw error_analyze_t{$2->loc(), program_str, "can't index by function"};
 
-                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), node_function, $4, true);
+                $$ = driver->add_node<node_function_call_wrapper_t>(@1, $1.length(), node_function, $4, true);
             } else {
                 node_variable_t* var    = static_cast<node_variable_t*>(current_scope->get_node($1));
                 node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
-                $$ = driver->add_node<node_function_call_t>(@1, $1.length(), lvalue, $4, false);
+                $$ = driver->add_node<node_function_call_wrapper_t>(@1, $1.length(), lvalue, $4, false);
             }
         }
 ;

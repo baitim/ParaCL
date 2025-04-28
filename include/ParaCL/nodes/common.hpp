@@ -409,14 +409,13 @@ namespace paracl {
     };
 
     class execute_params_t final : public names_visitor_t {
-        using    values_container_t = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
-        using   visited_container_t = std::unordered_map<int, std::unordered_map<node_t*, int>>;
-        using variables_container_t = std::unordered_map<int, std::unordered_map<node_settable_t*, execute_t>>;
-           values_container_t values;
-          visited_container_t visits;
-        variables_container_t variables;
+        using     values_container_t = std::unordered_map<int, std::unordered_map<node_t*, execute_t>>;
+        using    visited_container_t = std::unordered_map<int, std::unordered_map<node_t*, int>>;
+        using  variables_container_t = std::unordered_map<int, std::unordered_map<node_settable_t*, execute_t>>;
+            values_container_t values;
+           visited_container_t visits;
+         variables_container_t variables;
         std::vector<int> return_receivers;
-
         int step = 0;
 
     public:
@@ -501,7 +500,7 @@ namespace paracl {
                 if (step_it->second.find(node) != step_it->second.end())
                     return true;
             return false;
-        }
+        }     
 
         int number_of_visit(node_t* node) const {
             auto step_it = visits.find(step);
@@ -524,7 +523,7 @@ namespace paracl {
             statements.emplace(statement);
             execute_state = execute_state_e::ADDED_STATEMENTS;
             update_step();
-        }
+        }     
 
         void erase_statement() {
             statements.pop();
@@ -532,6 +531,52 @@ namespace paracl {
             visits.erase(step);
             variables.erase(step);
             update_step();
+        }
+
+        template <typename MapT>
+        void shift_step(MapT& map, int old_step, int new_step) {
+            if (auto it = map.find(old_step); it != map.end()) {
+                map[new_step] = std::move(it->second);
+                map.erase(it);
+            }
+        }
+
+        void insert_statement_before(node_interpretable_t* statement) {
+            auto* last_statement = statements.pop_value();
+            statements.emplace(statement);
+            statements.emplace(last_statement);
+            int old_step = step;
+            update_step();
+            int new_step = step;
+
+            shift_step(values,    old_step, new_step);
+            shift_step(variables, old_step, new_step);
+
+            if (!return_receivers.empty())
+                if (auto& last = return_receivers.back(); last == old_step)
+                    last = new_step;
+
+            execute_state = execute_state_e::ADDED_STATEMENTS;
+        }
+
+        void erase_statement_before() {
+            auto* last_statement = statements.pop_value();
+            statements.pop();
+            statements.emplace(last_statement);
+            int old_step = step;
+            update_step();
+            int new_step = step;
+            values.erase(new_step);
+            visits.erase(new_step);
+            variables.erase(new_step);
+
+            shift_step(values,    old_step, new_step);
+            shift_step(visits,    old_step, new_step);
+            shift_step(variables, old_step, new_step);
+
+            if (!return_receivers.empty())
+                if (auto& last = return_receivers.back(); last == old_step)
+                    last = new_step;
         }
 
         void add_return_receiver() {

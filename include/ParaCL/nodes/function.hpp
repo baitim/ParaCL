@@ -270,12 +270,12 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_function_call_t final : public node_expression_t {
-        node_expression_t*         function_;
-        node_function_call_args_t* args_;
-
+    class node_function_call_t : public node_expression_t {
         static inline int default_analyze_return = 42;
 
+    protected:
+        node_expression_t*         function_;
+        node_function_call_args_t* args_;
         bool is_call_by_name_;
 
     private:
@@ -306,11 +306,19 @@ namespace paracl {
         std::optional<analyze_t> analyze_call_by_name(analyze_params_t& params) const {
             if (!is_call_by_name_)
                 return std::nullopt;
-
+ 
             if (params.is_name_visited(function_to_id(function_)))
                 return analyze_t{make_number(default_analyze_return, params, node_loc_t::loc()), false};
 
             return std::nullopt;
+        }
+
+        execute_t execute_function_body(bool is_visiting_prev, node_function_t* function,
+                                        execute_params_t& params) {
+            params.is_visiting_prev = is_visiting_prev;
+            execute_t result = function->body_execute(params);
+            params.is_visiting_prev = false;
+            return result;
         }
 
     public:
@@ -321,41 +329,37 @@ namespace paracl {
             assert(args_);
         }
 
-        execute_t execute(execute_params_t& params) override {
+        execute_t execute(execute_params_t& params) override {        
             execute_t func_value = function_->execute(params);
-            node_function_t* func = static_cast<node_function_t*>(func_value.value);
+            node_function_t* function = static_cast<node_function_t*>(func_value.value);
 
-            int number_of_visit = params.number_of_visit(this);
-            bool is_prev_upload = params.is_name_visited(func);
+            int  number_of_visit = params.number_of_visit(this);
+            bool is_prev_upload  = params.is_name_visited(function);
 
             if (!params.is_visited(this)) {
                 params.visit(this);
                 if (is_prev_upload)
-                    func->upload_state(params);
-                func->args_execute(params);
+                    function->upload_state(params);
+                function->args_execute(params);
                 args_->execute(params);
                 return {};
             }
             params.visit(this);
-            params.visit_name(function_to_id(func), params.get_step());
+            params.visit_name(function_to_id(function), params.get_step());
 
             if (!is_prev_upload)
-                func->upload_state(params);
+                function->upload_state(params);
 
-            bool is_uploaded = false;
-            if (is_prev_upload && number_of_visit == 1) {
+            bool is_uploaded = (is_prev_upload && (number_of_visit == 1));
+            if (is_uploaded) {
                 params.insert_statement(
-                    params.buf()->add_node<node_function_state_loader_t>(node_loc_t::loc(), func)
+                    params.buf()->add_node<node_function_state_loader_t>(node_loc_t::loc(), function)
                 );
-                is_uploaded = true;
             }
 
-            params.is_visiting_prev = is_uploaded;
-            execute_t result = func->body_execute(params);
-            params.is_visiting_prev = false;
-
-            if (number_of_visit == 2)
-                params.unvisit_name(function_to_id(func), params.get_step());
+            execute_t result = execute_function_body(is_uploaded, function, params);
+            if (params.is_executed())
+                params.unvisit_name(function_to_id(function), params.get_step());
             return result;
         }
 
@@ -399,6 +403,35 @@ namespace paracl {
         void set_predict(bool value) override {
             function_->set_predict(value);
             args_->set_predict(value);
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_function_call_wrapper_t final : public node_function_call_t {
+    public:
+        node_function_call_wrapper_t(const location_t& loc, node_expression_t* function,
+                                     node_function_call_args_t* args, bool is_call_by_name)
+        : node_function_call_t(loc, function, args, is_call_by_name) {}
+
+        execute_t execute(execute_params_t& params) override {
+            if (auto result = params.get_evaluated(this))
+                return *result;
+
+            if (!params.is_visited(this)) {
+                params.visit(this);
+                params.insert_statement_before(
+                    make_empty_instruction(node_loc_t::loc(), params.copy_params)
+                );
+            }
+
+            params.execute_state = execute_state_e::PROCESS;
+            execute_t result = node_function_call_t::execute(params);
+            if (params.is_executed()) {
+                params.erase_statement_before();
+                params.add_value(this, result);
+            }
+            return result;
         }
     };
 }
