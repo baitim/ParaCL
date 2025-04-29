@@ -91,9 +91,4 @@ namespace paracl {
     inline execute_t make_number(int value, ParamsT& params, const location_t& loc) {
         return {node_type_e::INTEGER, params.buf()->template add_node<node_number_t>(loc, value)};
     }
-
-    inline node_statement_t* make_empty_instruction(const location_t& loc, copy_params_t& params) {
-        node_expression_t* expr = params.buf->add_node<node_undef_t>(loc);
-        return params.buf->add_node<node_instruction_t>(loc, expr);
-    }
 }

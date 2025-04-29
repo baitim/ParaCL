@@ -375,6 +375,18 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_empty_interpretable_t : public node_interpretable_t {
+    public:
+        node_empty_interpretable_t(const location_t& loc) : node_interpretable_t(loc) {}
+        void execute(execute_params_t& params) override {}
+    };
+
+    inline node_interpretable_t* make_empty_interpretable(const location_t& loc, copy_params_t& params) {
+        return params.buf->add_node<node_empty_interpretable_t>(loc);
+    }
+
+    /* ----------------------------------------------------- */
+
     class names_visitor_t {
         static constexpr const int default_key_value = -1;
         std::unordered_map<std::string_view, std::pair<id_t*, int>> names;

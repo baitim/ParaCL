@@ -421,7 +421,7 @@ namespace paracl {
             if (!params.is_visited(this)) {
                 params.visit(this);
                 params.insert_statement_before(
-                    make_empty_instruction(node_loc_t::loc(), params.copy_params)
+                    make_empty_interpretable(node_loc_t::loc(), params.copy_params)
                 );
             }
 
