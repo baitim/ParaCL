@@ -15,6 +15,7 @@ namespace paracl {
         }
 
         std::optional<int> step(execute_params_t& params) {
+            params.clear_step_values();
             execute_t result = condition_->execute(params);
 
             if (!params.is_executed())

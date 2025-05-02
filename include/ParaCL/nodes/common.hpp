@@ -545,6 +545,12 @@ namespace paracl {
             update_step();
         }
 
+        void clear_step_values() {
+            auto step_it = values.find(step);
+            if (step_it != values.end())
+                values.erase(step_it);
+        }
+
         template <typename MapT>
         void shift_step(MapT& map, int old_step, int new_step) {
             if (auto it = map.find(old_step); it != map.end()) {

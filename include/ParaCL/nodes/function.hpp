@@ -3,7 +3,6 @@
 #include "ParaCL/nodes/assign.hpp"
 
 #include <iomanip>
-#include <unordered_set>
 
 namespace paracl {
     class node_function_args_initializator_t final : public node_interpretable_t {
