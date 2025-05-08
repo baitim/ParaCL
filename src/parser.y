@@ -27,7 +27,7 @@ Grammar:
     expression_arithm   -> print_nr | assignment_nr | expression_lgc
     expression_r        -> expression_r_simple | scope_r
     expression_nr       -> expression_arithm | array_repeat
-    expression_scolon   -> expression_nr; | expression_r
+    expression_scolon   -> expression_nr; | expression_r_simple
     expression_single   -> expression_arithm | expression_r
 
     fork         -> if condition body | if condition body else body
