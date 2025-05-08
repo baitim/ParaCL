@@ -1,0 +1,8 @@
+x = 1000;
+step  = 0;
+steps = 10;
+while (step < steps) {
+    x = 10;
+    step = step + 1;
+}
+arr = array(0)[x];

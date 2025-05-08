@@ -1,0 +1,3 @@
+a = 1;
+foo = func(x, y) { a + x + y; }
+print foo(2, 3, 4);

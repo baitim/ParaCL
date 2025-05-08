@@ -1,0 +1,3 @@
+if (!undef)
+    print 1;
+print x = 100;

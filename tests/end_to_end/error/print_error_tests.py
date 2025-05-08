@@ -18,7 +18,7 @@ def run(program, input, exe_file):
     return result.stdout.decode("utf-8")
 
 paracl_exe = proj_dir + "/build/Release/src/paracl"
-program_files = list(map(str, glob.glob(tests_dir + "/tests_error_in/test_*.in")))
+program_files = list(map(str, glob.glob(tests_dir + "/tests_in/test_*.in")))
 program_files.sort()
 
 input_data_files = list(map(str, glob.glob(tests_dir + "/input4tests_in/input_*.in")))

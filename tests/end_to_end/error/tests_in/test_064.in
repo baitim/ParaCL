@@ -1,0 +1,6 @@
+foo = func(ind) {
+    arr = array(1, 2, 3);
+    arr[ind];
+}
+
+x = foo(5);

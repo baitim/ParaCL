@@ -1,0 +1,2 @@
+x = array(1, 2, undef);
+print x[2][1];

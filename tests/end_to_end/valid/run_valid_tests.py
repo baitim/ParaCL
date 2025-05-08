@@ -19,7 +19,7 @@ def run(program, input, answer_dir, exe_file):
 paracl_exe = build_dir + "/../../src/paracl"
 paracl_answers_dir =  tests_dir + "/answers_get"
 
-program_files = list(map(str, glob.glob(tests_dir + "/tests_valid_in/test_*.in")))
+program_files = list(map(str, glob.glob(tests_dir + "/tests_in/test_*.in")))
 program_files.sort()
 
 input_data_files = list(map(str, glob.glob(tests_dir + "/input4tests_in/input_*.in")))

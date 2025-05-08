@@ -1,0 +1,3 @@
+arr = array(1, 2, 3);
+arr2 = repeat(array(1, 2), 1);
+arr = arr2;

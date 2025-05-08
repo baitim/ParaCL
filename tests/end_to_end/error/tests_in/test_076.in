@@ -1,0 +1,5 @@
+foo = func(x) {
+    array(x, 0);
+}
+
+arr = foo(5);

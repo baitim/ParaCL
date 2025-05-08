@@ -22,7 +22,7 @@ def run(program, input, exe_file):
     return result.returncode
 
 paracl_exe = proj_dir + "/../../src/paracl"
-program_files = list(map(str, glob.glob(tests_dir + "/tests_error_in/test_*.in")))
+program_files = list(map(str, glob.glob(tests_dir + "/tests_in/test_*.in")))
 program_files.sort()
 
 input_data_files = list(map(str, glob.glob(tests_dir + "/input4tests_in/input_*.in")))

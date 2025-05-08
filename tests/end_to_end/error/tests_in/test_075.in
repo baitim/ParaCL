@@ -1,0 +1,13 @@
+count = 5;
+arr = array(5, 3, 8, 1, 7);
+
+print_array = func(a, n) {
+    i = 0;
+    while (i < n) {
+        print a[i];
+        i = i + 1;
+    }
+    return 0;
+};
+
+print_array(arr, count);

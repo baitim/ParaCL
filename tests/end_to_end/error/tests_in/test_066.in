@@ -1,0 +1,4 @@
+sum = func(x, y) { x + y; }
+
+ans = sum(x, 1);
+print ans;

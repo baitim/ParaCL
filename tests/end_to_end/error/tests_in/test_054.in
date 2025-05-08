@@ -1,0 +1,7 @@
+arr2 = array(repeat(array(repeat(array(1, 2, 1000), 10)), 5));
+arr = array(1, 2, 3);
+
+arr1 = arr2[3];
+arr3 = arr2[3][?];
+arr4 = arr2[3][1][0];
+print arr[arr2[3][3][2]];
