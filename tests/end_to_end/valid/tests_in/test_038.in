@@ -1,0 +1,11 @@
+print {x = 1; y = 2; x + y; } + 10;
+
+x = 0;
+
+if ({!x;}) {
+    print 777;
+}
+
+print func() : foo { 1; }
+
+print print print {1;}

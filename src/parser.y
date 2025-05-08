@@ -4,9 +4,9 @@ Grammar:
     global_scope -> global_scope statement    | global_scope scope | global_scope; | empty
     statements   -> statements   statement    | statements   scope | statements;   | statements   return | empty
     statements_r -> statements_r statement_nr | statements_r scope | statements_r;
-                  | statements_r expression_s | statements_r return | empty
+                  | statements_r expression_scolon | statements_r return | empty
     
-    return       -> return expression;
+    return       -> return expression_scolon
     scope        -> { statements }
     scope_r      -> { statements_r }
 
@@ -19,10 +19,16 @@ Grammar:
     function_args      -> function_args,      variable   | variable   | empty
     function_call_args -> function_call_args, expression | expression | empty
 
-    statement_nr -> fork | loop
-    statement    -> statement_nr | expression_s
-    expression   -> print | assignment | expression_lgc
-    expression_s -> print; | assignment_nr; | expression_lgc; | function | assignment_r
+    statement_nr  -> fork | loop
+    statement     -> statement_nr | expression_scolon
+
+    expression          -> expression_nr | expression_r
+    expression_r_simple -> print_r  | assignment_r  | function
+    expression_arithm   -> print_nr | assignment_nr | expression_lgc
+    expression_r        -> expression_r_simple | scope_r
+    expression_nr       -> expression_arithm | array_repeat
+    expression_scolon   -> expression_nr; | expression_r
+    expression_single   -> expression_arithm | expression_r
 
     fork         -> if condition body | if condition body else body
     loop         -> while condition body
@@ -30,14 +36,11 @@ Grammar:
     condition    -> ( expression )
     body         -> scope | lghost_scope statement rghost_scope | ;
 
-    print        -> print expression
+    print_r   -> print expression_r
+    print_nr  -> print expression_nr
 
-    rvalue_r      -> function   | scope_r
-    rvalue_nr     -> expression | array_repeat
-    rvalue_single -> rvalue_r   | expression
-    assignment    -> assignment_r | assignment_nr
-    assignment_r  -> variable indexes = rvalue_r
-    assignment_nr -> variable indexes = rvalue_nr
+    assignment_r  -> variable indexes = expression_r
+    assignment_nr -> variable indexes = expression_nr
 
     expression_lgc -> expression_lgc bin_oper_lgc expression_cmp | expression_cmp
     expression_cmp -> expression_cmp bin_oper_cmp expression_pls | expression_pls
@@ -50,9 +53,9 @@ Grammar:
 
     array          -> array ( array_values ) indexes
     array_repeat   -> repeat_values indexes
-    repeat_values  -> repeat ( rvalue_single, expression )
+    repeat_values  -> repeat ( expression_single, expression )
     list_values    -> array_values, array_value | array_value
-    array_value    -> rvalue_single | repeat_values
+    array_value    -> expression_single | repeat_values
     indexes        -> indexes index | empty
     index          -> [ expression ]
 */
@@ -156,25 +159,27 @@ Grammar:
 %nterm <node_function_call_args_t*> function_call_args_empty
 %nterm <node_function_call_args_t*> function_call_args_filled
 
-%nterm <node_scope_t*>      body
-%nterm <node_scope_t*>      lghost_scope
-%nterm                      rghost_scope
-
-%nterm <node_statement_t*>  statement
 %nterm <node_statement_t*>  statement_nr
+%nterm <node_statement_t*>  statement
+
 %nterm <node_expression_t*> expression
-%nterm <node_expression_t*> expression_s
+%nterm <node_expression_t*> expression_r_simple
+%nterm <node_expression_t*> expression_arithm
+%nterm <node_expression_t*> expression_r
+%nterm <node_expression_t*> expression_nr
+%nterm <node_expression_t*> expression_scolon
+%nterm <node_expression_t*> expression_single
 
 %nterm <node_statement_t*>  fork
 %nterm <node_statement_t*>  loop
 %nterm <node_expression_t*> condition
 
-%nterm <node_expression_t*> print
+%nterm <node_scope_t*>      body
+%nterm <node_scope_t*>      lghost_scope
+%nterm                      rghost_scope
 
-%nterm <node_expression_t*> rvalue_r
-%nterm <node_expression_t*> rvalue_nr
-%nterm <node_expression_t*> rvalue_single
-%nterm <node_expression_t*> assignment
+%nterm <node_expression_t*> print_r
+%nterm <node_expression_t*> print_nr
 %nterm <node_expression_t*> assignment_r
 %nterm <node_expression_t*> assignment_nr
 
@@ -267,11 +272,11 @@ statements_r: %empty                    {
           | statements_r statement_nr   { $$ = $1; $$->push_statement_build($2, driver->buf()); }
           | statements_r scope          { $$ = $1; $$->push_statement_build($2, driver->buf()); }
           | statements_r SCOLON         { $$ = $1; }
-          | statements_r expression_s   { $$ = $1; $$->push_expression($2, driver->buf()); }
+          | statements_r expression_scolon { $$ = $1; $$->push_expression($2, driver->buf()); }
           | statements_r return         { $$ = $1; $$->add_return($2, driver->buf()); }
 ;
 
-return: RETURN expression_s { $$ = $2; }
+return: RETURN expression_scolon { $$ = $2; }
 ;
 
 scope: LBRACKET_CURLY statements RBRACKET_CURLY { $$ = $2; lift_up_from_scope(); }
@@ -367,20 +372,38 @@ statement_nr: fork  { $$ = $1; }
             | loop  { $$ = $1; }
 ;
 
-statement: statement_nr  { $$ = $1; }
-         | expression_s  { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
+statement: statement_nr       { $$ = $1; }
+         | expression_scolon  { $$ = driver->add_node<node_instruction_t>(@1, $1->loc().len, $1); }
 ;
 
-expression: print          { $$ = $1; }
-          | assignment     { $$ = $1; }
-          | expression_lgc { $$ = $1; }
+expression: expression_nr  { $$ = $1; }
+          | expression_r   { $$ = $1; }
 ;
 
-expression_s: print          SCOLON { $$ = $1; }
-            | assignment_nr  SCOLON { $$ = $1; }
-            | expression_lgc SCOLON { $$ = $1; }
-            | function              { $$ = $1; }
-            | assignment_r          { $$ = $1; }
+expression_r_simple: print_r      { $$ = $1; }
+                   | assignment_r { $$ = $1; }
+                   | function     { $$ = $1; }
+;
+
+expression_arithm: print_nr       { $$ = $1; }
+                 | assignment_nr  { $$ = $1; }
+                 | expression_lgc { $$ = $1; }
+;
+
+expression_r: expression_r_simple { $$ = $1; }
+            | scope_r             { $$ = $1; }
+;
+
+expression_nr: expression_arithm { $$ = $1; }
+             | array_repeat      { $$ = $1; }
+;
+
+expression_scolon: expression_nr SCOLON { $$ = $1; }
+                 | expression_r_simple  { $$ = $1; }
+;
+
+expression_single: expression_arithm { $$ = $1; }
+                 | expression_r      { $$ = $1; }
 ;
 
 fork: IF condition body %prec THEN  { 
@@ -405,26 +428,10 @@ body: scope   { $$ = $1; }
 lghost_scope: %empty { $$ = driver->add_node<node_scope_t>(@$, 1, current_scope); drill_down_to_scope($$); }
 rghost_scope: %empty { lift_up_from_scope(); }
 
-print: PRINT expression { $$ = driver->add_node<node_print_t>(@1, 5, $2); }
-;
+print_r:  PRINT expression_r  { $$ = driver->add_node<node_print_t>(@1, 5, $2); };
+print_nr: PRINT expression_nr { $$ = driver->add_node<node_print_t>(@1, 5, $2); };
 
-rvalue_r: function  { $$ = $1; }
-        | scope_r   { $$ = $1; }
-;
-
-rvalue_nr: expression    { $$ = $1; }
-         | array_repeat  { $$ = $1; }
-;
-
-rvalue_single: rvalue_r    { $$ = $1; }
-             | expression  { $$ = $1; }
-;
-
-assignment: assignment_r   { $$ = $1; }
-          | assignment_nr  { $$ = $1; }
-;
-
-assignment_r: variable indexes ASSIGN rvalue_r
+assignment_r: variable indexes ASSIGN expression_r
         {
             node_variable_t* var    = decl_var($1, program_str, @1, driver);
             node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
@@ -432,7 +439,7 @@ assignment_r: variable indexes ASSIGN rvalue_r
         }
 ;
 
-assignment_nr: variable indexes ASSIGN rvalue_nr
+assignment_nr: variable indexes ASSIGN expression_nr
         {
             node_variable_t* var    = decl_var($1, program_str, @1, driver);
             node_lvalue_t*   lvalue = driver->add_node<node_lvalue_t>(@1, $1.length(), var, $2);
@@ -490,7 +497,7 @@ array_repeat: repeat_values indexes
         }
 ;
 
-repeat_values: REPEAT LBRACKET_ROUND rvalue_single COMMA expression RBRACKET_ROUND
+repeat_values: REPEAT LBRACKET_ROUND expression_single COMMA expression RBRACKET_ROUND
         { $$ = driver->add_node<node_repeat_values_t>(@1, 6, $3, $5); }
 ;
 
@@ -498,8 +505,8 @@ list_values: list_values COMMA array_value { $$ = $1; $$->add_value($3); }
            | array_value { $$ = driver->add_node<node_list_values_t>(@$, $1->loc().len); $$->add_value($1); }
 ;
 
-array_value: rvalue_single  { $$ = driver->add_node<node_expression_value_t>(@$, $1->loc().len, $1); }
-           | repeat_values  { $$ = $1; }
+array_value: expression_single  { $$ = driver->add_node<node_expression_value_t>(@$, $1->loc().len, $1); }
+           | repeat_values      { $$ = $1; }
 ;
 
 indexes: %empty        { $$ = driver->add_node<node_indexes_t>(@$, 1); }

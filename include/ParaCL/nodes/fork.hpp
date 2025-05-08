@@ -18,11 +18,12 @@ namespace paracl {
         }
 
         void execute(execute_params_t& params) override {
-            if (params.is_visited(this)) return;
-            params.visit(this);
+            if (params.get_evaluated(this))
+                return;
 
             execute_t result = condition_->execute(params);
             if (!params.is_executed()) return;
+            params.add_value(this, result);
 
             int value = static_cast<node_number_t*>(result.value)->get_value();
             if (value)
