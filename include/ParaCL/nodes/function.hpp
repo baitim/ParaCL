@@ -221,6 +221,7 @@ namespace paracl {
         }
 
         execute_t body_execute(execute_params_t& params) {
+            assert(body_);
             return body_->execute(params);
         }
 

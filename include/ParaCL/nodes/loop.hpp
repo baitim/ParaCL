@@ -3,7 +3,7 @@
 #include "ParaCL/nodes/common.hpp"
 
 namespace paracl {
-    class node_loop_t final : public node_statement_t {
+    class node_loop_t final : public node_strong_statement_t {
         node_expression_t* condition_;
         node_scope_t* body_;
 
@@ -34,7 +34,7 @@ namespace paracl {
 
     public:
         node_loop_t(const location_t& loc, node_expression_t* condition, node_scope_t* body)
-        : node_statement_t(loc), condition_(condition), body_(body) {
+        : node_strong_statement_t(loc), condition_(condition), body_(body) {
             assert(condition_);
             assert(body_);
         }

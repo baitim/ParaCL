@@ -60,10 +60,12 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
+    class node_scope_return_t;
+    class node_scope_t;
+
     class scope_base_t : public name_table_t,
                          public memory_table_t {
     protected:
-        node_expression_t* last_expr_ = nullptr;
         scope_base_t* parent_;
         std::vector<node_statement_t*> statements_;
         node_expression_t* return_expr_ = nullptr;
@@ -93,18 +95,18 @@ namespace paracl {
             return scope;
         }
 
+        template <typename ScopeT>
+        ScopeT* simple_copy_impl(ScopeT* scope, copy_params_t& params) const {
+            through_statements([&](auto statement) { scope->push_statement(statement); });
+            if (return_expr_)
+                scope->set_return(return_expr_);
+            return scope;
+        }
+
         void set_predict_impl(bool value) {
             through_statements([value](auto statement) { statement->set_predict(value); });
             if (return_expr_)
                 return_expr_->set_predict(value);
-        }
-
-        void push_back_last_expr(buffer_t* buf) {
-            if (last_expr_) {
-                node_statement_t* last_stmt = buf->add_node<node_instruction_t>(last_expr_->loc(), last_expr_);
-                statements_.push_back(last_stmt);
-                last_expr_ = nullptr;
-            }
         }
 
         analyze_t analyze_return(analyze_params_t& params) {
@@ -128,25 +130,9 @@ namespace paracl {
 
         void push_statement(node_statement_t* node) {
             assert(node);
-            statements_.push_back(node);
-        }
 
-        void push_statement_build(node_statement_t* node, buffer_t* buf) {
-            assert(node);
-            if (return_expr_)
-                return;
-
-            push_back_last_expr(buf);
-            statements_.push_back(node);
-        }
-
-        void push_expression(node_expression_t* node, buffer_t* buf) {
-            assert(node);
-            if (return_expr_)
-                return;
-
-            push_back_last_expr(buf);
-            last_expr_ = node;
+            if (!return_expr_)
+                statements_.push_back(node);
         }
 
         void set_return(node_expression_t* node) {
@@ -157,21 +143,19 @@ namespace paracl {
             return_expr_ = node;
         }
 
-        void add_return(node_expression_t* node, buffer_t* buf) {
-            assert(node);
+        void finish_return(buffer_t* buf) {
             if (return_expr_)
                 return;
 
-            push_back_last_expr(buf);
-            return_expr_ = node;
+            if (!statements_.empty()) {
+                copy_params_t params{buf};
+                return_expr_ = statements_.back()->to_expression(params, this);
+                if (return_expr_)
+                    statements_.pop_back();
+            }
         }
 
-        void finish_return() {
-            if (return_expr_)
-                return;
-
-            return_expr_ = last_expr_;
-        }
+        bool empty() const { return statements_.empty() && !return_expr_; }
 
         id_t* get_node(std::string_view name) const {
             for (auto scope = this; scope; scope = scope->parent_) {
@@ -185,46 +169,6 @@ namespace paracl {
 
     /* ----------------------------------------------------- */
 
-    class node_scope_t final : public node_statement_t,
-                               public scope_base_t {
-    public:
-        node_scope_t(const location_t& loc, scope_base_t* parent)
-        : node_statement_t(loc), scope_base_t(parent) {}
-
-        void execute(execute_params_t& params) override {
-            if (params.is_visited(this))
-                return;
-
-            params.visit(this);
-            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
-            if (return_expr_)
-                params.insert_statement(make_return_node(params.copy_params));
-            params.insert_statements(statements_.rbegin(), statements_.rend());
-        }
-
-        void analyze(analyze_params_t& params) override {
-            auto&& analyze_funct = [](auto node, auto& params) { return node->analyze(params); };
-            process_statements(analyze_funct, params);
-
-            if (params.analyze_state == analyze_state_e::PROCESS && return_expr_) {
-                params.stack.emplace(analyze_return(params));
-                params.analyze_state = analyze_state_e::RETURN;
-            }
-            memory_table_t::clear_memory();
-        }
-
-        node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
-            node_scope_t* scope = params.buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
-            return copy_impl<node_scope_t>(scope, params);
-        }
-
-        void set_predict(bool value) override {
-            set_predict_impl(value);
-        }
-    };
-
-    /* ----------------------------------------------------- */
-
     class node_scope_return_t final : public node_expression_t,
                                       public scope_base_t {
     public:
@@ -232,8 +176,12 @@ namespace paracl {
         : node_expression_t(loc), scope_base_t(parent) {}
 
         execute_t execute(execute_params_t& params) override {
-            if (params.is_visited(this))
-                return params.stack.pop_value();
+            if (params.is_visited(this)) {
+                execute_t result = params.stack.pop_value();
+                if (!result.value)
+                    throw error_execute_t{node_loc_t::loc(), params.program_str, "missing return value"};
+                return result;
+            }
             params.visit(this);
 
             params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
@@ -279,6 +227,53 @@ namespace paracl {
             node_scope_return_t* scope_r = params.buf->add_node<node_scope_return_t>(node_loc_t::loc(), parent);
             scope_r->add_variables(args_begin, args_end);
             return copy_impl<node_scope_return_t>(scope_r, params);
+        }
+
+        void set_predict(bool value) override {
+            set_predict_impl(value);
+        }
+    };
+
+    /* ----------------------------------------------------- */
+
+    class node_scope_t final : public node_strong_statement_t,
+                               public scope_base_t {
+    public:
+        node_scope_t(const location_t& loc, scope_base_t* parent)
+        : node_strong_statement_t(loc), scope_base_t(parent) {}
+
+        void execute(execute_params_t& params) override {
+            if (params.is_visited(this))
+                return;
+
+            params.visit(this);
+            params.insert_statement(make_memory_cleaner(node_loc_t::loc(), params.copy_params));
+            if (return_expr_)
+                params.insert_statement(make_return_node(params.copy_params));
+            params.insert_statements(statements_.rbegin(), statements_.rend());
+        }
+
+        void analyze(analyze_params_t& params) override {
+            auto&& analyze_funct = [](auto node, auto& params) { return node->analyze(params); };
+            process_statements(analyze_funct, params);
+
+            if (params.analyze_state == analyze_state_e::PROCESS && return_expr_) {
+                params.stack.emplace(analyze_return(params));
+                params.analyze_state = analyze_state_e::RETURN;
+            }
+            memory_table_t::clear_memory();
+        }
+
+        node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
+            node_scope_t* scope = params.buf->add_node<node_scope_t>(node_loc_t::loc(), parent);
+            return copy_impl<node_scope_t>(scope, params);
+        }
+
+        node_scope_return_t* to_scope_r(copy_params_t& params, scope_base_t* parent) const {
+            node_scope_return_t* scope_r = params.buf->add_node<node_scope_return_t>(node_loc_t::loc(), parent);
+            simple_copy_impl<node_scope_return_t>(scope_r, params);
+            scope_r->finish_return(params.buf);
+            return scope_r;
         }
 
         void set_predict(bool value) override {

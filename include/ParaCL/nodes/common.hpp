@@ -313,6 +313,15 @@ namespace paracl {
         virtual void analyze(analyze_params_t& params) = 0;
         virtual void set_predict(bool value) = 0;
         virtual node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const = 0;
+        virtual node_expression_t* to_expression(copy_params_t& params, scope_base_t* parent) const = 0;
+    };
+
+    class node_strong_statement_t : public node_statement_t {
+    public:
+        node_strong_statement_t(const location_t& loc) : node_statement_t(loc) {}
+        node_expression_t* to_expression(copy_params_t& params, scope_base_t* parent) const override {
+            return nullptr;
+        }
     };
 
     /* ----------------------------------------------------- */
@@ -686,6 +695,10 @@ namespace paracl {
 
         node_statement_t* copy(copy_params_t& params, scope_base_t* parent) const override {
             return params.buf->add_node<node_instruction_t>(node_loc_t::loc(), expr_->copy(params, parent));
+        }
+
+        node_expression_t* to_expression(copy_params_t& params, scope_base_t* parent) const override {
+            return expr_;
         }
 
         void set_predict(bool value) override { expr_->set_predict(value); };

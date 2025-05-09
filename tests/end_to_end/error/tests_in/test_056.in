@@ -1,4 +1,4 @@
 num = {
-    if (1)
+    if (0)
         print 1;
 };

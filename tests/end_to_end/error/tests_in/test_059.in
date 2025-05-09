@@ -1,5 +1,5 @@
 no_return = {
     x = 1;
-    if (1)
+    if (0)
         return print 1;
 };
