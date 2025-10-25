@@ -6,8 +6,11 @@
  #### [Documentation](https://github.com/baitim/ParaCL/tree/main/docs/ParaCL.pdf)
 
 ## How to integrate
- 
- use [storage](https://github.com/baitim/ConanPackages), project = "paracl", version = "1.0", user = "baitim"
+
+1. Add remote <br>
+    <code>conan remote add conan_packages http://77.233.223.124:9300</code>
+2. Install requires
+    <code>conan install --requires=paracl/1.0@baitim -r=conan_packages</code>
 
 ## How to run
 
