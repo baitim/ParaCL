@@ -5,6 +5,10 @@
  Implementation of the simple programming language, with flex and bison.<br>
  #### [Documentation](https://github.com/baitim/ParaCL/tree/main/docs/ParaCL.pdf)
 
+## How to integrate
+ 
+ use [storage](https://github.com/baitim/ConanPackages), project = "paracl", version = "1.0", user = "baitim"
+
 ## How to run
 
 1. Clone <br>
